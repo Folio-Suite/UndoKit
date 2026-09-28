@@ -1,0 +1,7 @@
+// SPDX-FileCopyrightText: 2026 the Folio Project
+// SPDX-License-Identifier: MIT
+
+MACOSX_DEPLOYMENT_TARGET = 14.0
+MARKETING_VERSION = 0.1.0
+CURRENT_PROJECT_VERSION = 1
+#include? "../Config/Suite.xcconfig"

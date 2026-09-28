@@ -17,7 +17,7 @@ UndoKit currently exports framework identity and version symbols. It has no publ
 
 ## Public interface and hosting
 
-Objective-C clients can import `<UndoKit/UndoKit.h>` or use `@import UndoKit;`; Swift clients can import `UndoKit`. These imports expose framework identity and version symbols only. Apps and Kits ship as a coordinated Suite version; mixed versions are unsupported, and independent binary compatibility is not promised.
+Swift clients use `import UndoKit`. The retained umbrella header exposes framework identity and version symbols only; external Objective-C API distribution is deferred. Apps and Kits ship as a coordinated Suite version; mixed versions are unsupported, and independent binary compatibility is not promised.
 
 ## Limitations
 

@@ -3,8 +3,10 @@ SPDX-FileCopyrightText: 2026 the Folio Project
 SPDX-License-Identifier: MIT
 -->
 
-# UndoKit upstream import
+# UndoKit preservation and incorporation
 
-This directory imports the UndoKit source snapshot from [ctwelve/UndoKit](https://github.com/ctwelve/UndoKit), captured on 2026-09-27 at source commit `5ca57fd54f91ad754ca3d0d8398f67745a7b5be7` (remote: `https://github.com/ctwelve/UndoKit.git`). The upstream MIT license and its attribution to Justin Croonenberghs are retained with the imported source. This is a source snapshot; no nested `.git` history is included. The original repository remains the source for upstream history and tracker identity.
+UndoKit was imported from `ctwelve/UndoKit` on 2026-09-27 at source commit `5ca57fd54f91ad754ca3d0d8398f67745a7b5be7`. Its original MIT license and attribution to Justin Croonenberghs are retained. Folio is now the development and tracker home for its Swift implementation, primarily serving Folio and secondarily KitchenMemory while preserving generic module boundaries.
 
-[Folio's local build adaptations](README.md#integration-with-folio) are documented with the integration notes. Imported design provenance is indexed in [docs/imported-design/README.md](docs/imported-design/README.md), with a dated snapshot of GitHub issue bodies, resolution comments, statuses, and native dependency edges. The snapshot preserves original issue URLs and IDs; it is historical evidence, not a live tracker or a claim that unresolved design has been settled.
+The maintainer explicitly authorized deletion of the original remote after preservation. The [design inventory](docs/imported-design/README.md) preserves all useful source/design records and maps unresolved issues to Folio. The complete ten-commit Git history is recoverable from the verified bundle; issues, comments, events and native relationships are retained in JSON with original identities. Checksums accompany the preserved artifacts. The separate original local checkout is retained.
+
+[Folio build adaptations](README.md#integration-with-folio) remain documented. The current framework is a scaffold, not a production history engine. Historical Objective-C/XCFramework research remains useful provenance, while external distribution is deferred until after a working Folio Suite 1.0.

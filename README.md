@@ -16,7 +16,7 @@ Build the shared `UndoKit` scheme in `UndoKit.xcodeproj`, or use the enclosing
 `Folio` workspace scheme. The Folio adaptation supplies an explicit public module
 map, macOS 14 deployment, coordinated Suite release identity, and development
 signing. UndoKit has no dependency on FolioKit or any application domain Kit.
-Future Swift and Objective-C callers remain part of its design contract.
+The accepted next implementation is Swift, serving Folio first and KitchenMemory second while keeping domain-independent interfaces. External Objective-C/XCFramework distribution is deferred until after Folio Suite 1.0. Historical interoperability research remains preserved.
 
 `Project.xcconfig` provides standalone version defaults and optionally inherits
 the enclosing Suite's version configuration. The shared scheme can archive the

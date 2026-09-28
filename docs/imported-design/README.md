@@ -3,22 +3,47 @@ SPDX-FileCopyrightText: 2026 the Folio Project
 SPDX-License-Identifier: MIT
 -->
 
-# Imported UndoKit design inventory
+# Preserved UndoKit design and repository history
 
-Snapshot captured 2026-09-27 from [ctwelve/UndoKit](https://github.com/ctwelve/UndoKit), source commit [`5ca57fd`](https://github.com/ctwelve/UndoKit/commit/5ca57fd54f91ad754ca3d0d8398f67745a7b5be7). The full source bodies, comments (including resolution comments), states, labels, timestamps, original URLs, and native GitHub dependency edges for issues #1–18 are in [issues-2026-09-27.json](issues-2026-09-27.json). This dated provenance snapshot preserves upstream tracker identities; it is not live status or a replacement for those issues.
+The original `ctwelve/UndoKit` repository is retired by explicit maintainer direction after preservation. Folio now owns active planning and future development. UndoKit will be a Swift framework, serving Folio first and KitchenMemory second, with generic capabilities and host-owned policy. External distribution and independently usable Objective-C interfaces are deferred beyond Folio Suite 1.0; original requirements remain historical evidence rather than current gates.
 
-## Accepted design decisions
+## Verified preservation
 
-- **#2–#4, requirements and research:** consumer requirements, Core Data/native lifecycle constraints, and typed Swift/Objective-C/XCFramework compatibility research are resolved. The findings establish constraints and options; they do not prove implementation or runtime acceptance.
-- **#5, ownership and vocabulary:** hosts own semantic meaning, validation, compensation, accepted outcomes, recovery evidence, store location, and history policy. UndoKit owns shared history capabilities, a separate local Core Data history store, native integration, and storage safeguards. Recording does not itself accept domain work.
+- [Final tracker snapshot](retirement-snapshot-2026-09-27.json): all 18 issues, four comments, 128 events, labels/states/timestamps, and original parent/blocker relationships; repository metadata and empty release/PR/tag/discussion inventories are included.
+- [Original import snapshot](issues-2026-09-27.json): unchanged provenance from the initial source import.
+- [Complete Git history bundle](undokit-history.bundle): all ten commits and the sole main branch at `5ca57fd54f91ad754ca3d0d8398f67745a7b5be7`. `git bundle verify`, an independent clone and `git fsck --full` passed. The restored vocabulary, license and all three research documents match the imported copies byte for byte.
+- There were no releases, tags, pull requests, discussions or issue attachment URLs to migrate. Wiki support was enabled, but no wiki Git repository existed. The separate local checkout was clean and remains available.
+- Original MIT attribution is retained. The bundle also retains original source, configuration, local workflow material and historical Git metadata without adding a nested repository.
 
-The destination remains a Core Data-backed, independently consumable XCFramework with typed Swift APIs and independently usable Objective-C APIs. Swift clients retain typed models, including supported Swift Collections values, without manual object-graph decomposition. Folio and KitchenMemory keep distinct history/availability and native-focus policies. Shared generic history UI is deferred. No framework implementation or consumer integration is claimed by this import.
+## Original issue disposition
 
-## Open design and proof work
+| Original issue | Preserved or continued in Folio |
+| --- | --- |
+| #1 | [#51](https://github.com/Folio-Suite/Folio/issues/51) Accept UndoKit design for Folio implementation |
+| #2 | Resolved research/ownership decision retained in the tracker snapshot and imported research/vocabulary; no duplicate work ticket. |
+| #3 | Resolved research/ownership decision retained in the tracker snapshot and imported research/vocabulary; no duplicate work ticket. |
+| #4 | Resolved research/ownership decision retained in the tracker snapshot and imported research/vocabulary; no duplicate work ticket. |
+| #5 | Resolved research/ownership decision retained in the tracker snapshot and imported research/vocabulary; no duplicate work ticket. |
+| #6 | [#41](https://github.com/Folio-Suite/Folio/issues/41) Define UndoKit durable acceptance and interruption recovery |
+| #7 | [#42](https://github.com/Folio-Suite/Folio/issues/42) Define UndoKit branches, checkpoints, and bounded retention |
+| #8 | [#43](https://github.com/Folio-Suite/Folio/issues/43) Define typed Swift UndoKit payload and host interfaces |
+| #9 | [#44](https://github.com/Folio-Suite/Folio/issues/44) Define native UndoKit routing and restored availability |
+| #10 | [#45](https://github.com/Folio-Suite/Folio/issues/45) Define UndoKit store lifecycle and safe capacity |
+| #11 | External XCFramework distribution deferred beyond Folio 1.0; full original question retained in the snapshot. |
+| #12 | [#46](https://github.com/Folio-Suite/Folio/issues/46) Set UndoKit acceptance scenarios and measured budgets |
+| #13 | [#51](https://github.com/Folio-Suite/Folio/issues/51) Accept UndoKit design for Folio implementation |
+| #14 | [#47](https://github.com/Folio-Suite/Folio/issues/47) Prove UndoKit interruption recovery and durable invalidation |
+| #15 | [#48](https://github.com/Folio-Suite/Folio/issues/48) Prove UndoKit native restoration and focus behavior |
+| #16 | [#49](https://github.com/Folio-Suite/Folio/issues/49) Prove UndoKit package and compatibility failure preservation |
+| #17 | [#43](https://github.com/Folio-Suite/Folio/issues/43) retains the relevant typed Swift independence/payload proof; external Objective-C/XCFramework proof is deferred. |
+| #18 | [#50](https://github.com/Folio-Suite/Folio/issues/50) Prove UndoKit branching and retention at the agreed scale |
 
-- **Acceptance/recovery gate:** #6 defines durable acceptance, compensation, and interruption recovery; #14 proves recovery and durable invalidation. Verify current status in GitHub before acting. The snapshot records #6 as open and unblocked: its two native blockers, #3 and #5, are closed. It is the next unblocked decision, while its resolution gates downstream work such as #12.
-- **Contracts:** #7 branching/checkpoints/retention; #8 typed payloads and interfaces; #9 native routing/restoration; #10 store/package lifecycle and compatibility; #11 XCFramework distribution/adoption.
-- **Proof gates:** #12 sets scenarios, scale budgets, and proof criteria; #15–#18 prove native behavior, package failure preservation, cross-language adoption, and branching/retention at scale.
-- **Readiness:** #13 is the design-completion gate, depending on its linked work. The map #1 remains open.
+Original dependency identities are preserved in the snapshot. The successor graph removes external distribution as a prerequisite and uses native Folio blockers. Recovery, branch semantics, payloads, native routing, store lifecycle, measured proof budgets and human review remain outstanding.
 
-GitHub's native blocker relationships are captured as `blockedBy` and `blocking` on each JSON issue record. In particular, #14–#18 are blocked by #12 and block #13. Preserve typed-language interoperability, host-owned semantics and policy, framework capabilities/storage safeguards, and the deferred generic history UI as unsettled work proceeds.
+## Accepted boundaries
+
+Hosts retain semantics, no-op filtering, validation, compensation, accepted outcomes, recovery evidence, store location and policy. UndoKit owns shared history capabilities, its separate Core Data history store, native adapters and storage safeguards. Recording does not establish domain acceptance. Folio document history and KitchenMemory's bounded policy remain distinct; no framework-wide `Revision` replaces host terminology.
+
+## Recover the original repository
+
+From a local checkout of this inventory, run `git clone undokit-history.bundle <destination>` to restore the complete original Git repository. The JSON snapshots preserve tracker data separately because issues and comments are not Git objects. Historical original URLs will no longer resolve after deletion; use this inventory and the successor links above.

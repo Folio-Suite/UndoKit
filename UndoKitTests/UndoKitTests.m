@@ -1,9 +1,5 @@
-//
-//  UndoKitTests.m
-//  UndoKitTests
-//
-//  Created by Justin Croonenberghs on 9/25/26.
-//
+// SPDX-FileCopyrightText: 2026 the Folio Project
+// SPDX-License-Identifier: MIT
 
 #import <XCTest/XCTest.h>
 

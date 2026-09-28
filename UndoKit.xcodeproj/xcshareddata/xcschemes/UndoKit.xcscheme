@@ -1,8 +1,4 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!--
-SPDX-FileCopyrightText: 2026 the Folio Project
-SPDX-License-Identifier: MIT
--->
 <Scheme
    LastUpgradeVersion = "2700"
    version = "1.7">
@@ -70,7 +66,7 @@ SPDX-License-Identifier: MIT
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "A1819381306767B600D3F601"
             BuildableName = "UndoKit.framework"
-               BlueprintName = "UndoKit"
+            BlueprintName = "UndoKit"
             ReferencedContainer = "container:UndoKit.xcodeproj">
          </BuildableReference>
       </MacroExpansion>

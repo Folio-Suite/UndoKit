@@ -5,6 +5,8 @@ SPDX-License-Identifier: MIT
 
 # Preserved UndoKit design and repository history
 
+**Remote status:** the original GitHub repository remains present. The authorized deletion attempt was rejected because the CLI credential lacks the `delete_repo` scope. No credential change was made. Its useful design work and complete recovery archive are preserved here, and Folio owns the successor work.
+
 The original `ctwelve/UndoKit` repository is retired by explicit maintainer direction after preservation. Folio now owns active planning and future development. UndoKit will be a Swift framework, serving Folio first and KitchenMemory second, with generic capabilities and host-owned policy. External distribution and independently usable Objective-C interfaces are deferred beyond Folio Suite 1.0; original requirements remain historical evidence rather than current gates.
 
 ## Verified preservation

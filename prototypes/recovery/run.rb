@@ -2,68 +2,139 @@
 # SPDX-FileCopyrightText: 2026 the Folio Project
 # SPDX-License-Identifier: MIT
 require 'tmpdir'
-require 'timeout'
 require 'fileutils'
+require 'json'
+require 'digest'
+
+# This runner owns only its child process tree and temporary fixture directory.
+def setting(name, fallback)
+  value = Integer(ENV.fetch(name, fallback.to_s))
+  abort "#{name} must be positive" unless value.positive?
+  value
+end
+
+def free_bytes(path)
+  output = IO.popen(['df', '-k', path], &:read)
+  raise 'Could not read free disk space' unless $?.success?
+  Integer(output.lines.last.split[3]) * 1024
+end
+
+def descendants(root)
+  output = IO.popen(['ps', '-axo', 'pid=,ppid=,rss='], &:read)
+  raise 'Could not read process memory' unless $?.success?
+  rows = output.lines.map { |line| line.split.map(&:to_i) }
+  ids = [root]
+  loop do
+    children = rows.select { |pid, parent, _| ids.include?(parent) && !ids.include?(pid) }.map(&:first)
+    break if children.empty?
+    ids.concat(children)
+  end
+  [ids, rows.select { |pid, _, _| ids.include?(pid) }.sum { |_, _, rss| rss * 1024 }]
+end
+
+def stop_children(root, ids)
+  # Foundation children can establish a separate process group; include descendants.
+  ids.reverse_each do |child|
+    begin
+      Process.kill('KILL', child)
+    rescue Errno::ESRCH
+      nil
+    end
+  end
+  begin
+    Process.kill('KILL', -root)
+  rescue Errno::ESRCH
+    nil
+  end
+end
 
 package = File.expand_path(__dir__)
-disk = IO.popen(['df', '-k', Dir.tmpdir], &:read).lines.last.split
-free_bytes = Integer(disk[3]) * 1024
-floor = 20 * 1024**3
-abort "SKIP: less than 20 GiB free on temporary volume" if free_bytes < floor
+limits = {
+  timeout_seconds: setting('RECOVERY_PROBE_TIMEOUT', 180),
+  memory_bytes: setting('RECOVERY_PROBE_MEMORY_MIB', 2048) * 1024**2,
+  disk_bytes: setting('RECOVERY_PROBE_DISK_MIB', 12_288) * 1024**2,
+  free_floor_bytes: setting('RECOVERY_PROBE_FREE_MIB', 20_480) * 1024**2
+}
+# Overrides are explicit experiment configuration, not production limits.
+puts "Recovery probe limits: #{limits.to_json}"
+if [free_bytes(Dir.tmpdir), free_bytes(package)].min < limits[:free_floor_bytes]
+  warn 'SKIP: insufficient free space for the configured floor'
+  exit 77
+end
 
-timeout_seconds = Integer(ENV.fetch('RECOVERY_PROBE_TIMEOUT', '180'))
-abort 'Timeout must be between 1 and 600 seconds' unless (1..600).cover?(timeout_seconds)
-puts "Recovery probe: small deterministic #47 suite; free temporary disk #{free_bytes} bytes; watchdog #{timeout_seconds}s"
-puts "Source: #{package}"
-
+build = File.join(package, '.build')
+FileUtils.mkdir_p(build)
 fixture_dir = Dir.mktmpdir('folio-recovery-')
-memory_limit = 2 * 1024**3
-disk_limit = 12 * 1024**3
+log_path = File.join(build, 'recovery-last-run.log')
+report_path = File.join(build, 'recovery-last-run.json')
+started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+source_head = IO.popen(['git', '-C', package, 'rev-parse', 'HEAD'], &:read).strip
+source_files = Dir.glob(File.join(package, '**', '*.swift')) + [File.join(package, 'run.rb')]
+source_hashes = source_files.sort.to_h { |path| [path.delete_prefix(package + '/'), Digest::SHA256.file(path).hexdigest] }
+report = { source: package, source_head: source_head, source_sha256: source_hashes,
+           fixture_directory: fixture_dir, limits: limits,
+           peak_sampled_memory_bytes: 0, peak_sampled_owned_bytes: 0 }
 reason = nil
-running = true
-pid = Process.spawn({ 'TMPDIR' => fixture_dir }, 'swift', 'test', '--package-path', package,
-                    '-Xswiftc', '-strict-concurrency=complete', '-Xswiftc', '-warnings-as-errors',
-                    chdir: package, pgroup: true, out: $stdout, err: $stderr)
-watchdog = Thread.new do
-  while running
-    sleep 0.5
-    break unless running
-    resident_kib = IO.popen(['ps', '-axo', 'pgid=,rss='], &:read).lines.sum do |line|
-      fields = line.split
-      fields.length == 2 && fields[0].to_i == pid ? fields[1].to_i : 0
-    end
-    owned_kib = IO.popen(['du', '-sk', fixture_dir, File.join(package, '.build')], &:read).lines.sum do |line|
-      line.split.first.to_i
-    end
-    remaining = Integer(IO.popen(['df', '-k', fixture_dir], &:read).lines.last.split[3]) * 1024
-    reason = if resident_kib * 1024 > memory_limit
-               "combined process-group RSS exceeded 2 GiB (#{resident_kib} KiB)"
-             elsif owned_kib * 1024 > disk_limit
-               "fixture and build footprint exceeded 12 GiB (#{owned_kib} KiB)"
-             elsif remaining < floor
-               "remaining temporary disk fell below 20 GiB (#{remaining} bytes)"
-             end
-    next unless reason
-    warn "FAIL: watchdog stopped recovery probe: #{reason}; fixtures retained at #{fixture_dir}"
-    File.write(File.join(fixture_dir, 'watchdog-diagnostic.txt'), reason + "\n")
-    Process.kill('KILL', -pid)
-    break
-  end
-rescue Errno::ESRCH
-  nil
-end
+child_status = nil
+child_ids = []
+pid = nil
 begin
-  Timeout.timeout(timeout_seconds) { Process.wait(pid) }
-rescue Timeout::Error
-  reason = "runtime exceeded #{timeout_seconds}s"
-  warn "FAIL: watchdog stopped recovery probe: #{reason}; fixtures retained at #{fixture_dir}"
-  File.write(File.join(fixture_dir, 'watchdog-diagnostic.txt'), reason + "\n")
-  Process.kill('KILL', -pid)
-  Process.wait(pid)
+  File.open(log_path, 'w') do |log|
+    pid = Process.spawn({ 'TMPDIR' => fixture_dir, 'RECOVERY_PROBE_KEEP_FIXTURES' => '1' }, 'xcrun', 'swift', 'test', '--package-path', package,
+                        '-Xswiftc', '-strict-concurrency=complete', '-Xswiftc', '-warnings-as-errors',
+                        chdir: package, pgroup: true, out: log, err: log)
+    loop do
+      completed = Process.waitpid2(pid, Process::WNOHANG)
+      if completed
+        child_status = completed.last
+        break
+      end
+      child_ids, resident = descendants(pid)
+      usage = IO.popen(['du', '-sk', fixture_dir, build], &:read)
+      raise 'Could not read owned disk usage' unless $?.success?
+      owned = usage.lines.sum { |line| Integer(line.split.first) * 1024 }
+      report[:peak_sampled_memory_bytes] = [report[:peak_sampled_memory_bytes], resident].max
+      report[:peak_sampled_owned_bytes] = [report[:peak_sampled_owned_bytes], owned].max
+      elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
+      reason = if elapsed > limits[:timeout_seconds]
+                 'runtime limit exceeded'
+               elsif resident > limits[:memory_bytes]
+                 'combined descendant RSS limit exceeded'
+               elsif owned > limits[:disk_bytes]
+                 'fixture and build footprint limit exceeded'
+               elsif [free_bytes(fixture_dir), free_bytes(build)].min < limits[:free_floor_bytes]
+                 'remaining disk below free-space floor'
+               end
+      break if reason
+      sleep 0.25
+    end
+  end
+rescue StandardError, Interrupt => error
+  reason = "runner failure: #{error.class}: #{error.message}"
 ensure
-  running = false
-  watchdog.join
+  if pid && child_status.nil?
+    stop_children(pid, child_ids)
+    begin
+      _, child_status = Process.waitpid2(pid)
+    rescue Errno::ECHILD
+      nil
+    end
+  end
+  report[:elapsed_seconds] = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
+  report[:reason] = reason
+  report[:child_exit_status] = child_status&.exitstatus
+  report[:child_signal] = child_status&.termsig
+  # Stop children before writing diagnostics: disk failure must not defeat the watchdog.
+  begin
+    File.write(report_path, JSON.pretty_generate(report) + "\n")
+  rescue StandardError => error
+    warn "Could not save runner report: #{error.message}"
+  end
 end
-status = $?.exitstatus || 1
-FileUtils.remove_entry(fixture_dir) if reason.nil?
-exit(reason.nil? ? status : 124)
+puts File.read(log_path) if File.file?(log_path)
+succeeded = reason.nil? && child_status&.success?
+FileUtils.remove_entry(fixture_dir) if succeeded
+warn "FAIL: #{reason || 'test command failed'}; fixtures retained at #{fixture_dir}" unless succeeded
+puts "Runner report: #{report_path}"
+puts 'Memory and disk peaks are sampled watchdog observations, not calibrated benchmarks.'
+exit(reason ? 124 : (child_status&.exitstatus || 1))

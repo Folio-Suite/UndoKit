@@ -7,7 +7,10 @@ public enum CommandKind: String, Codable, Sendable { case ordinary, undo, redo }
 public struct Member: Codable, Equatable, Sendable {
     public let id: String
     public let delta: Int
-    public init(id: String, delta: Int) { self.id = id; self.delta = delta }
+    public let targetMemberID: String?
+    public init(id: String, delta: Int, targetMemberID: String? = nil) {
+        self.id = id; self.delta = delta; self.targetMemberID = targetMemberID
+    }
 }
 public struct Command: Codable, Equatable, Sendable {
     public let scope: String
@@ -17,9 +20,9 @@ public struct Command: Codable, Equatable, Sendable {
     public let groupID: String
     public let members: [Member]
     public init(scope: String, id: String, fingerprint: String, kind: CommandKind,
-                delta: Int, groupID: String? = nil) {
+                delta: Int, groupID: String? = nil, targetMemberID: String? = nil) {
         self.init(scope: scope, id: id, fingerprint: fingerprint, kind: kind,
-                  groupID: groupID ?? id, members: [Member(id: id, delta: delta)])
+                  groupID: groupID ?? id, members: [Member(id: id, delta: delta, targetMemberID: targetMemberID)])
     }
     public init(scope: String, id: String, fingerprint: String, kind: CommandKind,
                 groupID: String, members: [Member]) {
@@ -49,6 +52,7 @@ public struct ActionSnapshot: Equatable, Sendable {
     public let id: String
     public let groupID: String
     public let memberID: String
+    public let targetMemberID: String?
     public let kind: CommandKind
     public let valid: Bool
 }
@@ -62,6 +66,7 @@ public struct HostReceipt: Codable, Equatable, Sendable {
     public let fingerprint: String
     public let outcome: Outcome
     public let memberIDs: [String]
+    public let targetMemberIDs: [String?]
 }
 private struct HostDocument: Codable {
     var values: [String: Int] = [:]
@@ -102,10 +107,11 @@ private struct HostDocument: Codable {
         let outcome = nextOutcome
         nextOutcome = .accepted
         let evidence = outcome == .accepted
-            ? (malformedMemberEvidence ? Array(command.members.dropLast()).map(\.id) : command.members.map(\.id))
+            ? (malformedMemberEvidence ? Array(command.members.dropLast()) : command.members)
             : []
         malformedMemberEvidence = false
-        let receipt = HostReceipt(fingerprint: command.fingerprint, outcome: outcome, memberIDs: evidence)
+        let receipt = HostReceipt(fingerprint: command.fingerprint, outcome: outcome,
+                                  memberIDs: evidence.map(\.id), targetMemberIDs: evidence.map(\.targetMemberID))
         if outcome == .accepted {
             document.values[command.scope, default: 0] += command.members.reduce(0) { $0 + $1.delta }
         }
@@ -157,10 +163,12 @@ private struct HostDocument: Codable {
         transaction.uniquenessConstraints = [["key"]]
         let member = entity("Member", [attribute("transactionKey", .stringAttributeType),
             attribute("ordinal", .integer64AttributeType), attribute("memberID", .stringAttributeType),
+            attribute("targetMemberID", .stringAttributeType, optional: true),
             attribute("delta", .integer64AttributeType)])
         member.uniquenessConstraints = [["transactionKey", "ordinal"]]
         let action = entity("Action", [attribute("scope", .stringAttributeType), attribute("transactionKey", .stringAttributeType),
             attribute("ordinal", .integer64AttributeType), attribute("memberID", .stringAttributeType),
+            attribute("targetMemberID", .stringAttributeType, optional: true),
             attribute("groupID", .stringAttributeType), attribute("kind", .stringAttributeType)])
         action.uniquenessConstraints = [["transactionKey", "ordinal"]]
         let eligibility = entity("GroupEligibility", [attribute("key", .stringAttributeType),
@@ -212,6 +220,7 @@ private struct HostDocument: Codable {
             TransactionPhase.finalized.rawValue, TransactionPhase.cancelled.rawValue))
         guard active.isEmpty else { throw ProbeError.busy }
         if command.kind == .ordinary {
+            guard command.members.allSatisfy({ $0.targetMemberID == nil }) else { throw ProbeError.invalidGroup }
             guard try eligibility(command.scope, command.groupID) == nil else { throw ProbeError.conflict }
         } else {
             let required = command.kind == .undo ? "undoable" : "redoable"
@@ -221,6 +230,14 @@ private struct HostDocument: Codable {
                 : candidates.min { ($0.value(forKey: "sequence") as! Int64) < ($1.value(forKey: "sequence") as! Int64) }
             guard expected?.value(forKey: "groupID") as? String == command.groupID else {
                 throw ProbeError.invalidTransition
+            }
+            let originalMembers = try fetch("Action", predicate: NSPredicate(format: "scope == %@ AND groupID == %@ AND kind == %@",
+                command.scope, command.groupID, CommandKind.ordinary.rawValue),
+                sort: [NSSortDescriptor(key: "ordinal", ascending: true)])
+            let targetPlan = originalMembers.map { $0.value(forKey: "memberID") as! String }
+            let requiredPlan = command.kind == .undo ? Array(targetPlan.reversed()) : targetPlan
+            guard !requiredPlan.isEmpty, command.members.map(\.targetMemberID) == requiredPlan.map(Optional.some) else {
+                throw ProbeError.invalidGroup
             }
         }
         let prior = try fetch("Transaction", predicate: NSPredicate(format: "scope == %@", command.scope))
@@ -235,6 +252,7 @@ private struct HostDocument: Codable {
             let member = NSEntityDescription.insertNewObject(forEntityName: "Member", into: context)
             member.setValue(key(command.scope, command.id), forKey: "transactionKey")
             member.setValue(Int64(ordinal), forKey: "ordinal"); member.setValue(item.id, forKey: "memberID")
+            member.setValue(item.targetMemberID, forKey: "targetMemberID")
             member.setValue(Int64(item.delta), forKey: "delta")
         }
         try save(.prepare)
@@ -255,7 +273,8 @@ private struct HostDocument: Codable {
     private func command(_ token: Token) throws -> Command {
         let record = try check(token)
         let items = try members(token).map { Member(id: $0.value(forKey: "memberID") as! String,
-                                                   delta: Int($0.value(forKey: "delta") as! Int64)) }
+                                                   delta: Int($0.value(forKey: "delta") as! Int64),
+                                                   targetMemberID: $0.value(forKey: "targetMemberID") as? String) }
         return Command(scope: token.scope, id: token.id, fingerprint: record.value(forKey: "fingerprint") as! String,
                        kind: CommandKind(rawValue: record.value(forKey: "kind") as! String)!,
                        groupID: record.value(forKey: "groupID") as! String, members: items)
@@ -275,7 +294,8 @@ private struct HostDocument: Codable {
             try save(.acceptance); throw ProbeError.unresolved
         }
         if receipt.outcome == .accepted {
-            guard receipt.memberIDs == command.members.map(\.id) else {
+            guard receipt.memberIDs == command.members.map(\.id),
+                  receipt.targetMemberIDs == command.members.map(\.targetMemberID) else {
                 record.setValue(TransactionPhase.unresolved.rawValue, forKey: "phase")
                 try save(.acceptance); throw ProbeError.unresolved
             }
@@ -304,6 +324,7 @@ private struct HostDocument: Codable {
                 action.setValue(key(command.scope, command.id), forKey: "transactionKey")
                 action.setValue(Int64(ordinal), forKey: "ordinal")
                 action.setValue(member.id, forKey: "memberID")
+                action.setValue(member.targetMemberID, forKey: "targetMemberID")
                 action.setValue(command.groupID, forKey: "groupID")
                 action.setValue(command.kind.rawValue, forKey: "kind")
             }
@@ -342,17 +363,24 @@ private struct HostDocument: Codable {
     }
     public func recover(host: HostStore) throws {
         let active = try fetch("Transaction", predicate: NSPredicate(format: "phase != %@ AND phase != %@",
-            TransactionPhase.finalized.rawValue, TransactionPhase.cancelled.rawValue))
+            TransactionPhase.finalized.rawValue, TransactionPhase.cancelled.rawValue),
+            sort: [NSSortDescriptor(key: "scope", ascending: true), NSSortDescriptor(key: "sequence", ascending: true)])
+        var foundUnresolved = false
         for record in active {
             let token = Token(scope: record.value(forKey: "scope") as! String, id: record.value(forKey: "id") as! String,
                               generation: record.value(forKey: "generation") as! Int64,
                               sequence: record.value(forKey: "sequence") as! Int64)
-            switch phase(record) {
-            case .deliveryStarted, .unresolved: try reconcile(token, host: host); _ = try finalize(token)
-            case .acceptancePending, .rejectionPending: _ = try finalize(token)
-            default: break
+            do {
+                switch phase(record) {
+                case .deliveryStarted, .unresolved: try reconcile(token, host: host); _ = try finalize(token)
+                case .acceptancePending, .rejectionPending: _ = try finalize(token)
+                default: break
+                }
+            } catch ProbeError.unresolved {
+                foundUnresolved = true
             }
         }
+        if foundUnresolved { throw ProbeError.unresolved }
     }
     public func snapshot(scope: String) throws -> ScopeSnapshot {
         let transactions = try fetch("Transaction", predicate: NSPredicate(format: "scope == %@", scope))
@@ -368,6 +396,7 @@ private struct HostDocument: Codable {
                                       String(action.value(forKey: "ordinal") as! Int64),
                                   groupID: groupID,
                                   memberID: action.value(forKey: "memberID") as! String,
+                                  targetMemberID: action.value(forKey: "targetMemberID") as? String,
                                   kind: kind,
                                   valid: kind == .ordinary ? states[groupID] == "undoable" : kind == .undo && states[groupID] == "redoable") }
         let available = active == nil

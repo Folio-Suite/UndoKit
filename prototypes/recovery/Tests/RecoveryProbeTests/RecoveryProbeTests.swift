@@ -4,9 +4,14 @@ import Foundation
 import Testing
 import RecoveryProbe
 
+private func cleanup(_ directory: URL) {
+    guard ProcessInfo.processInfo.environment["RECOVERY_PROBE_KEEP_FIXTURES"] != "1" else { return }
+    try? FileManager.default.removeItem(at: directory)
+}
+
 @MainActor @Test func acceptedCommandSurvivesReopenWithoutDuplicateDelivery() throws {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-    defer { try? FileManager.default.removeItem(at: directory) }
+    defer { cleanup(directory) }
     let host = try HostStore.open(directory: directory)
     let probe = try RecoveryProbe.open(directory: directory)
     let command = Command(scope: "work-a", id: "one", fingerprint: "add-one", kind: .ordinary, delta: 1)
@@ -21,7 +26,7 @@ import RecoveryProbe
 
 @MainActor @Test func preparationAndCancellationNeverChangeHost() throws {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-    defer { try? FileManager.default.removeItem(at: directory) }
+    defer { cleanup(directory) }
     let host = try HostStore.open(directory: directory)
     let probe = try RecoveryProbe.open(directory: directory)
     let command = Command(scope: "a", id: "cancelled", fingerprint: "first", kind: .ordinary, delta: 4)
@@ -40,7 +45,7 @@ import RecoveryProbe
 
 @MainActor @Test func unknownOutcomeSuspendsOnlyItsScopeAndLaterReceiptRecovers() throws {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-    defer { try? FileManager.default.removeItem(at: directory) }
+    defer { cleanup(directory) }
     let host = try HostStore.open(directory: directory)
     let probe = try RecoveryProbe.open(directory: directory)
     let command = Command(scope: "a", id: "uncertain", fingerprint: "add-five", kind: .ordinary, delta: 5)
@@ -62,7 +67,7 @@ import RecoveryProbe
 
 @MainActor @Test func hostAcceptedBeforeHistorySaveIsNeverAppliedTwice() throws {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-    defer { try? FileManager.default.removeItem(at: directory) }
+    defer { cleanup(directory) }
     let host = try HostStore.open(directory: directory)
     let probe = try RecoveryProbe.open(directory: directory)
     let command = Command(scope: "a", id: "one", fingerprint: "add-nine", kind: .ordinary, delta: 9)
@@ -82,17 +87,19 @@ import RecoveryProbe
 
 @MainActor @Test func acceptedInverseAndRejectedInverseKeepEligibilityHonest() throws {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-    defer { try? FileManager.default.removeItem(at: directory) }
+    defer { cleanup(directory) }
     let host = try HostStore.open(directory: directory)
     let probe = try RecoveryProbe.open(directory: directory)
     let original = Command(scope: "a", id: "original", fingerprint: "plus-three", kind: .ordinary, delta: 3, groupID: "group")
     #expect(try probe.submit(original, host: host) == .accepted)
-    let inverse = Command(scope: "a", id: "undo", fingerprint: "minus-three", kind: .undo, delta: -3, groupID: "group")
+    let inverse = Command(scope: "a", id: "undo", fingerprint: "minus-three", kind: .undo, delta: -3,
+                          groupID: "group", targetMemberID: "original")
     #expect(try probe.submit(inverse, host: host) == .accepted)
     #expect(try host.value(scope: "a") == 0)
     #expect(try probe.snapshot(scope: "a").undoAvailable == false)
     #expect(try probe.snapshot(scope: "a").redoAvailable == true)
-    let redo = Command(scope: "a", id: "redo", fingerprint: "plus-again", kind: .redo, delta: 3, groupID: "group")
+    let redo = Command(scope: "a", id: "redo", fingerprint: "plus-again", kind: .redo, delta: 3,
+                       groupID: "group", targetMemberID: "original")
     host.nextOutcome = .rejected
     let token = try probe.prepare(redo)
     try probe.markDeliveryStarted(token)
@@ -111,7 +118,7 @@ import RecoveryProbe
 
 @MainActor @Test func groupMustHaveWholeAuthoritativeMemberEvidence() throws {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-    defer { try? FileManager.default.removeItem(at: directory) }
+    defer { cleanup(directory) }
     let host = try HostStore.open(directory: directory)
     let probe = try RecoveryProbe.open(directory: directory)
     let group = Command(scope: "a", id: "group-command", fingerprint: "two-members", kind: .ordinary,
@@ -132,7 +139,7 @@ import RecoveryProbe
 
 @MainActor @Test func rejectedOrdinaryCommandHasNoActionAndNoEffect() throws {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-    defer { try? FileManager.default.removeItem(at: directory) }
+    defer { cleanup(directory) }
     let host = try HostStore.open(directory: directory)
     let probe = try RecoveryProbe.open(directory: directory)
     let command = Command(scope: "a", id: "no-op", fingerprint: "no-op", kind: .ordinary, delta: 5)
@@ -146,7 +153,7 @@ import RecoveryProbe
 
 @MainActor @Test func failedHistoryFinalizationPreservesAcceptedEffectAcrossRepeatedReopens() throws {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-    defer { try? FileManager.default.removeItem(at: directory) }
+    defer { cleanup(directory) }
     let host = try HostStore.open(directory: directory)
     let command = Command(scope: "a", id: "accepted", fingerprint: "four", kind: .ordinary, delta: 4)
     let first = try RecoveryProbe.open(directory: directory)
@@ -173,7 +180,7 @@ import RecoveryProbe
     #expect(FileManager.default.isExecutableFile(atPath: executable.path))
     for mode in ["afterPrepare", "afterDelivery", "afterHostAcceptance", "afterAcceptanceRecord", "afterFinalization"] {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        defer { try? FileManager.default.removeItem(at: directory) }
+        defer { cleanup(directory) }
         let process = Process()
         process.executableURL = executable
         process.arguments = [directory.path, mode]
@@ -207,33 +214,36 @@ import RecoveryProbe
         let final = try RecoveryProbe.open(directory: directory)
         #expect(try final.snapshot(scope: "killed").actions.count == 1, "\(mode)")
         #expect(try host.value(scope: "killed") == 7, "\(mode)")
+        print("SIGKILL \(mode): signal=\(process.terminationStatus), hostValue=7, actions=1")
         try final.close()
     }
 }
 
 @MainActor @Test func undoCannotSkipNewerAcceptedGroup() throws {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-    defer { try? FileManager.default.removeItem(at: directory) }
+    defer { cleanup(directory) }
     let host = try HostStore.open(directory: directory)
     let probe = try RecoveryProbe.open(directory: directory)
     #expect(try probe.submit(Command(scope: "a", id: "first", fingerprint: "one", kind: .ordinary, delta: 1), host: host) == .accepted)
     #expect(try probe.submit(Command(scope: "a", id: "second", fingerprint: "two", kind: .ordinary, delta: 2), host: host) == .accepted)
     #expect(throws: ProbeError.invalidTransition) {
-        try probe.submit(Command(scope: "a", id: "wrong-undo", fingerprint: "minus-one", kind: .undo, delta: -1, groupID: "first"), host: host)
+        try probe.submit(Command(scope: "a", id: "wrong-undo", fingerprint: "minus-one", kind: .undo, delta: -1,
+                                 groupID: "first", targetMemberID: "first"), host: host)
     }
     #expect(try host.value(scope: "a") == 3)
 }
 
 @MainActor @Test func wholeGroupInverseAndRejectionAreAtomicToCaller() throws {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-    defer { try? FileManager.default.removeItem(at: directory) }
+    defer { cleanup(directory) }
     let host = try HostStore.open(directory: directory)
     let probe = try RecoveryProbe.open(directory: directory)
     let original = Command(scope: "a", id: "group", fingerprint: "two-adds", kind: .ordinary,
                            groupID: "g", members: [Member(id: "one", delta: 2), Member(id: "two", delta: 3)])
     #expect(try probe.submit(original, host: host) == .accepted)
     let inverse = Command(scope: "a", id: "inverse", fingerprint: "two-compensations", kind: .undo,
-                          groupID: "g", members: [Member(id: "undo-two", delta: -3), Member(id: "undo-one", delta: -2)])
+                          groupID: "g", members: [Member(id: "undo-two", delta: -3, targetMemberID: "two"),
+                                                   Member(id: "undo-one", delta: -2, targetMemberID: "one")])
     host.nextOutcome = .rejected
     #expect(try probe.submit(inverse, host: host) == .rejected)
     #expect(try host.value(scope: "a") == 5)
@@ -244,20 +254,30 @@ import RecoveryProbe
                          groupID: "g", members: [Member(id: "one", delta: 2), Member(id: "two", delta: 3)])
     #expect(try probe.submit(second, host: host) == .accepted)
     let acceptedInverse = Command(scope: "b", id: "inverse", fingerprint: "two-compensations", kind: .undo,
-                                  groupID: "g", members: [Member(id: "undo-two", delta: -3), Member(id: "undo-one", delta: -2)])
+                                  groupID: "g", members: [Member(id: "undo-two", delta: -3, targetMemberID: "two"),
+                                                           Member(id: "undo-one", delta: -2, targetMemberID: "one")])
     #expect(try probe.submit(acceptedInverse, host: host) == .accepted)
     #expect(try host.value(scope: "b") == 0)
     #expect(try probe.snapshot(scope: "b").actions.count == 4)
+    #expect(try probe.snapshot(scope: "b").actions.filter { $0.kind == .undo }.map(\.targetMemberID) == ["two", "one"])
+    #expect(try host.lookup(scope: "b", id: "inverse")?.targetMemberIDs == ["two", "one"])
     #expect(try probe.snapshot(scope: "b").redoAvailable == true)
+    let redo = Command(scope: "b", id: "redo", fingerprint: "ordered-reapplication", kind: .redo,
+                       groupID: "g", members: [Member(id: "redo-one", delta: 2, targetMemberID: "one"),
+                                              Member(id: "redo-two", delta: 3, targetMemberID: "two")])
+    #expect(try probe.submit(redo, host: host) == .accepted)
+    #expect(try probe.snapshot(scope: "b").actions.filter { $0.kind == .redo }.map(\.targetMemberID) == ["one", "two"])
+    #expect(try host.value(scope: "b") == 5)
 }
 
 @MainActor @Test func newOrdinaryCommandAfterUndoAbandonsRedoEligibility() throws {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-    defer { try? FileManager.default.removeItem(at: directory) }
+    defer { cleanup(directory) }
     let host = try HostStore.open(directory: directory)
     let probe = try RecoveryProbe.open(directory: directory)
     #expect(try probe.submit(Command(scope: "a", id: "first", fingerprint: "plus-one", kind: .ordinary, delta: 1), host: host) == .accepted)
-    #expect(try probe.submit(Command(scope: "a", id: "undo", fingerprint: "minus-one", kind: .undo, delta: -1, groupID: "first"), host: host) == .accepted)
+    #expect(try probe.submit(Command(scope: "a", id: "undo", fingerprint: "minus-one", kind: .undo, delta: -1,
+                                     groupID: "first", targetMemberID: "first"), host: host) == .accepted)
     #expect(try probe.snapshot(scope: "a").redoAvailable == true)
     #expect(try probe.submit(Command(scope: "a", id: "new", fingerprint: "plus-four", kind: .ordinary, delta: 4), host: host) == .accepted)
     #expect(try probe.snapshot(scope: "a").redoAvailable == false)
@@ -266,7 +286,7 @@ import RecoveryProbe
 
 @MainActor @Test func failedBoundarySavesNeverMistakeMissingReceiptForRejection() throws {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-    defer { try? FileManager.default.removeItem(at: directory) }
+    defer { cleanup(directory) }
     let host = try HostStore.open(directory: directory)
     let probe = try RecoveryProbe.open(directory: directory)
     let command = Command(scope: "a", id: "one", fingerprint: "plus-six", kind: .ordinary, delta: 6)
@@ -288,7 +308,7 @@ import RecoveryProbe
 
 @MainActor @Test func failedAcceptanceRecordReconcilesWithoutRedelivery() throws {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-    defer { try? FileManager.default.removeItem(at: directory) }
+    defer { cleanup(directory) }
     let host = try HostStore.open(directory: directory)
     let probe = try RecoveryProbe.open(directory: directory)
     let command = Command(scope: "a", id: "one", fingerprint: "plus-eight", kind: .ordinary, delta: 8)
@@ -307,7 +327,7 @@ import RecoveryProbe
 
 @MainActor @Test func failedRejectionRecordCannotCreateAnActionOnReopen() throws {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-    defer { try? FileManager.default.removeItem(at: directory) }
+    defer { cleanup(directory) }
     let host = try HostStore.open(directory: directory)
     let probe = try RecoveryProbe.open(directory: directory)
     let command = Command(scope: "a", id: "reject", fingerprint: "no-effect", kind: .ordinary, delta: 10)
@@ -328,13 +348,13 @@ import RecoveryProbe
 
 @MainActor @Test func acceptedInverseFinalizesAfterReopenWithoutSecondHostDelivery() throws {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-    defer { try? FileManager.default.removeItem(at: directory) }
+    defer { cleanup(directory) }
     let host = try HostStore.open(directory: directory)
     let first = try RecoveryProbe.open(directory: directory)
     #expect(try first.submit(Command(scope: "a", id: "original", fingerprint: "plus-five", kind: .ordinary,
                                      delta: 5, groupID: "g"), host: host) == .accepted)
     let inverse = Command(scope: "a", id: "inverse", fingerprint: "minus-five", kind: .undo,
-                          delta: -5, groupID: "g")
+                          delta: -5, groupID: "g", targetMemberID: "original")
     let token = try first.prepare(inverse)
     try first.markDeliveryStarted(token)
     try first.deliver(token, host: host)
@@ -356,14 +376,15 @@ import RecoveryProbe
 
 @MainActor @Test func rejectedInverseOutcomeSaveFailureKeepsRedoFenced() throws {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-    defer { try? FileManager.default.removeItem(at: directory) }
+    defer { cleanup(directory) }
     let host = try HostStore.open(directory: directory)
     let first = try RecoveryProbe.open(directory: directory)
     #expect(try first.submit(Command(scope: "a", id: "original", fingerprint: "plus-five", kind: .ordinary,
                                      delta: 5, groupID: "g"), host: host) == .accepted)
     #expect(try first.submit(Command(scope: "a", id: "inverse", fingerprint: "minus-five", kind: .undo,
-                                     delta: -5, groupID: "g"), host: host) == .accepted)
-    let redo = Command(scope: "a", id: "redo", fingerprint: "stale-redo", kind: .redo, delta: 5, groupID: "g")
+                                     delta: -5, groupID: "g", targetMemberID: "original"), host: host) == .accepted)
+    let redo = Command(scope: "a", id: "redo", fingerprint: "stale-redo", kind: .redo, delta: 5,
+                       groupID: "g", targetMemberID: "original")
     let token = try first.prepare(redo)
     try first.markDeliveryStarted(token)
     host.nextOutcome = .rejected
@@ -378,4 +399,46 @@ import RecoveryProbe
     #expect(try second.snapshot(scope: "a").actions.count == 2)
     #expect(try host.value(scope: "a") == 0)
     #expect(host.deliveryAttempts == 3)
+}
+
+@MainActor @Test func incompleteInverseMemberPlanIsRefusedBeforeHostDelivery() throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { cleanup(directory) }
+    let host = try HostStore.open(directory: directory)
+    let probe = try RecoveryProbe.open(directory: directory)
+    let original = Command(scope: "a", id: "group", fingerprint: "two-members", kind: .ordinary,
+                           groupID: "g", members: [Member(id: "first", delta: 2), Member(id: "second", delta: 3)])
+    #expect(try probe.submit(original, host: host) == .accepted)
+    let incomplete = Command(scope: "a", id: "bad-inverse", fingerprint: "only-one", kind: .undo,
+                             groupID: "g", members: [Member(id: "undo-only", delta: -5, targetMemberID: "second")])
+    #expect(throws: ProbeError.invalidGroup) { try probe.submit(incomplete, host: host) }
+    let wrongOrder = Command(scope: "a", id: "wrong-order", fingerprint: "wrong-order", kind: .undo,
+                             groupID: "g", members: [Member(id: "undo-first", delta: -2, targetMemberID: "first"),
+                                                    Member(id: "undo-second", delta: -3, targetMemberID: "second")])
+    #expect(throws: ProbeError.invalidGroup) { try probe.submit(wrongOrder, host: host) }
+    #expect(host.deliveryAttempts == 1)
+    #expect(try host.value(scope: "a") == 5)
+    #expect(try probe.snapshot(scope: "a").undoAvailable)
+}
+
+@MainActor @Test func unresolvedScopeDoesNotStopIndependentAcceptedRecovery() throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { cleanup(directory) }
+    let host = try HostStore.open(directory: directory)
+    let first = try RecoveryProbe.open(directory: directory)
+    let unavailable = Command(scope: "a", id: "missing", fingerprint: "missing-receipt", kind: .ordinary, delta: 1)
+    let a = try first.prepare(unavailable)
+    try first.markDeliveryStarted(a)
+    let accepted = Command(scope: "b", id: "accepted", fingerprint: "plus-four", kind: .ordinary, delta: 4)
+    let b = try first.prepare(accepted)
+    try first.markDeliveryStarted(b)
+    _ = try host.apply(accepted)
+    try first.close()
+    let reopened = try RecoveryProbe.open(directory: directory)
+    #expect(throws: ProbeError.unresolved) { try reopened.recover(host: host) }
+    #expect(try reopened.snapshot(scope: "a").phase == .unresolved)
+    #expect(try reopened.snapshot(scope: "b").phase == nil)
+    #expect(try reopened.snapshot(scope: "b").actions.count == 1)
+    #expect(try host.value(scope: "b") == 4)
+    #expect(host.deliveryAttempts == 1)
 }

@@ -7,13 +7,13 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0DC102BA675746A4EC039F34 /* Collections in Frameworks */ = {isa = PBXBuildFile; productRef = 47410F255C9D1AB799521CB0 /* Collections */; };
+		61460B1F53B3AC2E379B647F /* Algorithms in Frameworks */ = {isa = PBXBuildFile; productRef = 613C9292406B67FA6D5E095C /* Algorithms */; };
 		A120CDEA306A0D9F0097A0D5 /* Project.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = A120CDE9306A0D9F0097A0D5 /* Project.xcconfig */; };
 		A181938E306767B700D3F601 /* UndoKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A1819382306767B600D3F601 /* UndoKit.framework */; };
 		A18193A63067681900D3F601 /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = A18193A43067681900D3F601 /* LICENSE */; };
 		A18193A73067681900D3F601 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = A18193A53067681900D3F601 /* README.md */; };
 		FB10143AAEEC910C8409EAF0 /* Defaults in Frameworks */ = {isa = PBXBuildFile; productRef = E028F02C28AD325AD9497000 /* Defaults */; };
-		0DC102BA675746A4EC039F34 /* Collections in Frameworks */ = {isa = PBXBuildFile; productRef = 47410F255C9D1AB799521CB0 /* Collections */; };
-		61460B1F53B3AC2E379B647F /* Algorithms in Frameworks */ = {isa = PBXBuildFile; productRef = 613C9292406B67FA6D5E095C /* Algorithms */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -35,21 +35,11 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		A1819394306767B700D3F601 /* Exceptions for "UndoKit" folder in "UndoKit" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			publicHeaders = (
-				UndoKit.h,
-			);
-			target = A1819381306767B600D3F601 /* UndoKit */;
-		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		A1819384306767B600D3F601 /* UndoKit */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				A1819394306767B700D3F601 /* Exceptions for "UndoKit" folder in "UndoKit" target */,
-			);
 			path = UndoKit;
 			sourceTree = "<group>";
 		};
@@ -121,21 +111,21 @@
 			);
 			buildRules = (
 			);
+			dependencies = (
+				1B341B6B400C16817E4D0B30 /* PBXTargetDependency */,
+			);
 			fileSystemSynchronizedGroups = (
 				A1819384306767B600D3F601 /* UndoKit */,
 			);
 			name = UndoKit;
-			productName = UndoKit;
-			productReference = A1819382306767B600D3F601 /* UndoKit.framework */;
-			productType = "com.apple.product-type.framework";
-			dependencies = (
-				1B341B6B400C16817E4D0B30 /* SwiftLintBuildToolPlugin */,
-			);
 			packageProductDependencies = (
 				E028F02C28AD325AD9497000 /* Defaults */,
 				47410F255C9D1AB799521CB0 /* Collections */,
 				613C9292406B67FA6D5E095C /* Algorithms */,
 			);
+			productName = UndoKit;
+			productReference = A1819382306767B600D3F601 /* UndoKit.framework */;
+			productType = "com.apple.product-type.framework";
 		};
 		A181938C306767B700D3F601 /* UndoKitTests */ = {
 			isa = PBXNativeTarget;
@@ -148,7 +138,7 @@
 			buildRules = (
 			);
 			dependencies = (
-				631DC7CCA9AEEB67CBB034CE /* SwiftLintBuildToolPlugin */,
+				631DC7CCA9AEEB67CBB034CE /* PBXTargetDependency */,
 				A1819390306767B700D3F601 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
@@ -187,6 +177,12 @@
 			);
 			mainGroup = A1819378306767B600D3F601;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				8840E7303BFF30ECF81EBBB2 /* XCRemoteSwiftPackageReference "Defaults" */,
+				5325B1215BE6F97D2177BCA9 /* XCRemoteSwiftPackageReference "swift-collections" */,
+				6948A5714736CDFFD6F9045B /* XCRemoteSwiftPackageReference "swift-algorithms" */,
+				021B629ED4FAEF4DAECE0712 /* XCRemoteSwiftPackageReference "SwiftLintPlugins" */,
+			);
 			preferredProjectObjectVersion = 110;
 			productRefGroup = A1819383306767B600D3F601 /* Products */;
 			projectDirPath = "";
@@ -194,12 +190,6 @@
 			targets = (
 				A1819381306767B600D3F601 /* UndoKit */,
 				A181938C306767B700D3F601 /* UndoKitTests */,
-			);
-			packageReferences = (
-				8840E7303BFF30ECF81EBBB2 /* XCRemoteSwiftPackageReference "Defaults" */,
-				5325B1215BE6F97D2177BCA9 /* XCRemoteSwiftPackageReference "swift-collections" */,
-				6948A5714736CDFFD6F9045B /* XCRemoteSwiftPackageReference "swift-algorithms" */,
-				021B629ED4FAEF4DAECE0712 /* XCRemoteSwiftPackageReference "SwiftLintPlugins" */,
 			);
 		};
 /* End PBXProject section */
@@ -234,18 +224,18 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		1B341B6B400C16817E4D0B30 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			productRef = 86D29266179CEA3AF4457BDA /* SwiftLintBuildToolPlugin */;
+		};
+		631DC7CCA9AEEB67CBB034CE /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			productRef = B712686F35EFD8226F0EF515 /* SwiftLintBuildToolPlugin */;
+		};
 		A1819390306767B700D3F601 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = A1819381306767B600D3F601 /* UndoKit */;
 			targetProxy = A181938F306767B700D3F601 /* PBXContainerItemProxy */;
-		};
-		1B341B6B400C16817E4D0B30 /* SwiftLintBuildToolPlugin */ = {
-			isa = PBXTargetDependency;
-			productRef = 86D29266179CEA3AF4457BDA /* SwiftLintBuildToolPlugin */;
-		};
-		631DC7CCA9AEEB67CBB034CE /* SwiftLintBuildToolPlugin */ = {
-			isa = PBXTargetDependency;
-			productRef = B712686F35EFD8226F0EF515 /* SwiftLintBuildToolPlugin */;
 		};
 /* End PBXTargetDependency section */
 
@@ -257,7 +247,6 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = "$(inherited)";
-				DEFINES_MODULE = YES;
 				DEVELOPMENT_TEAM = FT9KDL728H;
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
@@ -274,7 +263,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = "$(RECOMMENDED_MACOSX_DEPLOYMENT_TARGET)";
 				MARKETING_VERSION = "$(inherited)";
-				MODULEMAP_FILE = "$(SRCROOT)/UndoKit/UndoKit.modulemap";
+				SWIFT_INSTALL_OBJC_HEADER = NO;
 				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
 				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
 				ONLY_ACTIVE_ARCH = NO;
@@ -299,7 +288,6 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = "$(inherited)";
-				DEFINES_MODULE = YES;
 				DEVELOPMENT_TEAM = FT9KDL728H;
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
@@ -316,7 +304,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = "$(RECOMMENDED_MACOSX_DEPLOYMENT_TARGET)";
 				MARKETING_VERSION = "$(inherited)";
-				MODULEMAP_FILE = "$(SRCROOT)/UndoKit/UndoKit.modulemap";
+				SWIFT_INSTALL_OBJC_HEADER = NO;
 				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
 				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
 				ONLY_ACTIVE_ARCH = NO;
@@ -523,12 +511,12 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		8840E7303BFF30ECF81EBBB2 /* XCRemoteSwiftPackageReference "Defaults" */ = {
+		021B629ED4FAEF4DAECE0712 /* XCRemoteSwiftPackageReference "SwiftLintPlugins" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/sindresorhus/Defaults";
+			repositoryURL = "https://github.com/SimplyDanny/SwiftLintPlugins";
 			requirement = {
 				kind = exactVersion;
-				version = 9.0.9;
+				version = 0.65.1;
 			};
 		};
 		5325B1215BE6F97D2177BCA9 /* XCRemoteSwiftPackageReference "swift-collections" */ = {
@@ -547,27 +535,17 @@
 				version = 1.2.1;
 			};
 		};
-		021B629ED4FAEF4DAECE0712 /* XCRemoteSwiftPackageReference "SwiftLintPlugins" */ = {
+		8840E7303BFF30ECF81EBBB2 /* XCRemoteSwiftPackageReference "Defaults" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/SimplyDanny/SwiftLintPlugins";
+			repositoryURL = "https://github.com/sindresorhus/Defaults";
 			requirement = {
 				kind = exactVersion;
-				version = 0.65.1;
+				version = 9.0.9;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		86D29266179CEA3AF4457BDA /* SwiftLintBuildToolPlugin */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 021B629ED4FAEF4DAECE0712 /* XCRemoteSwiftPackageReference "SwiftLintPlugins" */;
-			productName = "plugin:SwiftLintBuildToolPlugin";
-		};
-		E028F02C28AD325AD9497000 /* Defaults */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 8840E7303BFF30ECF81EBBB2 /* XCRemoteSwiftPackageReference "Defaults" */;
-			productName = Defaults;
-		};
 		47410F255C9D1AB799521CB0 /* Collections */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 5325B1215BE6F97D2177BCA9 /* XCRemoteSwiftPackageReference "swift-collections" */;
@@ -578,10 +556,20 @@
 			package = 6948A5714736CDFFD6F9045B /* XCRemoteSwiftPackageReference "swift-algorithms" */;
 			productName = Algorithms;
 		};
+		86D29266179CEA3AF4457BDA /* SwiftLintBuildToolPlugin */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 021B629ED4FAEF4DAECE0712 /* XCRemoteSwiftPackageReference "SwiftLintPlugins" */;
+			productName = "plugin:SwiftLintBuildToolPlugin";
+		};
 		B712686F35EFD8226F0EF515 /* SwiftLintBuildToolPlugin */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 021B629ED4FAEF4DAECE0712 /* XCRemoteSwiftPackageReference "SwiftLintPlugins" */;
 			productName = "plugin:SwiftLintBuildToolPlugin";
+		};
+		E028F02C28AD325AD9497000 /* Defaults */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 8840E7303BFF30ECF81EBBB2 /* XCRemoteSwiftPackageReference "Defaults" */;
+			productName = Defaults;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

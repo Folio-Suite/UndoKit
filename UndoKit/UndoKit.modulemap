@@ -1,7 +1,0 @@
-// SPDX-FileCopyrightText: 2026 the Folio Project
-// SPDX-License-Identifier: MIT
-
-framework module UndoKit {
-    header "UndoKit.h"
-    export *
-}

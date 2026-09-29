@@ -7,10 +7,11 @@ import Foundation
 public enum PackageFailure: Error, Equatable {
     case missingHistory, corruptHistory, unavailableHistory, newerSchema, unknownCodec
     case identityMismatch, unresolved, injectedFailure, destinationExists, missingResource, corruptResource
+    case unusable, rollbackFailed(String)
 }
 
 public enum HistoryKind: String { case action, checkpoint, baseline, displaced }
-public enum PromotionFault: String { case afterOriginalMoved, afterNewAttached }
+public enum PromotionFault: String { case afterOriginalMoved, afterNewAttached, rollbackBlocked }
 
 public struct ProbeSnapshot: Equatable {
     public let text: String
@@ -47,6 +48,7 @@ private struct Contents: Codable {
     private var coordinator: NSPersistentStoreCoordinator?
     private var store: NSPersistentStore?
     private var context: NSManagedObjectContext?
+    private var unusable = false
     public var identity: String { manifest.identity }
     public var generation: Int { manifest.generation }
     private init(url: URL, manifest: Manifest, contents: Contents) {
@@ -93,6 +95,21 @@ private struct Contents: Codable {
             throw PackageFailure.corruptResource
         }
         return text
+    }
+    private func ensureUsable() throws {
+        if unusable { throw PackageFailure.unusable }
+    }
+    private func validateResources() throws {
+        for id in contents.resources.values { _ = try resource(id: id) }
+        guard let context else {
+            if manifest.expectedHistory { throw PackageFailure.unavailableHistory }
+            return
+        }
+        let rows = try context.fetch(NSFetchRequest<NSManagedObject>(entityName: "Record"))
+        for row in rows {
+            guard let id = row.value(forKey: "resourceID") as? String else { throw PackageFailure.corruptHistory }
+            _ = try resource(id: id)
+        }
     }
     private static func writeJSON<T: Encodable>(_ value: T, to url: URL) throws {
         try JSONEncoder().encode(value).write(to: url, options: .atomic)
@@ -154,6 +171,11 @@ private struct Contents: Codable {
             do { try probe.attach(version: manifest.schema) }
             catch { throw PackageFailure.corruptHistory }
         }
+        do { try probe.validateResources() }
+        catch {
+            try? probe.detach()
+            throw error
+        }
         return probe
     }
 
@@ -189,20 +211,34 @@ private struct Contents: Codable {
             if manifest.expectedHistory { throw PackageFailure.unavailableHistory }
             return
         }
-        let row = NSEntityDescription.insertNewObject(forEntityName: "Record", into: context)
-        row.setValue(scope, forKey: "scope")
-        row.setValue(kind, forKey: "kind")
-        row.setValue(value, forKey: "value")
-        row.setValue(resourceID, forKey: "resourceID")
-        row.setValue(manifest.generation, forKey: "generation")
-        let count = try context.count(for: NSFetchRequest<NSManagedObject>(entityName: "Record"))
-        row.setValue(count, forKey: "ordinal")
-        if manifest.schema >= 2 { row.setValue(manifest.codec, forKey: "codec") }
-        try context.save()
+        do {
+            let row = NSEntityDescription.insertNewObject(forEntityName: "Record", into: context)
+            row.setValue(scope, forKey: "scope")
+            row.setValue(kind, forKey: "kind")
+            row.setValue(value, forKey: "value")
+            row.setValue(resourceID, forKey: "resourceID")
+            row.setValue(manifest.generation, forKey: "generation")
+            let count = try context.count(for: NSFetchRequest<NSManagedObject>(entityName: "Record"))
+            row.setValue(count, forKey: "ordinal")
+            if manifest.schema >= 2 { row.setValue(manifest.codec, forKey: "codec") }
+            if failNextHistorySaveAfterInsert {
+                failNextHistorySaveAfterInsert = false
+                throw PackageFailure.injectedFailure
+            }
+            try context.save()
+        } catch {
+            context.rollback()
+            throw error
+        }
     }
 
+    /// A deterministic failure hook after insertion and before the Core Data save.
+    public var failNextHistorySaveAfterInsert = false
+
     public func save(scope: String, text: String, resource: String) throws {
+        try ensureUsable()
         guard !manifest.unresolved else { throw PackageFailure.unresolved }
+        try validateResources()
         let previous = contents
         let data = Data(resource.utf8)
         let id = resource.isEmpty ? "" : Self.resourceID(data)
@@ -222,6 +258,7 @@ private struct Contents: Codable {
         }
     }
     public func setRecording(_ enabled: Bool) throws {
+        try ensureUsable()
         guard !manifest.unresolved else { throw PackageFailure.unresolved }
         if enabled && !manifest.recording {
             for (scope, text) in contents.scopes {
@@ -232,6 +269,7 @@ private struct Contents: Codable {
         try Self.writeJSON(manifest, to: Self.manifestURL(url))
     }
     public func checkpoint(scope: String) throws {
+        try ensureUsable()
         guard !manifest.unresolved else { throw PackageFailure.unresolved }
         let state = try snapshot(scope: scope)
         try record(scope: scope, kind: "checkpoint", value: state.text, resourceID: contents.resources[scope] ?? "")
@@ -241,7 +279,9 @@ private struct Contents: Codable {
 
     /// Core Data copies the SQLite store and its active journal under a serialized host boundary.
     public func capture(to destination: URL, independent: Bool) throws {
+        try ensureUsable()
         guard !manifest.unresolved else { throw PackageFailure.unresolved }
+        try validateResources()
         guard !FileManager.default.fileExists(atPath: destination.path) else { throw PackageFailure.destinationExists }
         let stage = destination.deletingLastPathComponent().appendingPathComponent(".capture-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: stage, withIntermediateDirectories: true)
@@ -263,6 +303,7 @@ private struct Contents: Codable {
         try FileManager.default.moveItem(at: stage, to: destination)
     }
     public func move(to destination: URL, simulateFailure: Bool = false) throws {
+        try ensureUsable()
         guard !FileManager.default.fileExists(atPath: destination.path) else { throw PackageFailure.destinationExists }
         let original = url
         try detach()
@@ -282,21 +323,38 @@ private struct Contents: Codable {
             throw error
         }
     }
-    public func restore(from source: PackageProbe, scope: String) throws {
+    public func restore(from source: PackageProbe, scope: String,
+                        simulateFailureAfterState: Bool = false) throws {
+        try ensureUsable()
+        guard !manifest.unresolved else { throw PackageFailure.unresolved }
+        try source.validateResources()
         let displaced = try snapshot(scope: scope)
         let selected = try source.snapshot(scope: scope)
-        try save(scope: scope, text: selected.text, resource: selected.resource)
+        let staged = url.deletingLastPathComponent().appendingPathComponent(".restore-\(UUID().uuidString)")
+        try capture(to: staged, independent: false)
+        defer { try? FileManager.default.removeItem(at: staged) }
+        let edited = try Self.open(at: staged, expectedIdentity: identity)
+        defer { try? edited.close() }
+        try edited.save(scope: scope, text: selected.text, resource: selected.resource)
+        if simulateFailureAfterState {
+            try edited.close()
+            throw PackageFailure.injectedFailure
+        }
         let displacedID = displaced.resource.isEmpty ? "" : Self.resourceID(Data(displaced.resource.utf8))
-        try record(scope: scope, kind: "displaced", value: displaced.text, resourceID: displacedID)
+        try edited.record(scope: scope, kind: "displaced", value: displaced.text, resourceID: displacedID)
+        try edited.close()
+        try promote(staged, next: manifest, fault: nil)
     }
     public func displaced(scope: String) throws -> [String] { try records(scope: scope, kind: "displaced") }
     public func omitHistory(simulateFailure: Bool = false, promotionFault: PromotionFault? = nil) throws {
+        try ensureUsable()
         guard !manifest.unresolved else { throw PackageFailure.unresolved }
         guard manifest.expectedHistory else { return }
         let staged = url.deletingLastPathComponent().appendingPathComponent(".omission-\(UUID().uuidString)")
         try capture(to: staged, independent: false)
         defer { try? FileManager.default.removeItem(at: staged) }
         let edited = try Self.open(at: staged, expectedIdentity: identity)
+        defer { try? edited.close() }
         guard let context = edited.context else { throw PackageFailure.missingHistory }
         let request = NSFetchRequest<NSManagedObject>(entityName: "Record")
         for row in try context.fetch(request) { context.delete(row) }
@@ -317,6 +375,8 @@ private struct Contents: Codable {
     private func promote(_ staged: URL, next: Manifest, fault: PromotionFault?) throws {
         let original = url.deletingLastPathComponent().appendingPathComponent(".original-\(UUID().uuidString)")
         let previous = manifest
+        let previousContents = contents
+        let adoptedContents = try Self.readJSON(Contents.self, from: Self.contentsURL(staged))
         try detach()
         do {
             try FileManager.default.moveItem(at: url, to: original)
@@ -324,21 +384,39 @@ private struct Contents: Codable {
             try FileManager.default.moveItem(at: staged, to: url)
             try attach(version: next.schema)
             manifest = next
-            if fault == .afterNewAttached { throw PackageFailure.injectedFailure }
+            contents = adoptedContents
+            if fault == .afterNewAttached || fault == .rollbackBlocked { throw PackageFailure.injectedFailure }
             try FileManager.default.removeItem(at: original)
         } catch {
-            try? detach()
+            do { try detach() }
+            catch {
+                unusable = true
+                throw PackageFailure.rollbackFailed(FileManager.default.fileExists(atPath: original.path) ? original.path : url.path)
+            }
             if FileManager.default.fileExists(atPath: original.path) {
-                if FileManager.default.fileExists(atPath: url.path) { try? FileManager.default.removeItem(at: url) }
-                try? FileManager.default.moveItem(at: original, to: url)
+                do {
+                    if FileManager.default.fileExists(atPath: url.path) { try FileManager.default.removeItem(at: url) }
+                    if fault == .rollbackBlocked { throw PackageFailure.injectedFailure }
+                    try FileManager.default.moveItem(at: original, to: url)
+                } catch {
+                    unusable = true
+                    throw PackageFailure.rollbackFailed(original.path)
+                }
             }
             manifest = previous
-            if previous.expectedHistory { try attach(version: previous.schema) }
+            contents = previousContents
+            do {
+                if previous.expectedHistory { try attach(version: previous.schema) }
+            } catch {
+                unusable = true
+                throw PackageFailure.rollbackFailed(url.path)
+            }
             throw error
         }
     }
 
     public func migrate(simulateInterruption: Bool = false, promotionFault: PromotionFault? = nil) throws {
+        try ensureUsable()
         guard manifest.schema == 1 else { return }
         let staged = url.deletingLastPathComponent().appendingPathComponent(".migration-\(UUID().uuidString)")
         try capture(to: staged, independent: false)
@@ -356,9 +434,23 @@ private struct Contents: Codable {
     }
     /// Fixture control for explicit compatibility inputs.
     public func fixtureManifest(schema: Int? = nil, codec: String? = nil, unresolved: Bool? = nil) throws {
+        try ensureUsable()
         if let schema { manifest.schema = schema }
         if let codec { manifest.codec = codec }
         if let unresolved { manifest.unresolved = unresolved }
         try Self.writeJSON(manifest, to: Self.manifestURL(url))
+    }
+
+    /// Fixture control for a missing or tampered immutable historical asset.
+    public func fixtureDamageHistoricalResource(scope: String, kind: HistoryKind,
+                                                index: Int = 0, corrupt: Bool = false) throws {
+        try ensureUsable()
+        let matching = try rows(scope: scope, kind: kind.rawValue)
+        guard matching.indices.contains(index),
+              let id = matching[index].value(forKey: "resourceID") as? String,
+              !id.isEmpty else { throw PackageFailure.missingResource }
+        let location = Self.resourceURL(url, id: id)
+        if corrupt { try Data("tampered".utf8).write(to: location, options: .atomic) }
+        else { try FileManager.default.removeItem(at: location) }
     }
 }

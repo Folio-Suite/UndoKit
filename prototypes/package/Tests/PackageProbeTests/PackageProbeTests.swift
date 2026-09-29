@@ -67,7 +67,7 @@ import PackageProbe
         let start = root.appendingPathComponent("start")
         let moved = root.appendingPathComponent("moved")
         let saveAs = root.appendingPathComponent("save-as")
-        let host = try PackageProbe.create(at: start)
+        var host = try PackageProbe.create(at: start)
         try host.save(scope: "document", text: "A", resource: "asset-A")
         let identity = host.identity
         try host.move(to: moved)
@@ -76,6 +76,18 @@ import PackageProbe
         try host.capture(to: saveAs, independent: true)
         let selected = try PackageProbe.open(at: saveAs)
         try host.save(scope: "document", text: "B", resource: "asset-B")
+        let beforeFailedRestore = try hostBytes(moved)
+        #expect(throws: PackageFailure.injectedFailure) {
+            try host.restore(from: selected, scope: "document", simulateFailureAfterState: true)
+        }
+        #expect(try hostBytes(moved) == beforeFailedRestore)
+        #expect(try host.snapshot(scope: "document").text == "B")
+        #expect(try host.displaced(scope: "document").isEmpty)
+        #expect(try host.historicalResources(scope: "document", kind: .action) == ["asset-A", "asset-B"])
+        try host.close()
+        host = try PackageProbe.open(at: moved, expectedIdentity: identity)
+        #expect(try host.snapshot(scope: "document").resource == "asset-B")
+        #expect(try host.displaced(scope: "document").isEmpty)
         try host.restore(from: selected, scope: "document")
         #expect(try host.snapshot(scope: "document").text == "A")
         #expect(try host.snapshot(scope: "document").resource == "asset-A")
@@ -278,6 +290,78 @@ import PackageProbe
         let reopened = try PackageProbe.open(at: path)
         #expect(try reopened.snapshot(scope: "document").history == ["Before", "After"])
         try reopened.close()
+      }
+    }
+
+    @Test func failedHistorySaveRollsBackInsertedRecordAndHostState() throws {
+      try fixture { root in
+        let path = root.appendingPathComponent("document")
+        var host = try PackageProbe.create(at: path)
+        try host.save(scope: "document", text: "Before", resource: "asset-before")
+        host.failNextHistorySaveAfterInsert = true
+        #expect(throws: PackageFailure.injectedFailure) {
+            try host.save(scope: "document", text: "Failed", resource: "asset-failed")
+        }
+        #expect(try host.snapshot(scope: "document") == ProbeSnapshot(text: "Before", resource: "asset-before", history: ["Before"], generation: 1, recording: true))
+        try host.close()
+        host = try PackageProbe.open(at: path)
+        #expect(try host.historicalResources(scope: "document", kind: .action) == ["asset-before"])
+        try host.save(scope: "document", text: "Later", resource: "asset-later")
+        #expect(try host.snapshot(scope: "document").history == ["Before", "Later"])
+        #expect(try host.historicalResources(scope: "document", kind: .action) == ["asset-before", "asset-later"])
+        try host.close()
+      }
+    }
+
+    @Test func missingOrCorruptHistoricalResourceRefusesOpenAndCapture() throws {
+      try fixture { root in
+        for corrupt in [false, true] {
+            let path = root.appendingPathComponent(corrupt ? "corrupt" : "missing")
+            let host = try PackageProbe.create(at: path)
+            try host.save(scope: "document", text: "Old", resource: "asset-old")
+            try host.save(scope: "document", text: "Current", resource: "asset-current")
+            try host.fixtureDamageHistoricalResource(scope: "document", kind: .action, corrupt: corrupt)
+            let damagedBytes = try hostBytes(path)
+            let destination = root.appendingPathComponent(corrupt ? "bad-copy" : "missing-copy")
+            if corrupt {
+                #expect(throws: PackageFailure.corruptResource) { try host.capture(to: destination, independent: true) }
+            } else {
+                #expect(throws: PackageFailure.missingResource) { try host.capture(to: destination, independent: true) }
+            }
+            #expect(!FileManager.default.fileExists(atPath: destination.path))
+            #expect(try hostBytes(path) == damagedBytes)
+            try host.close()
+            if corrupt {
+                #expect(throws: PackageFailure.corruptResource) { try PackageProbe.open(at: path) }
+            } else {
+                #expect(throws: PackageFailure.missingResource) { try PackageProbe.open(at: path) }
+            }
+            #expect(try hostBytes(path) == damagedBytes)
+        }
+      }
+    }
+
+    @Test func failedRollbackRetainsOriginalAndDisablesProbe() throws {
+      try fixture { root in
+        let path = root.appendingPathComponent("legacy")
+        let host = try PackageProbe.create(at: path, legacy: true)
+        try host.save(scope: "document", text: "Protected", resource: "protected-asset")
+        var retained: String?
+        do {
+            try host.migrate(promotionFault: .rollbackBlocked)
+            Issue.record("Expected rollback failure")
+        } catch PackageFailure.rollbackFailed(let path) {
+            retained = path
+        }
+        let retainedPath = try #require(retained)
+        #expect(FileManager.default.fileExists(atPath: retainedPath))
+        #expect(throws: PackageFailure.unusable) {
+            try host.save(scope: "document", text: "Unsafe", resource: "unsafe-asset")
+        }
+        let preserved = try PackageProbe.open(at: URL(fileURLWithPath: retainedPath))
+        #expect(try preserved.snapshot(scope: "document").text == "Protected")
+        #expect(try preserved.historicalResources(scope: "document", kind: .action) == ["protected-asset"])
+        try preserved.close()
       }
     }
 }

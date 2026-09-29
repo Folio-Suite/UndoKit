@@ -17,12 +17,33 @@ The framework remains a Swift scaffold. The template tests
 do not establish durable-history behavior. The accepted
 [durable-acceptance contract](docs/durable-acceptance-contract.md) now defines
 the host/framework transaction and recovery boundary; its public API, storage
-model and runtime proofs remain future work.
+model and durable runtime proofs remain future work.
 
 The accepted [history-retention contract](docs/history-retention-contract.md)
 defines restoration, shared Undo/Redo depth, checkpoints, separate state and
 history holds, and safe pruning under host-selected policy. Its representation
 candidates and scale scenarios remain future proof work.
+
+The accepted [typed-interface contract](docs/typed-interface-contract.md)
+defines thin host adapters, opaque versioned payloads, JSON and XML/binary
+property-list conveniences, asynchronous ordered submission and bounded reads.
+Its isolated Swift proof establishes adapter and codec feasibility, including
+fresh-process decoding; it does not implement the production history engine.
+
+The accepted [native-routing contract](docs/native-routing-contract.md) defines
+the reusable bridge, pending editing barriers, local text routing, coherent
+availability and host presentation obligations. Its required AppKit observations
+remain pending in #48; no native bridge is implemented yet.
+
+The accepted [store-lifecycle contract](docs/store-lifecycle-contract.md) defines
+host-registered document stores, an Application Support default for app-owned
+history, safe opening/closing, copying, migration and capacity handling. Measured
+limits require disposable storage and scale evidence in #47–#50.
+
+The accepted [measurement plan](docs/acceptance-measurement-plan.md) specifies
+mandatory workloads through 100,000 retained groups, optional multi-GiB payload
+experiments, runner safeguards and evidence for all four proofs. Timing targets
+are advisory; candidate production limits require measurement and review.
 
 Build the shared `UndoKit` scheme in `UndoKit.xcodeproj`, or use the enclosing
 `Folio` workspace scheme. The Folio adaptation supplies a public Swift module,

@@ -127,6 +127,12 @@ unprotected records, while retained Actions keep their meaning.
 
 ## Representation candidates and proof handoff
 
+The subsequently accepted [typed-interface contract](typed-interface-contract.md)
+defines bounded independent reads, host-owned presentation metadata and stable
+Recovery Plans that protect selected material while it is retrieved. The host
+reconstructs and validates the state before submitting restoration. Its isolated
+codec/interface proof does not establish Recovery Plan or pruning behavior.
+
 Evaluate full checkpoint snapshots against snapshots with bounded state
 reconstruction. Evaluate dependency-based pruning from retained states,
 groups, segments and recovery requirements across branches, including shared
@@ -134,8 +140,8 @@ objects. These are candidates to prove within the selected Core Data and
 host-owned Retention Store boundaries, not a selected schema or a requirement
 to replay historical Commands.
 
-[Issue #46](https://github.com/Folio-Suite/Folio/issues/46) must choose bounded
-fixtures and human-approved budgets. Relevant dimensions include group count,
+The accepted [measurement plan](acceptance-measurement-plan.md) from #46 supplies
+bounded fixtures and human-approved candidate budgets. Relevant dimensions include group count,
 Actions per group, branch and checkpoint count, dependency fanout, retained
 bytes, reconstruction distance, traversal/restoration latency, peak memory and
 pruning interruption/restart cost. This contract chooses no numeric scale or
@@ -156,8 +162,10 @@ and retention at that agreed scale, including:
 10. shared dependencies and interruption/restart during pruning and object cleanup.
 
 The acceptance, interruption and native-routing proofs remain coordinated with
-issues #47–#49. Public interfaces, lifecycle details and numeric budgets remain
-with issues #43–#46; the design and proof acceptance gate in #51 precedes Folio
-implementation. Compilation, behavioral tests, native observations and human
+issues #47–#49. The accepted interface, native-routing and store-lifecycle
+contracts define the behavior required by those proofs. The
+[measurement plan](acceptance-measurement-plan.md) supplies workloads and candidate
+limits; measured calibration remains pending. The design and proof acceptance
+gate in #51 precedes Folio implementation. Compilation, behavioral tests, native observations and human
 acceptance remain distinct evidence. Closing #42 resolves this design decision
 only.

@@ -29,13 +29,17 @@ The ordinary host interface must remain small. Conceptually, a host submits one
 typed semantic Command in a History Scope and receives one of:
 
 - **Accepted**, with a compact receipt for the resulting Action or Undo Group;
-- **Rejected**, with an authoritative domain reason and no Action; or
+- **Rejected**, with authoritative no-effect and no Action; or
 - **Failure**, with a typed cause, protocol stage, History Scope disposition and
   any permitted host recovery participation.
 
-The public API shape, generic types and isolation declarations belong to
-[issue #43](https://github.com/Folio-Suite/Folio/issues/43). Hosts never set
-internal transaction states, advance Undo/Redo Position or edit UndoKit records.
+The subsequently accepted [typed-interface contract](typed-interface-contract.md)
+from #43 defines host adapters, opaque payloads, asynchronous completion and
+isolation responsibilities. Domain-specific results and rejection explanations
+remain on the host side; UndoKit receives the application-neutral outcome and
+required evidence. Hosts never set internal transaction states, advance
+Undo/Redo Position or edit UndoKit records. Final production declarations must
+preserve both contracts.
 
 ## Host outcome contract
 
@@ -83,8 +87,9 @@ is permitted only when UndoKit can prove the host was never invoked.
 ## Serialized transaction lifecycle
 
 Exactly one History Transaction per History Scope may cross the host boundary at
-a time. UndoKit may serialize asynchronous callers, but it does not prepare or
-invoke the next Command until the active transaction closes. Host callbacks may
+a time. UndoKit serializes admitted requests through the bounded, in-memory
+per-scope queue defined in #43; it does not prepare or invoke the next Command
+until the active transaction closes. Host callbacks may
 not re-enter UndoKit with another Command for that scope. Independent scopes may
 proceed concurrently.
 
@@ -197,8 +202,9 @@ Inputs use two tiers of safeguards:
   validation data before the host is invoked.
 
 Hosts may select stricter policy but cannot exceed the framework's compiled
-safety ceiling. [Issue #46](https://github.com/Folio-Suite/Folio/issues/46) will
-choose numbers from representative Folio and KitchenMemory workloads.
+safety ceiling. The accepted [measurement plan](acceptance-measurement-plan.md)
+specifies candidate limits and representative Folio/KitchenMemory workloads; measured production
+ceilings require subsequent proof and review.
 
 ## Retention Stores and large objects
 
@@ -276,8 +282,9 @@ declares them finalized.
 The allowed terminal paths are reconciliation and finalization, restoration of
 a missing prerequisite followed by retry of the UndoKit transition, preserved
 suspension with quarantined evidence, or explicit generation reset. Exact repair
-algorithms belong to store-lifecycle design in
-[issue #45](https://github.com/Folio-Suite/Folio/issues/45).
+behavior is refined by the accepted
+[store-lifecycle contract](store-lifecycle-contract.md); concrete algorithms
+remain subject to storage and recovery proof.
 
 ## Documentation contract
 
@@ -318,8 +325,13 @@ distinct evidence.
 
 ## Deferred decisions
 
-This contract does not select public generic signatures, payload codecs, Core
-Data entities, migration stages, branch algorithms, native UndoManager routing,
-package layout, numerical budgets or repair implementations. Those remain with
-issues #43–#50, subject to the accepted behavior in #42. External Objective-C
-and XCFramework distribution remains deferred beyond Folio 1.0.
+The typed-interface contract now selects adapter responsibilities and codec
+conveniences; final public declarations remain implementation work under those
+constraints. The [native-routing contract](native-routing-contract.md) selects
+bridge behavior and host integration obligations, with concrete AppKit proof
+still required by #48. The store-lifecycle contract defines placement, ownership,
+opening/closing, migration, copying and capacity safeguards. Concrete Core Data
+entities, migration stages, branch algorithms, package layout, numerical budgets
+and repair implementations remain subject to the #46 measurement plan and
+#47–#50 proof evidence under the accepted behavior in #42–#45.
+External Objective-C and XCFramework distribution remains deferred beyond Folio 1.0.

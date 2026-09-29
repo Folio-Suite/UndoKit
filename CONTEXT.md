@@ -30,7 +30,7 @@ _Avoid_: Command, submission
 
 **Rejected Outcome**:
 The host-authoritative result establishing that a Command produced no semantic
-effect, together with its reason. It produces no Action.
+effect. It produces no Action; domain-specific explanations remain host-owned.
 _Avoid_: Failure, unresolved outcome
 
 **Action**:
@@ -62,6 +62,11 @@ irrecoverable reset retires one generation and establishes another from a
 host-adopted current state.
 _Avoid_: History Branch, Checkpoint, model version
 
+**Intent Fingerprint**:
+A host-supplied fingerprint of the canonical intent bound to a Command's identity,
+distinct from the integrity check of any particular stored encoding.
+_Avoid_: Payload checksum, Command identity
+
 **Historical State**:
 A coherent host-defined domain state represented in History, including the
 dependencies the host identifies as necessary to interpret it. Its semantic
@@ -86,6 +91,12 @@ Explicit protection of a designated Historical State or detailed history
 segment against automatic pruning until released. State protection and
 detailed-history protection are independent promises.
 _Avoid_: Checkpoint, Undo depth
+
+**Recovery Plan**:
+A stable, ordered description of the baseline, retained records and dependencies
+needed to reconstruct a selected Historical State under host-declared relationships.
+It protects required material while the host retrieves and reconstructs that state.
+_Avoid_: Restoration, Undo Group, active position
 
 **Undo/Redo Position**:
 The place from which ordinary Undo/Redo operates in a History Scope's current

@@ -22,8 +22,9 @@ that exceeds 600 seconds per repetition, 2 GiB descendant RSS, 12 GiB owned
 temporary/build space, or the 20 GiB remaining disk floor. Environment settings
 may tighten those bounds. KEEP_FIXTURES=1 retains successful fixture stores;
 failed fixtures, logs and reports are retained automatically. The runner
-requires fixture, operation, reopen and consolidation metric events before it
-reports success. It records source SHA-256 values, toolchain and host details,
+requires fixture, operation, reopen and consolidation phase names before it
+reports success. It checks phase presence, not metric field types or values; the
+published reports were audited separately for their required measurements. It records source SHA-256 values, toolchain and host details,
 each reopen sample, runner limits, process exits and sampled peaks. Full reports
 from the mandatory runs are in evidence/.
 

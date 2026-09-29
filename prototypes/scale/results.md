@@ -110,8 +110,10 @@ protected Recovery Plans and expiry on reopen; ancestor-only shared
 resources; lowered capacity and payload limits; and pruning complete
 groups. After the four measured workloads, a first-group empty-baseline
 Undo/Redo boundary and strict primary-store stat handling were added.
-The resulting source passed 12 public-interface tests and a release smoke
-run. The four workload measurements above remain tied to commit 631bd231;
+The resulting source passed 13 public-interface tests and a release smoke
+run. The added hard-cap test verifies that refused acceptance leaves active
+state and detailed-history holds, their held resource, and exact state intact
+through reopen and pruning. The four workload measurements above remain tied to commit 631bd231;
 the later boundary edits were not rerun at mandatory scale.
 
 A deliberately lowered 1 MiB memory guard stopped a smoke child and kept

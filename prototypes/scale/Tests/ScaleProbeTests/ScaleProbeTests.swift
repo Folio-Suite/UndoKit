@@ -158,6 +158,46 @@ import ScaleProbe
     #expect(try store.reconstruct(scope: "folio", node: b).state == ["x": "b"])
 }
 
+@Test func hardCapRefusalPreservesActiveHoldsAcrossReopenAndPrune() throws {
+    let store = try HistoryStore.temporary()
+    let url = store.url
+    defer { try? store.close(); if ProcessInfo.processInfo.environment["KEEP_FIXTURES"] != "1" { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) } }
+    let resource = Resource(store: "assets", key: "held", version: "v1")
+    let a = try store.append(scope: "folio", actions: [.set("x", "a")], resources: [resource])
+    let b = try store.append(scope: "folio", actions: [.set("x", "b")])
+    _ = try store.checkpoint(scope: "folio", node: b)
+    let c = try store.append(scope: "folio", actions: [.set("x", "c")])
+    let stateHold = try store.hold(node: a, kind: "state")
+    let historyHold = try store.hold(node: c, kind: "history", until: b)
+    try store.forkFixture(scope: "folio", from: a)
+    let side = try store.append(scope: "folio", actions: [.set("x", "side")])
+    try store.forkFixture(scope: "folio", from: c)
+    var limits = store.limits
+    limits.hardStoreBytes = try store.fileFootprint() + 100_000
+    store.limits = limits
+    #expect(throws: ProofError.refused("store capacity")) {
+        _ = try store.append(scope: "folio", actions: [.set("x", "refused")])
+    }
+    #expect(try store.head(scope: "folio") == c)
+    #expect(try store.node(side) != nil)
+    try store.close()
+
+    let reopened = try HistoryStore(url: url)
+    defer { try? reopened.close() }
+    let result = try reopened.prune(targetGroups: 0)
+    #expect(result.removedGroups == 1)
+    #expect(result.retainedGroups == 3)
+    #expect(result.unmetTarget)
+    #expect(try reopened.node(side) == nil)
+    #expect(try reopened.node(a) != nil)
+    #expect(try reopened.node(b) != nil)
+    #expect(try reopened.node(c) != nil)
+    #expect(try reopened.reconstruct(scope: "folio", node: a).state == ["x": "a"])
+    #expect(try reopened.references(store: "assets").contains(resource))
+    try reopened.releaseHold(stateHold)
+    try reopened.releaseHold(historyHold)
+}
+
 @Test func conservativeCapacityRefusesBeforeMutation() throws {
     let store = try HistoryStore.temporary()
     defer { try? store.close(); if ProcessInfo.processInfo.environment["KEEP_FIXTURES"] != "1" { try? FileManager.default.removeItem(at: store.url.deletingLastPathComponent()) } }

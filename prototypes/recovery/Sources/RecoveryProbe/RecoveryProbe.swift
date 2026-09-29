@@ -8,8 +8,10 @@ public struct Member: Codable, Equatable, Sendable {
     public let id: String
     public let delta: Int
     public let targetMemberID: String?
-    public init(id: String, delta: Int, targetMemberID: String? = nil) {
+    public let compensationActionID: String?
+    public init(id: String, delta: Int, targetMemberID: String? = nil, compensationActionID: String? = nil) {
         self.id = id; self.delta = delta; self.targetMemberID = targetMemberID
+        self.compensationActionID = compensationActionID
     }
 }
 public struct Command: Codable, Equatable, Sendable {
@@ -20,9 +22,11 @@ public struct Command: Codable, Equatable, Sendable {
     public let groupID: String
     public let members: [Member]
     public init(scope: String, id: String, fingerprint: String, kind: CommandKind,
-                delta: Int, groupID: String? = nil, targetMemberID: String? = nil) {
+                delta: Int, groupID: String? = nil, targetMemberID: String? = nil,
+                compensationActionID: String? = nil) {
         self.init(scope: scope, id: id, fingerprint: fingerprint, kind: kind,
-                  groupID: groupID ?? id, members: [Member(id: id, delta: delta, targetMemberID: targetMemberID)])
+                  groupID: groupID ?? id, members: [Member(id: id, delta: delta, targetMemberID: targetMemberID,
+                                                        compensationActionID: compensationActionID)])
     }
     public init(scope: String, id: String, fingerprint: String, kind: CommandKind,
                 groupID: String, members: [Member]) {
@@ -53,6 +57,7 @@ public struct ActionSnapshot: Equatable, Sendable {
     public let groupID: String
     public let memberID: String
     public let targetMemberID: String?
+    public let compensationActionID: String?
     public let kind: CommandKind
     public let valid: Bool
 }
@@ -67,6 +72,7 @@ public struct HostReceipt: Codable, Equatable, Sendable {
     public let outcome: Outcome
     public let memberIDs: [String]
     public let targetMemberIDs: [String?]
+    public let compensationActionIDs: [String?]
 }
 private struct HostDocument: Codable {
     var values: [String: Int] = [:]
@@ -111,7 +117,8 @@ private struct HostDocument: Codable {
             : []
         malformedMemberEvidence = false
         let receipt = HostReceipt(fingerprint: command.fingerprint, outcome: outcome,
-                                  memberIDs: evidence.map(\.id), targetMemberIDs: evidence.map(\.targetMemberID))
+                                  memberIDs: evidence.map(\.id), targetMemberIDs: evidence.map(\.targetMemberID),
+                                  compensationActionIDs: evidence.map(\.compensationActionID))
         if outcome == .accepted {
             document.values[command.scope, default: 0] += command.members.reduce(0) { $0 + $1.delta }
         }
@@ -164,20 +171,26 @@ private struct HostDocument: Codable {
         let member = entity("Member", [attribute("transactionKey", .stringAttributeType),
             attribute("ordinal", .integer64AttributeType), attribute("memberID", .stringAttributeType),
             attribute("targetMemberID", .stringAttributeType, optional: true),
+            attribute("compensationActionID", .stringAttributeType, optional: true),
             attribute("delta", .integer64AttributeType)])
         member.uniquenessConstraints = [["transactionKey", "ordinal"]]
         let action = entity("Action", [attribute("scope", .stringAttributeType), attribute("transactionKey", .stringAttributeType),
             attribute("ordinal", .integer64AttributeType), attribute("memberID", .stringAttributeType),
             attribute("targetMemberID", .stringAttributeType, optional: true),
+            attribute("compensationActionID", .stringAttributeType, optional: true),
             attribute("groupID", .stringAttributeType), attribute("kind", .stringAttributeType)])
         action.uniquenessConstraints = [["transactionKey", "ordinal"]]
         let eligibility = entity("GroupEligibility", [attribute("key", .stringAttributeType),
             attribute("scope", .stringAttributeType), attribute("groupID", .stringAttributeType),
-            attribute("state", .stringAttributeType), attribute("sequence", .integer64AttributeType)])
+            attribute("state", .stringAttributeType), attribute("sequence", .integer64AttributeType),
+            attribute("latestCompensationKey", .stringAttributeType, optional: true)])
         eligibility.uniquenessConstraints = [["key"]]
         model.entities = [transaction, member, action, eligibility]; return model
     }
     private func key(_ scope: String, _ id: String) -> String { scope + "\u{1F}" + id }
+    private func actionID(_ transactionKey: String, _ ordinal: Int64) -> String {
+        transactionKey + "#" + String(ordinal)
+    }
     private func fetch(_ entity: String, predicate: NSPredicate? = nil, sort: [NSSortDescriptor] = []) throws -> [NSManagedObject] {
         let request = NSFetchRequest<NSManagedObject>(entityName: entity)
         request.predicate = predicate; request.sortDescriptors = sort
@@ -220,7 +233,9 @@ private struct HostDocument: Codable {
             TransactionPhase.finalized.rawValue, TransactionPhase.cancelled.rawValue))
         guard active.isEmpty else { throw ProbeError.busy }
         if command.kind == .ordinary {
-            guard command.members.allSatisfy({ $0.targetMemberID == nil }) else { throw ProbeError.invalidGroup }
+            guard command.members.allSatisfy({ $0.targetMemberID == nil && $0.compensationActionID == nil }) else {
+                throw ProbeError.invalidGroup
+            }
             guard try eligibility(command.scope, command.groupID) == nil else { throw ProbeError.conflict }
         } else {
             let required = command.kind == .undo ? "undoable" : "redoable"
@@ -239,6 +254,23 @@ private struct HostDocument: Codable {
             guard !requiredPlan.isEmpty, command.members.map(\.targetMemberID) == requiredPlan.map(Optional.some) else {
                 throw ProbeError.invalidGroup
             }
+            if command.kind == .undo {
+                guard command.members.allSatisfy({ $0.compensationActionID == nil }) else { throw ProbeError.invalidGroup }
+            } else {
+                guard let compensationKey = try eligibility(command.scope, command.groupID)?
+                    .value(forKey: "latestCompensationKey") as? String else { throw ProbeError.invalidGroup }
+                let compensation = try fetch("Action", predicate: NSPredicate(format: "transactionKey == %@ AND kind == %@",
+                    compensationKey, CommandKind.undo.rawValue))
+                let byTarget = Dictionary(uniqueKeysWithValues: compensation.map {
+                    ($0.value(forKey: "targetMemberID") as! String,
+                     actionID(compensationKey, $0.value(forKey: "ordinal") as! Int64))
+                })
+                let expectedCompensation = requiredPlan.map { byTarget[$0] }
+                guard expectedCompensation.allSatisfy({ $0 != nil }),
+                      command.members.map(\.compensationActionID) == expectedCompensation else {
+                    throw ProbeError.invalidGroup
+                }
+            }
         }
         let prior = try fetch("Transaction", predicate: NSPredicate(format: "scope == %@", command.scope))
         let sequence = (prior.map { $0.value(forKey: "sequence") as! Int64 }.max() ?? 0) + 1
@@ -253,6 +285,7 @@ private struct HostDocument: Codable {
             member.setValue(key(command.scope, command.id), forKey: "transactionKey")
             member.setValue(Int64(ordinal), forKey: "ordinal"); member.setValue(item.id, forKey: "memberID")
             member.setValue(item.targetMemberID, forKey: "targetMemberID")
+            member.setValue(item.compensationActionID, forKey: "compensationActionID")
             member.setValue(Int64(item.delta), forKey: "delta")
         }
         try save(.prepare)
@@ -274,7 +307,8 @@ private struct HostDocument: Codable {
         let record = try check(token)
         let items = try members(token).map { Member(id: $0.value(forKey: "memberID") as! String,
                                                    delta: Int($0.value(forKey: "delta") as! Int64),
-                                                   targetMemberID: $0.value(forKey: "targetMemberID") as? String) }
+                                                   targetMemberID: $0.value(forKey: "targetMemberID") as? String,
+                                                   compensationActionID: $0.value(forKey: "compensationActionID") as? String) }
         return Command(scope: token.scope, id: token.id, fingerprint: record.value(forKey: "fingerprint") as! String,
                        kind: CommandKind(rawValue: record.value(forKey: "kind") as! String)!,
                        groupID: record.value(forKey: "groupID") as! String, members: items)
@@ -295,7 +329,8 @@ private struct HostDocument: Codable {
         }
         if receipt.outcome == .accepted {
             guard receipt.memberIDs == command.members.map(\.id),
-                  receipt.targetMemberIDs == command.members.map(\.targetMemberID) else {
+                  receipt.targetMemberIDs == command.members.map(\.targetMemberID),
+                  receipt.compensationActionIDs == command.members.map(\.compensationActionID) else {
                 record.setValue(TransactionPhase.unresolved.rawValue, forKey: "phase")
                 try save(.acceptance); throw ProbeError.unresolved
             }
@@ -325,6 +360,7 @@ private struct HostDocument: Codable {
                 action.setValue(Int64(ordinal), forKey: "ordinal")
                 action.setValue(member.id, forKey: "memberID")
                 action.setValue(member.targetMemberID, forKey: "targetMemberID")
+                action.setValue(member.compensationActionID, forKey: "compensationActionID")
                 action.setValue(command.groupID, forKey: "groupID")
                 action.setValue(command.kind.rawValue, forKey: "kind")
             }
@@ -340,6 +376,7 @@ private struct HostDocument: Codable {
             } else {
                 let group = try eligibility(command.scope, command.groupID)!
                 group.setValue(command.kind == .undo ? "redoable" : "undoable", forKey: "state")
+                if command.kind == .undo { group.setValue(key(command.scope, command.id), forKey: "latestCompensationKey") }
             }
         } else if command.kind != .ordinary {
             try eligibility(command.scope, command.groupID)?.setValue("invalidated", forKey: "state")
@@ -392,11 +429,12 @@ private struct HostDocument: Codable {
         let snapshots = actions.map { action in
             let kind = CommandKind(rawValue: action.value(forKey: "kind") as! String)!
             let groupID = action.value(forKey: "groupID") as! String
-            return ActionSnapshot(id: (action.value(forKey: "transactionKey") as! String) + "#" +
-                                      String(action.value(forKey: "ordinal") as! Int64),
+            return ActionSnapshot(id: actionID(action.value(forKey: "transactionKey") as! String,
+                                               action.value(forKey: "ordinal") as! Int64),
                                   groupID: groupID,
                                   memberID: action.value(forKey: "memberID") as! String,
                                   targetMemberID: action.value(forKey: "targetMemberID") as? String,
+                                  compensationActionID: action.value(forKey: "compensationActionID") as? String,
                                   kind: kind,
                                   valid: kind == .ordinary ? states[groupID] == "undoable" : kind == .undo && states[groupID] == "redoable") }
         let available = active == nil

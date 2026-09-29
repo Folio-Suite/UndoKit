@@ -98,8 +98,9 @@ private func cleanup(_ directory: URL) {
     #expect(try host.value(scope: "a") == 0)
     #expect(try probe.snapshot(scope: "a").undoAvailable == false)
     #expect(try probe.snapshot(scope: "a").redoAvailable == true)
+    let compensationID = try #require(probe.snapshot(scope: "a").actions.first { $0.kind == .undo }?.id)
     let redo = Command(scope: "a", id: "redo", fingerprint: "plus-again", kind: .redo, delta: 3,
-                       groupID: "group", targetMemberID: "original")
+                       groupID: "group", targetMemberID: "original", compensationActionID: compensationID)
     host.nextOutcome = .rejected
     let token = try probe.prepare(redo)
     try probe.markDeliveryStarted(token)
@@ -262,11 +263,17 @@ private func cleanup(_ directory: URL) {
     #expect(try probe.snapshot(scope: "b").actions.filter { $0.kind == .undo }.map(\.targetMemberID) == ["two", "one"])
     #expect(try host.lookup(scope: "b", id: "inverse")?.targetMemberIDs == ["two", "one"])
     #expect(try probe.snapshot(scope: "b").redoAvailable == true)
+    let compensation = try probe.snapshot(scope: "b").actions.filter { $0.kind == .undo }
+    let compensationByTarget = Dictionary(uniqueKeysWithValues: compensation.map { ($0.targetMemberID!, $0.id) })
     let redo = Command(scope: "b", id: "redo", fingerprint: "ordered-reapplication", kind: .redo,
-                       groupID: "g", members: [Member(id: "redo-one", delta: 2, targetMemberID: "one"),
-                                              Member(id: "redo-two", delta: 3, targetMemberID: "two")])
+                       groupID: "g", members: [Member(id: "redo-one", delta: 2, targetMemberID: "one",
+                                                      compensationActionID: compensationByTarget["one"]),
+                                              Member(id: "redo-two", delta: 3, targetMemberID: "two",
+                                                     compensationActionID: compensationByTarget["two"])])
     #expect(try probe.submit(redo, host: host) == .accepted)
     #expect(try probe.snapshot(scope: "b").actions.filter { $0.kind == .redo }.map(\.targetMemberID) == ["one", "two"])
+    #expect(try probe.snapshot(scope: "b").actions.filter { $0.kind == .redo }.map(\.compensationActionID) ==
+            [compensationByTarget["one"], compensationByTarget["two"]])
     #expect(try host.value(scope: "b") == 5)
 }
 
@@ -383,8 +390,9 @@ private func cleanup(_ directory: URL) {
                                      delta: 5, groupID: "g"), host: host) == .accepted)
     #expect(try first.submit(Command(scope: "a", id: "inverse", fingerprint: "minus-five", kind: .undo,
                                      delta: -5, groupID: "g", targetMemberID: "original"), host: host) == .accepted)
+    let compensationID = try #require(first.snapshot(scope: "a").actions.first { $0.kind == .undo }?.id)
     let redo = Command(scope: "a", id: "redo", fingerprint: "stale-redo", kind: .redo, delta: 5,
-                       groupID: "g", targetMemberID: "original")
+                       groupID: "g", targetMemberID: "original", compensationActionID: compensationID)
     let token = try first.prepare(redo)
     try first.markDeliveryStarted(token)
     host.nextOutcome = .rejected
@@ -441,4 +449,47 @@ private func cleanup(_ directory: URL) {
     #expect(try reopened.snapshot(scope: "b").actions.count == 1)
     #expect(try host.value(scope: "b") == 4)
     #expect(host.deliveryAttempts == 1)
+}
+
+@MainActor @Test func redoRequiresIdentityOfLatestCompensatingAction() throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { cleanup(directory) }
+    let host = try HostStore.open(directory: directory)
+    let probe = try RecoveryProbe.open(directory: directory)
+    let original = Command(scope: "a", id: "original", fingerprint: "plus-three", kind: .ordinary,
+                           delta: 3, groupID: "g")
+    #expect(try probe.submit(original, host: host) == .accepted)
+    let undo = Command(scope: "a", id: "undo-1", fingerprint: "minus-three", kind: .undo,
+                       delta: -3, groupID: "g", targetMemberID: "original")
+    #expect(try probe.submit(undo, host: host) == .accepted)
+    let unlinked = Command(scope: "a", id: "unlinked-redo", fingerprint: "missing-compensation", kind: .redo,
+                           delta: 3, groupID: "g", targetMemberID: "original")
+    #expect(throws: ProbeError.invalidGroup) { try probe.submit(unlinked, host: host) }
+    #expect(try host.value(scope: "a") == 0)
+    #expect(host.deliveryAttempts == 2)
+    let firstCompensation = try #require(probe.snapshot(scope: "a").actions.first { $0.kind == .undo }?.id)
+    try probe.close()
+    let reopened = try RecoveryProbe.open(directory: directory)
+    let linked = Command(scope: "a", id: "redo-1", fingerprint: "linked-redo", kind: .redo,
+                         delta: 3, groupID: "g", targetMemberID: "original",
+                         compensationActionID: firstCompensation)
+    #expect(try reopened.submit(linked, host: host) == .accepted)
+    #expect(try reopened.snapshot(scope: "a").actions.first { $0.kind == .redo }?.compensationActionID == firstCompensation)
+    #expect(try host.lookup(scope: "a", id: "redo-1")?.compensationActionIDs == [firstCompensation])
+    let secondUndo = Command(scope: "a", id: "undo-2", fingerprint: "second-compensation", kind: .undo,
+                             delta: -3, groupID: "g", targetMemberID: "original")
+    #expect(try reopened.submit(secondUndo, host: host) == .accepted)
+    let secondCompensation = try #require(reopened.snapshot(scope: "a").actions.first { $0.memberID == "undo-2" }?.id)
+    #expect(secondCompensation != firstCompensation)
+    let stale = Command(scope: "a", id: "stale-redo", fingerprint: "old-link", kind: .redo,
+                        delta: 3, groupID: "g", targetMemberID: "original",
+                        compensationActionID: firstCompensation)
+    #expect(throws: ProbeError.invalidGroup) { try reopened.submit(stale, host: host) }
+    let current = Command(scope: "a", id: "redo-2", fingerprint: "new-link", kind: .redo,
+                          delta: 3, groupID: "g", targetMemberID: "original",
+                          compensationActionID: secondCompensation)
+    #expect(try reopened.submit(current, host: host) == .accepted)
+    #expect(try reopened.snapshot(scope: "a").actions.first { $0.memberID == "redo-2" }?.compensationActionID == secondCompensation)
+    #expect(try host.value(scope: "a") == 3)
+    #expect(host.deliveryAttempts == 5)
 }

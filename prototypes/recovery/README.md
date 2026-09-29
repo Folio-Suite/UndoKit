@@ -25,9 +25,21 @@ ruby UndoKit/prototypes/recovery/run.rb
 Run from the repository checkout on macOS with Xcode selected. The runner builds
 the independent Swift package using Swift 6 strict concurrency and warnings as
 errors, then runs the behavioral suite and its SIGKILL children. The small suite
-uses a 180-second default timeout, 2 GiB process-group memory limit, 12 GiB owned
+uses a 180-second default timeout, 2 GiB descendant-process memory limit, 12 GiB owned
 disk limit and 20 GiB free-space floor. No budget override was used in the
-recorded run. See [results](results.md) for evidence and remaining coverage.
+recorded normal run. The separate watchdog check intentionally lowers the memory
+limit to 1 MiB. See [results](results.md) for evidence and remaining coverage.
+
+The runner writes `.build/recovery-last-run.log` and `.build/recovery-last-run.json`
+with the source revision, source hashes, configured limits and sampled peaks.
+Failed runs retain their temporary store directory; successful runs clean it.
+Recorded evidence is copied into [evidence.md](evidence.md) for review. Watchdog
+samples are safeguards, not calibrated allocation measurements.
+
+Explicit experiment settings are `RECOVERY_PROBE_TIMEOUT`,
+`RECOVERY_PROBE_MEMORY_MIB`, `RECOVERY_PROBE_DISK_MIB` and
+`RECOVERY_PROBE_FREE_MIB`. Raising budgets requires the maintainer authorization
+defined in the measurement plan; configuration alone is not that authorization.
 
 ## Accepted seams and ownership
 

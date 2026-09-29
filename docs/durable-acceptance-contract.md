@@ -182,8 +182,8 @@ provide enough concrete benefit to displace the conservative Core Data choice.
 
 Preparation is one ordinary atomic history-store transaction. It verifies only
 what UndoKit can honestly know: that its store is open, compatible and writable;
-that the prepared record can be committed; that configured retention and
-capacity policy is not already exceeded; and that known encoding and structural
+that the prepared record can be committed; that configured hard capacity
+limits are not already exceeded; and that known encoding and structural
 requirements pass. UndoKit relies on Core Data's transaction and storage
 machinery rather than reimplementing a database or promising that a later write
 cannot fail.
@@ -232,6 +232,13 @@ history graph, never maintained as a second mutable ledger. Shared, current,
 checkpoint and recovery-required objects remain listed.
 
 ## Recording, pruning and generation changes
+
+The subsequently accepted [history-retention contract](history-retention-contract.md)
+defines restoration, shared Undo/Redo depth, independent state and history holds,
+host-declared retention requirements, and consolidation with explicit gaps.
+An unmet retention target alone does not refuse admission; hard capacity and
+safety limits can. Automatic pruning cannot revoke a hold. These rules refine
+retention policy without changing transaction safety.
 
 Recording Off changes retention, not transaction safety. UndoKit still performs
 prepare, host acceptance and finalization, but does not retain an ordinary
@@ -314,5 +321,5 @@ distinct evidence.
 This contract does not select public generic signatures, payload codecs, Core
 Data entities, migration stages, branch algorithms, native UndoManager routing,
 package layout, numerical budgets or repair implementations. Those remain with
-issues #42–#50. External Objective-C and XCFramework distribution remains
-deferred beyond Folio 1.0.
+issues #43–#50, subject to the accepted behavior in #42. External Objective-C
+and XCFramework distribution remains deferred beyond Folio 1.0.

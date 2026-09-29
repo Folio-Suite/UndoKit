@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 the Folio Project
+SPDX-License-Identifier: MIT
+-->
+
 # UndoKit
 
 UndoKit provides shared history concepts for applications with different ownership,
@@ -72,15 +77,19 @@ _Avoid_: History Scope, Recipe Revision
 
 **Checkpoint**:
 A host-designated, optionally named reference to a coherent Historical State,
-available when checkpoint capability is requested. Retaining a Checkpoint
-preserves the data that state requires; hosts determine how Checkpoints are used.
+whose retention preserves the data that state requires without implicitly
+preserving the detailed editing history that produced it.
 _Avoid_: Backup, History Branch
+
+**Retention Hold**:
+Explicit protection of a designated Historical State or detailed history
+segment against automatic pruning until released. State protection and
+detailed-history protection are independent promises.
+_Avoid_: Checkpoint, Undo depth
 
 **Undo/Redo Position**:
 The place from which ordinary Undo/Redo operates in a History Scope's current
 ordering, distinct from the newest historical record or a state being browsed.
-The host may select a different branch and position; changes to domain state
-require an accepted host operation.
 _Avoid_: Latest Action, browsing selection
 
 **Undo/Redo Availability**:

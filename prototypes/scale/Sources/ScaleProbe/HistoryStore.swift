@@ -55,6 +55,7 @@ public struct PlanPage: Sendable {
     public let hasMore: Bool
 }
 @MainActor public final class HistoryStore {
+    private static let emptyPosition = "__EMPTY_HISTORY_POSITION__"
     public let url: URL
     public var limits: Limits
     private let container: NSPersistentContainer
@@ -195,12 +196,14 @@ public struct PlanPage: Sendable {
         let previousCheckpoint = str(owner, "floorCheckpoint")
         var cursor = str(owner, "head")
         for _ in 0..<depth {
-            guard let current = cursor, let parent = try node(current)?.parent else { break }
-            cursor = parent
+            guard let current = cursor else { cursor = Self.emptyPosition; break }
+            if let parent = try node(current)?.parent { cursor = parent }
+            else { cursor = Self.emptyPosition; break }
         }
         if cursor == previousFloor { return }
         var nextCheckpoint: String?
-        if let cursor, try checkpoint(node: cursor) == nil {
+        if let cursor, cursor != Self.emptyPosition,
+           try checkpoint(node: cursor) == nil {
             nextCheckpoint = try checkpoint(scope: str(owner, "id")!, node: cursor)
         }
         if let previousCheckpoint, let old = try one("Checkpoint", "id", previousCheckpoint) {
@@ -215,9 +218,9 @@ public struct PlanPage: Sendable {
     public func undo(scope id: String) throws {
         let owner = try scope(id)
         guard let current = str(owner, "head"), current != str(owner, "undoFloor"),
-              let info = try node(current),
-              !info.gapBefore, let parent = info.parent,
-              try node(parent) != nil else { throw ProofError.noUndo }
+              let info = try node(current), !info.gapBefore else { throw ProofError.noUndo }
+        let parent = info.parent
+        if let parent, try node(parent) == nil { throw ProofError.noUndo }
         let ordinal = (owner.value(forKey: "redoOrdinal") as? Int64 ?? 0) + 1
         let redo = put("Redo")
         redo.setValue(UUID().uuidString, forKey: "id"); redo.setValue(id, forKey: "scope")
@@ -418,11 +421,24 @@ public struct PlanPage: Sendable {
     }
     public func fileFootprint() throws -> Int64 {
         var total: Int64 = 0
-        for file in [url, URL(fileURLWithPath: url.path + "-wal"), URL(fileURLWithPath: url.path + "-shm")] {
-            if !FileManager.default.fileExists(atPath: file.path) { continue }
-            let attrs = try FileManager.default.attributesOfItem(atPath: file.path)
-            guard let size = attrs[.size] as? NSNumber else { throw ProofError.refused("unreadable store footprint") }
-            total += size.int64Value
+        let files = [url, URL(fileURLWithPath: url.path + "-wal"),
+                     URL(fileURLWithPath: url.path + "-shm")]
+        for (index, file) in files.enumerated() {
+            do {
+                let attrs = try FileManager.default.attributesOfItem(atPath: file.path)
+                guard let size = attrs[.size] as? NSNumber else {
+                    throw ProofError.refused("unreadable store footprint")
+                }
+                total += size.int64Value
+            } catch {
+                let cause = error as NSError
+                let missing = (cause.domain == NSCocoaErrorDomain &&
+                               (cause.code == NSFileReadNoSuchFileError ||
+                                cause.code == NSFileNoSuchFileError)) ||
+                              (cause.domain == NSPOSIXErrorDomain && cause.code == ENOENT)
+                if index > 0 && missing { continue }
+                throw error
+            }
         }
         return total
     }
@@ -459,14 +475,16 @@ extension HistoryStore {
         for row in try fetch("Scope") {
             if let floor = str(row, "undoFloor") {
                 floors[str(row, "id")!] = floor
-                try protectPath(str(row, "head"), until: floor, detailed: true)
+                try protectPath(str(row, "head"),
+                                until: floor == Self.emptyPosition ? nil : floor, detailed: true)
             } else {
                 try protectPath(str(row, "head"))
             }
         }
         for row in try fetch("Redo") {
             let floor = floors[str(row, "scope")!]
-            try protectPath(str(row, "node"), until: floor, detailed: floor != nil)
+            try protectPath(str(row, "node"),
+                            until: floor == Self.emptyPosition ? nil : floor, detailed: floor != nil)
         }
         for row in try fetch("Checkpoint") {
             if let id = str(row, "node") { protected.insert(id) }

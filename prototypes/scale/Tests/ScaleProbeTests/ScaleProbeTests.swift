@@ -170,4 +170,39 @@ import ScaleProbe
     #expect(try store.head(scope: "folio") == nil)
 }
 
+
+@Test func firstGroupUndoReachesEmptyAndRedoSurvivesReopen() throws {
+    let store = try HistoryStore.temporary()
+    let url = store.url
+    defer { try? store.close(); if ProcessInfo.processInfo.environment["KEEP_FIXTURES"] != "1" { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) } }
+    try store.configureUndoDepth(scope: "folio", groups: 1)
+    let first = try store.append(scope: "folio", actions: [.set("x", "first")])
+    try store.undo(scope: "folio")
+    #expect(try store.currentState(scope: "folio").isEmpty)
+    #expect(throws: ProofError.noUndo) { try store.undo(scope: "folio") }
+    try store.close()
+    let reopened = try HistoryStore(url: url)
+    defer { try? reopened.close() }
+    let beforeRedo = try reopened.prune(targetGroups: 0)
+    #expect(beforeRedo.retainedGroups == 1)
+    #expect(try reopened.node(first) != nil)
+    try reopened.redo(scope: "folio")
+    #expect(try reopened.currentState(scope: "folio") == ["x": "first"])
+    try reopened.undo(scope: "folio")
+    #expect(try reopened.currentState(scope: "folio").isEmpty)
+}
+
+
+@Test func missingPrimaryDatabaseCannotReportZeroFootprint() throws {
+    let store = try HistoryStore.temporary()
+    let url = store.url
+    defer { try? store.close(); if ProcessInfo.processInfo.environment["KEEP_FIXTURES"] != "1" { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) } }
+    try store.close()
+    try FileManager.default.removeItem(at: url)
+    var didThrow = false
+    do { _ = try store.fileFootprint() }
+    catch { didThrow = true }
+    #expect(didThrow)
+}
+
 }

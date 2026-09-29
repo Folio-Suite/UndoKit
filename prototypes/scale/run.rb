@@ -55,16 +55,24 @@ def descendants(root)
 end
 
 def kill_tree(root, ids)
+  errors = []
+  begin
+    Process.kill('KILL', -root)
+  rescue Errno::ESRCH
+    nil
+  rescue StandardError => error
+    errors << "group: #{error.class}: #{error.message}"
+  end
   ids.reverse_each do |pid|
     begin
       Process.kill('KILL', pid)
     rescue Errno::ESRCH
       nil
+    rescue StandardError => error
+      errors << "pid #{pid}: #{error.class}: #{error.message}"
     end
   end
-  Process.kill('KILL', -root)
-rescue Errno::ESRCH
-  nil
+  errors
 end
 
 def watched(command, log_path, fixture_dir, report, phase, deadline)
@@ -77,7 +85,8 @@ def watched(command, log_path, fixture_dir, report, phase, deadline)
   peak_owned = 0
   termination_errors = []
   begin
-    pid = Process.spawn(*command, chdir: ROOT, pgroup: true, out: log_path, err: log_path)
+    pid = Process.spawn(*command, chdir: ROOT, pgroup: true,
+                        out: log_path, err: log_path + '.stderr.log')
     loop do
       pair = Process.waitpid2(pid, Process::WNOHANG)
       if pair
@@ -108,7 +117,7 @@ def watched(command, log_path, fixture_dir, report, phase, deadline)
   ensure
     if pid && status.nil?
       begin
-        kill_tree(pid, ids)
+        termination_errors.concat(kill_tree(pid, ids))
       rescue StandardError => error
         termination_errors << "#{error.class}: #{error.message}"
       end
@@ -134,12 +143,26 @@ def watched(command, log_path, fixture_dir, report, phase, deadline)
     end
   end
   events = File.file?(log_path) ? File.readlines(log_path).map { |line| JSON.parse(line) rescue nil }.compact : []
+  required = if phase.start_with?('fixture-')
+               %w[fixtureComplete smallOperations] +
+                 (KIND == 'kitchen' ? ['allowance'] : []) +
+                 (KIND == 'large' ? ['distantRecovery'] : [])
+             elsif phase.start_with?('reopen-')
+               ['reopen']
+             elsif phase.start_with?('consolidate-')
+               ['consolidation']
+             else
+               []
+             end
+  seen = events.map { |event| event['phase'] }
+  missing = required - seen
+  reason = [reason, "missing metric events: #{missing.join(', ')}"].compact.join('; ') unless missing.empty?
   entry = {
     'phase' => phase, 'command' => command, 'elapsed_seconds' => Process.clock_gettime(Process::CLOCK_MONOTONIC) - start,
     'exit_status' => status&.exitstatus, 'signal' => status&.termsig, 'reason' => reason,
     'child_pid' => pid, 'child_reaped' => !status.nil?, 'termination_errors' => termination_errors,
     'peak_descendant_rss_bytes' => peak_rss, 'peak_owned_bytes' => peak_owned,
-    'events' => events, 'log' => log_path
+    'events' => events, 'log' => log_path, 'stderr_log' => log_path + '.stderr.log'
   }
   report['steps'] << entry
   raise "#{phase}: #{reason || status&.exitstatus || status&.termsig}" unless reason.nil? && status&.success?

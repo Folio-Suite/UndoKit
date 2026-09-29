@@ -9,8 +9,10 @@ imported from the original repository; see [provenance](UPSTREAM.md) and the
 [design index](docs/imported-design/README.md).
 
 The imported implementation is an umbrella-header scaffold. The template tests
-do not establish durable-history behavior. Folio's need for history does not
-settle the acceptance and recovery questions still open in the design work.
+do not establish durable-history behavior. The accepted
+[durable-acceptance contract](docs/durable-acceptance-contract.md) now defines
+the host/framework transaction and recovery boundary; its public API, storage
+model and runtime proofs remain future work.
 
 Build the shared `UndoKit` scheme in `UndoKit.xcodeproj`, or use the enclosing
 `Folio` workspace scheme. The Folio adaptation supplies an explicit public module

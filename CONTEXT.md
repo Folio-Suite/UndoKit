@@ -23,6 +23,11 @@ It is distinct from evidence that a Command was merely requested or recorded in
 History.
 _Avoid_: Command, submission
 
+**Rejected Outcome**:
+The host-authoritative result establishing that a Command produced no semantic
+effect, together with its reason. It produces no Action.
+_Avoid_: Failure, unresolved outcome
+
 **Action**:
 An accepted semantic change resulting from a Command. Accepted Undo and Redo
 operations also produce Actions with explicit relationships to earlier changes;
@@ -40,6 +45,17 @@ The retained record of accepted Actions and, when enabled, historical states
 within a History Scope. It can include material that is no longer available
 through ordinary Undo or Redo.
 _Avoid_: Undo availability, redo availability
+
+**History Transaction**:
+UndoKit's coordination of one Command from durable preparation through an
+authoritative host outcome and history finalization within one History Scope.
+_Avoid_: Core Data transaction, Action
+
+**History Generation**:
+A continuity boundary for one History Scope. Complete clearing or an explicit
+irrecoverable reset retires one generation and establishes another from a
+host-adopted current state.
+_Avoid_: History Branch, Checkpoint, model version
 
 **Historical State**:
 A coherent host-defined domain state represented in History, including the
@@ -88,6 +104,17 @@ _Avoid_: Suspension, Pruning
 Removal of historical data under an authorized retention policy, preserving
 anything still required by current content, retained History, or pending recovery.
 _Avoid_: Invalidation, Suspension
+
+**Retention Store**:
+A stable, host-defined identity for a store containing domain objects or
+resources that retained History may require. Its storage technology and policy
+remain host-owned.
+_Avoid_: History store, History Scope
+
+**Retained Object Reference**:
+A bounded, durable identity for one required object or version in a Retention
+Store. UndoKit retains the reference, not the object's bytes or meaning.
+_Avoid_: Resource copy, managed object
 
 **History Capabilities**:
 The history behaviors supported by UndoKit and requested by a host. They establish

@@ -118,4 +118,56 @@ import ScaleProbe
     #expect(try reopened.reconstruct(scope: "folio", node: b).state == ["x": "b"])
 }
 
+
+@Test func ordinaryWindowKeepsCompleteGroupsAcrossCheckpoint() throws {
+    let store = try HistoryStore.temporary()
+    defer { try? store.close(); if ProcessInfo.processInfo.environment["KEEP_FIXTURES"] != "1" { try? FileManager.default.removeItem(at: store.url.deletingLastPathComponent()) } }
+    let a = try store.append(scope: "folio", actions: [.set("x", "a")])
+    let b = try store.append(scope: "folio", actions: [.set("x", "b")])
+    let c = try store.append(scope: "folio", actions: [.set("x", "c"), .set("y", "group")])
+    _ = try store.checkpoint(scope: "folio", node: c)
+    _ = try store.append(scope: "folio", actions: [.set("x", "d")])
+    _ = try store.append(scope: "folio", actions: [.set("x", "e")])
+    try store.configureUndoDepth(scope: "folio", groups: 3)
+    let result = try store.prune(targetGroups: 1)
+    #expect(result.retainedGroups == 4)
+    #expect(try store.node(a) == nil)
+    #expect(try store.node(b) != nil)
+    try store.undo(scope: "folio")
+    try store.undo(scope: "folio")
+    try store.undo(scope: "folio")
+    #expect(try store.currentState(scope: "folio") == ["x": "b"])
+    #expect(throws: ProofError.noUndo) { try store.undo(scope: "folio") }
+    try store.redo(scope: "folio")
+    try store.redo(scope: "folio")
+    try store.redo(scope: "folio")
+    #expect(try store.currentState(scope: "folio") == ["x": "e", "y": "group"])
+}
+
+@Test func heldStateKeepsAncestorOnlyResourceAfterPruning() throws {
+    let store = try HistoryStore.temporary()
+    defer { try? store.close(); if ProcessInfo.processInfo.environment["KEEP_FIXTURES"] != "1" { try? FileManager.default.removeItem(at: store.url.deletingLastPathComponent()) } }
+    let resource = Resource(store: "assets", key: "only-on-ancestor", version: "v1")
+    let a = try store.append(scope: "folio", actions: [.set("x", "a")], resources: [resource])
+    let b = try store.append(scope: "folio", actions: [.set("x", "b")])
+    _ = try store.hold(node: b, kind: "state")
+    _ = try store.append(scope: "folio", actions: [.set("x", "c")])
+    #expect(try store.prune(targetGroups: 1).removedGroups == 1)
+    #expect(try store.node(a) == nil)
+    #expect(try store.references(store: "assets").contains(resource))
+    #expect(try store.reconstruct(scope: "folio", node: b).state == ["x": "b"])
+}
+
+@Test func conservativeCapacityRefusesBeforeMutation() throws {
+    let store = try HistoryStore.temporary()
+    defer { try? store.close(); if ProcessInfo.processInfo.environment["KEEP_FIXTURES"] != "1" { try? FileManager.default.removeItem(at: store.url.deletingLastPathComponent()) } }
+    var limits = store.limits
+    limits.hardStoreBytes = try store.fileFootprint() + 100_000
+    store.limits = limits
+    #expect(throws: ProofError.refused("store capacity")) {
+        _ = try store.append(scope: "folio", actions: [.set("x", "tiny")])
+    }
+    #expect(try store.head(scope: "folio") == nil)
+}
+
 }

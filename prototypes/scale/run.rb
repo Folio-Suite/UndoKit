@@ -14,6 +14,11 @@ abort 'Unknown fixture' unless %w[ordinary large kitchen payload smoke].include?
 def setting(name, fallback)
   value = Integer(ENV.fetch(name, fallback.to_s))
   abort "#{name} must be positive" unless value.positive?
+  if name == 'SCALE_FREE_FLOOR_MIB'
+    abort "#{name} cannot be below #{fallback} without a recorded override" if value < fallback
+  else
+    abort "#{name} cannot exceed #{fallback} without a recorded override" if value > fallback
+  end
   value
 end
 
@@ -67,45 +72,72 @@ def watched(command, log_path, fixture_dir, report, phase, deadline)
   status = nil
   ids = []
   reason = nil
+  pid = nil
   peak_rss = 0
   peak_owned = 0
-  pid = Process.spawn(*command, chdir: ROOT, pgroup: true, out: log_path, err: log_path)
-  loop do
-    pair = Process.waitpid2(pid, Process::WNOHANG)
-    if pair
-      status = pair.last
-      break
+  termination_errors = []
+  begin
+    pid = Process.spawn(*command, chdir: ROOT, pgroup: true, out: log_path, err: log_path)
+    loop do
+      pair = Process.waitpid2(pid, Process::WNOHANG)
+      if pair
+        status = pair.last
+        break
+      end
+      raise 'injected monitor failure' if ENV['SCALE_INJECT_MONITOR_FAILURE'] == '1'
+      ids, rss = descendants(pid)
+      owned = owned_bytes(fixture_dir) + owned_bytes(File.join(ROOT, '.build'))
+      peak_rss = [peak_rss, rss].max
+      peak_owned = [peak_owned, owned].max
+      report['peak_descendant_rss_bytes'] = [report['peak_descendant_rss_bytes'] || 0, rss].max
+      report['peak_owned_bytes'] = [report['peak_owned_bytes'] || 0, owned].max
+      reason = if Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+                 "case runtime exceeded #{LIMITS[:case_seconds]} seconds"
+               elsif rss > LIMITS[:memory_bytes]
+                 "descendant RSS exceeded #{LIMITS[:memory_bytes]} bytes"
+               elsif owned > LIMITS[:owned_bytes]
+                 "owned footprint exceeded #{LIMITS[:owned_bytes]} bytes"
+               elsif [free_bytes(fixture_dir), free_bytes(File.join(ROOT, '.build'))].min < LIMITS[:free_floor_bytes]
+                 "free space fell below #{LIMITS[:free_floor_bytes]} bytes"
+               end
+      break if reason
+      sleep 0.25
     end
-    ids, rss = descendants(pid)
-    owned = owned_bytes(fixture_dir) + owned_bytes(File.join(ROOT, '.build'))
-    peak_rss = [peak_rss, rss].max
-    peak_owned = [peak_owned, owned].max
-    report['peak_descendant_rss_bytes'] = [report['peak_descendant_rss_bytes'] || 0, rss].max
-    report['peak_owned_bytes'] = [report['peak_owned_bytes'] || 0, owned].max
-    reason = if Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
-               "case runtime exceeded #{LIMITS[:case_seconds]} seconds"
-             elsif rss > LIMITS[:memory_bytes]
-               "descendant RSS exceeded #{LIMITS[:memory_bytes]} bytes"
-             elsif owned > LIMITS[:owned_bytes]
-               "owned footprint exceeded #{LIMITS[:owned_bytes]} bytes"
-             elsif [free_bytes(fixture_dir), free_bytes(File.join(ROOT, '.build'))].min < LIMITS[:free_floor_bytes]
-               "free space fell below #{LIMITS[:free_floor_bytes]} bytes"
-             end
-    break if reason
-    sleep 0.25
-  end
-  if reason
-    kill_tree(pid, ids)
-    begin
-      _, status = Process.waitpid2(pid)
-    rescue Errno::ECHILD
-      nil
+  rescue StandardError, Interrupt => error
+    reason = "watchdog failure: #{error.class}: #{error.message}"
+  ensure
+    if pid && status.nil?
+      begin
+        kill_tree(pid, ids)
+      rescue StandardError => error
+        termination_errors << "#{error.class}: #{error.message}"
+      end
+      reap_deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 3
+      loop do
+        begin
+          pair = Process.waitpid2(pid, Process::WNOHANG)
+          if pair
+            status = pair.last
+            break
+          end
+        rescue Errno::ECHILD
+          termination_errors << 'child already reaped without captured status'
+          break
+        end
+        break if Process.clock_gettime(Process::CLOCK_MONOTONIC) > reap_deadline
+        sleep 0.05
+      end
+      if status.nil?
+        termination_errors << 'child not reaped within 3 seconds'
+        reason = [reason, 'child reap timeout'].compact.join('; ')
+      end
     end
   end
   events = File.file?(log_path) ? File.readlines(log_path).map { |line| JSON.parse(line) rescue nil }.compact : []
   entry = {
     'phase' => phase, 'command' => command, 'elapsed_seconds' => Process.clock_gettime(Process::CLOCK_MONOTONIC) - start,
     'exit_status' => status&.exitstatus, 'signal' => status&.termsig, 'reason' => reason,
+    'child_pid' => pid, 'child_reaped' => !status.nil?, 'termination_errors' => termination_errors,
     'peak_descendant_rss_bytes' => peak_rss, 'peak_owned_bytes' => peak_owned,
     'events' => events, 'log' => log_path
   }

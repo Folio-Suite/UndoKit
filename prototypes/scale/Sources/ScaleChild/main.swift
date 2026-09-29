@@ -196,6 +196,7 @@ func effect(_ key: String, _ value: String, command: Data) -> Effect {
         }
         try store.flush()
         for scope in oracle.keys {
+            try store.configureUndoDepth(scope: scope, groups: 100)
             guard try store.currentState(scope: scope) == oracle[scope] else {
                 throw ProofError.gap("kitchen oracle mismatch")
             }
@@ -282,17 +283,18 @@ func effect(_ key: String, _ value: String, command: Data) -> Effect {
     let pageStart = ProcessInfo.processInfo.systemUptime
     let page = try store.historyPage(scope: scope, offset: 0, count: 100)
     let pageTime = seconds(pageStart) * 1_000
-    var planTime = 0.0; var planBytes = 0; var planRecords = 0
+    var planTime = 0.0; var planBytes = 0; var planAdvertised = 0; var planRecords = 0
     if let target = targets["midpoint"] ?? targets["nearBeginning"] ?? targets["end"] {
         let planStart = ProcessInfo.processInfo.systemUptime
         let plan = try store.beginPlan(scope: scope, target: target)
         let first = try store.planPage(plan, offset: 0, maxEntries: 100)
         planTime = seconds(planStart) * 1_000
-        planBytes = first.bytesRead; planRecords = first.nodeIDs.count
+        planBytes = first.bytesRead; planAdvertised = first.advertisedBytes
+        planRecords = first.nodeIDs.count
         try store.releasePlan(plan)
     }
     emit(["phase": "reopen", "availabilityMs": available, "pageMs": pageTime,
-          "pageCount": page.count, "firstPlanMs": planTime, "firstPlanBytes": planBytes,
+          "pageCount": page.count, "firstPlanMs": planTime, "firstPlanBytes": planBytes, "firstPlanAdvertisedBytes": planAdvertised,
           "firstPlanRecords": planRecords])
 }
 

@@ -51,6 +51,7 @@ public struct RecoveryResult: Sendable {
 public struct PlanPage: Sendable {
     public let nodeIDs: [String]
     public let bytesRead: Int
+    public let advertisedBytes: Int
     public let hasMore: Bool
 }
 @MainActor public final class HistoryStore {
@@ -96,7 +97,7 @@ public struct PlanPage: Sendable {
         }
         let model = NSManagedObjectModel()
         model.entities = [
-            entity("Scope", [attr("id", .stringAttributeType), attr("head", .stringAttributeType, true), attr("redo", .stringAttributeType, true), attr("sequence", .integer64AttributeType), attr("redoOrdinal", .integer64AttributeType)], unique: [["id"]]),
+            entity("Scope", [attr("id", .stringAttributeType), attr("head", .stringAttributeType, true), attr("redo", .stringAttributeType, true), attr("sequence", .integer64AttributeType), attr("redoOrdinal", .integer64AttributeType), attr("undoDepth", .integer32AttributeType, true), attr("undoFloor", .stringAttributeType, true), attr("floorCheckpoint", .stringAttributeType, true)], unique: [["id"]]),
             entity("Node", [attr("id", .stringAttributeType), attr("scope", .stringAttributeType), attr("parent", .stringAttributeType, true), attr("origin", .stringAttributeType, true), attr("kind", .stringAttributeType), attr("sequence", .integer64AttributeType), attr("gapBefore", .booleanAttributeType)], unique: [["id"]]),
             entity("Effect", [attr("id", .stringAttributeType), attr("node", .stringAttributeType), attr("ordinal", .integer32AttributeType), attr("key", .stringAttributeType), attr("value", .binaryDataAttributeType, true), attr("command", .binaryDataAttributeType), attr("valueBytes", .integer64AttributeType), attr("commandBytes", .integer64AttributeType)], unique: [["id"]]),
             entity("Checkpoint", [attr("id", .stringAttributeType), attr("node", .stringAttributeType), attr("scope", .stringAttributeType), attr("snapshot", .binaryDataAttributeType)], unique: [["id"]]),
@@ -142,7 +143,8 @@ public struct PlanPage: Sendable {
             size += action.command.count + (action.value?.count ?? 0)
             guard size <= limits.maxGroupBytes else { throw ProofError.refused("group bytes") }
         }
-        if let hard = limits.hardStoreBytes, try fileFootprint() + Int64(size) > hard {
+        let conservativeGrowth = Int64(size) * 2 + 1_024 * 1_024
+        if let hard = limits.hardStoreBytes, try fileFootprint() + conservativeGrowth > hard {
             throw ProofError.refused("store capacity")
         }
         let owner = try scope(id)
@@ -166,6 +168,7 @@ public struct PlanPage: Sendable {
         for redo in try fetch("Redo", NSPredicate(format: "scope == %@", id)) { context.delete(redo) }
         owner.setValue(idNew, forKey: "head"); owner.setValue(nil, forKey: "redo")
         owner.setValue(sequence, forKey: "sequence")
+        if owner.value(forKey: "undoDepth") != nil { try updateUndoFloor(owner) }
         if durable { try flush() }
         return idNew
     }
@@ -179,9 +182,40 @@ public struct PlanPage: Sendable {
         row.setValue(resource.store, forKey: "store"); row.setValue(resource.key, forKey: "key")
         row.setValue(resource.version, forKey: "version")
     }
+    public func configureUndoDepth(scope id: String, groups: Int) throws {
+        guard groups >= 0 && groups <= Int(Int32.max) else { throw ProofError.refused("undo depth") }
+        let owner = try scope(id)
+        owner.setValue(Int32(groups), forKey: "undoDepth")
+        try updateUndoFloor(owner)
+        try flush()
+    }
+    private func updateUndoFloor(_ owner: NSManagedObject) throws {
+        guard let depth = owner.value(forKey: "undoDepth") as? Int32 else { return }
+        let previousFloor = str(owner, "undoFloor")
+        let previousCheckpoint = str(owner, "floorCheckpoint")
+        var cursor = str(owner, "head")
+        for _ in 0..<depth {
+            guard let current = cursor, let parent = try node(current)?.parent else { break }
+            cursor = parent
+        }
+        if cursor == previousFloor { return }
+        var nextCheckpoint: String?
+        if let cursor, try checkpoint(node: cursor) == nil {
+            nextCheckpoint = try checkpoint(scope: str(owner, "id")!, node: cursor)
+        }
+        if let previousCheckpoint, let old = try one("Checkpoint", "id", previousCheckpoint) {
+            for ref in try fetch("Reference", NSPredicate(format: "owner == %@", previousCheckpoint)) {
+                context.delete(ref)
+            }
+            context.delete(old)
+        }
+        owner.setValue(cursor, forKey: "undoFloor")
+        owner.setValue(nextCheckpoint, forKey: "floorCheckpoint")
+    }
     public func undo(scope id: String) throws {
         let owner = try scope(id)
-        guard let current = str(owner, "head"), let info = try node(current),
+        guard let current = str(owner, "head"), current != str(owner, "undoFloor"),
+              let info = try node(current),
               !info.gapBefore, let parent = info.parent,
               try node(parent) != nil else { throw ProofError.noUndo }
         let ordinal = (owner.value(forKey: "redoOrdinal") as? Int64 ?? 0) + 1
@@ -220,11 +254,25 @@ public struct PlanPage: Sendable {
     }
     public func checkpoint(scope id: String, node target: String, resources: [Resource] = []) throws -> String {
         let snapshot = try JSONEncoder().encode(reconstruct(scope: id, node: target).state)
+        let (lineage, baseline) = try path(to: target)
         let checkpointID = UUID().uuidString
         let row = put("Checkpoint")
         row.setValue(checkpointID, forKey: "id"); row.setValue(target, forKey: "node")
         row.setValue(id, forKey: "scope"); row.setValue(snapshot, forKey: "snapshot")
-        for resource in resources { putReference(owner: checkpointID, resource: resource) }
+        // This prototype lacks a host dependency oracle. Copying the lineage's
+        // references conservatively prevents a held snapshot from losing an
+        // ancestor-only resource; it may retain resources that state no longer uses.
+        var owners = lineage
+        if let baselineID = baseline.flatMap({ str($0, "id") }) { owners.append(baselineID) }
+        var required = Set(resources)
+        for start in stride(from: 0, to: owners.count, by: 256) {
+            let batch = Array(owners[start..<min(owners.count, start + 256)])
+            for ref in try fetch("Reference", NSPredicate(format: "owner IN %@", batch)) {
+                required.insert(Resource(store: str(ref, "store")!, key: str(ref, "key")!,
+                                         version: str(ref, "version")!))
+            }
+        }
+        for resource in required { putReference(owner: checkpointID, resource: resource) }
         try context.save()
         return checkpointID
     }
@@ -325,7 +373,16 @@ public struct PlanPage: Sendable {
             if count > limits.pageBytes { throw ProofError.refused("single page record bytes") }
             ids.append(id); bytes += count
         }
-        return PlanPage(nodeIDs: ids, bytesRead: bytes, hasMore: offset + ids.count < path.count)
+        // Fetch only the selected page's opaque material after deciding its
+        // byte limit from normalized length columns.
+        let material = ids.isEmpty ? [] : try fetch("Effect", NSPredicate(format: "node IN %@", ids))
+        let actual = material.reduce(0) {
+            $0 + (($1.value(forKey: "value") as? Data)?.count ?? 0) +
+                 (($1.value(forKey: "command") as? Data)?.count ?? 0)
+        }
+        guard actual == bytes else { throw ProofError.gap("effect length mismatch") }
+        return PlanPage(nodeIDs: ids, bytesRead: actual, advertisedBytes: bytes,
+                        hasMore: offset + ids.count < path.count)
     }
     public func reconstruct(scope id: String, node target: String) throws -> RecoveryResult {
         guard let row = try one("Node", "id", target), str(row, "scope") == id else { throw ProofError.missing(target) }
@@ -360,10 +417,14 @@ public struct PlanPage: Sendable {
         return Set(rows.map { Resource(store: id, key: str($0, "key")!, version: str($0, "version")!) })
     }
     public func fileFootprint() throws -> Int64 {
-        [url, URL(fileURLWithPath: url.path + "-wal"), URL(fileURLWithPath: url.path + "-shm")].reduce(0) { total, file in
-            let attrs = try? FileManager.default.attributesOfItem(atPath: file.path)
-            return total + ((attrs?[.size] as? NSNumber)?.int64Value ?? 0)
+        var total: Int64 = 0
+        for file in [url, URL(fileURLWithPath: url.path + "-wal"), URL(fileURLWithPath: url.path + "-shm")] {
+            if !FileManager.default.fileExists(atPath: file.path) { continue }
+            let attrs = try FileManager.default.attributesOfItem(atPath: file.path)
+            guard let size = attrs[.size] as? NSNumber else { throw ProofError.refused("unreadable store footprint") }
+            total += size.int64Value
         }
+        return total
     }
 }
 
@@ -394,10 +455,19 @@ extension HistoryStore {
             }
             if until != nil { throw ProofError.gap("held segment boundary") }
         }
+        var floors: [String: String] = [:]
         for row in try fetch("Scope") {
-            try protectPath(str(row, "head"))
+            if let floor = str(row, "undoFloor") {
+                floors[str(row, "id")!] = floor
+                try protectPath(str(row, "head"), until: floor, detailed: true)
+            } else {
+                try protectPath(str(row, "head"))
+            }
         }
-        for row in try fetch("Redo") { try protectPath(str(row, "node")) }
+        for row in try fetch("Redo") {
+            let floor = floors[str(row, "scope")!]
+            try protectPath(str(row, "node"), until: floor, detailed: floor != nil)
+        }
         for row in try fetch("Checkpoint") {
             if let id = str(row, "node") { protected.insert(id) }
         }

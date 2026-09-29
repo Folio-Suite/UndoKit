@@ -7,8 +7,10 @@ SPDX-License-Identifier: MIT
 
 ## Build identity
 
-The current app bundle was produced by `run.rb` on 2026-09-29 with base commit
-`00852f423740655fc596761e1321fa663e0320cd` and these source hashes:
+The current app bundle was rebuilt by `run.rb` on 2026-09-29 with source base
+`8fe3d41fecfe4f6a21ff22ce3eb9d832f2eadb71` and these source hashes.
+The initial native UI run preceded that commit and used base
+`00852f423740655fc596761e1321fa663e0320cd`:
 
 | File | SHA-256 |
 | --- | --- |
@@ -16,7 +18,7 @@ The current app bundle was produced by `run.rb` on 2026-09-29 with base commit
 | `Sources/NativeProofCore/History.swift` | `b57d7b942be6ecb87d1aaa3eb319bc5c901290641371657d6e35d634716a142b` |
 | `Sources/NativeProof/main.swift` | `6a5e7e95f89fb7e4072c622388d85b8456b82ec998ef574f1c211a03b72e9ba0` |
 | `Tests/NativeProofCoreTests/HistoryTests.swift` | `0108ac5102974142b49d2611e7194b5c6cac101e0d0efa328da4420d4e7c7989` |
-| `run.rb` | `a3fe9ef326676ca7fd88395ea12d3cd592a230671c79bd47c6c87e2ce404e7be` |
+| `run.rb` | `d25cc4e162f152ed98f03c540a52ff9f86a9e03b9178ab89bc9d0267382ce6f6` |
 
 The current executable SHA-256 is
 `3b46170fa2a0091e51734c8637d8f9f42f4974ea0ee6c5dedceb8b6fd9b2a5c0`.
@@ -35,13 +37,30 @@ temporary fixtures; their generation IDs and state are kept separate.
 ## Automated behavior
 
 `ruby UndoKit/prototypes/native/run.rb` completed its final bounded build and
-tests in 3.60 seconds, including a 2.03-second SwiftPM Debug build. Four Swift Testing
+tests in 1.01 seconds, including a 0.20-second incremental SwiftPM Debug build. Four Swift Testing
 tests passed in 0.001 seconds (reported test time). The runner's sampled limits
-were 180 seconds, 2 GiB memory, 12 GiB owned scratch/bundle/fixture disk and
-20 GiB free-space floor. Sampled peaks were 539,705,344 bytes memory and
-128,557,056 bytes owned disk. The machine-readable report is at
+were 180 seconds, 2 GiB memory, 12 GiB owned build/bundle/both-fixture disk and
+20 GiB free-space floor. Sampled peaks were 83,804,160 bytes memory and
+127,971,328 bytes owned disk. The machine-readable report is at
 `.../T/folio-native-proof-build/last-run.json`. These limits covered build
 and tests, not the separately driven native app session.
+
+The runner refuses overrides above the accepted 600-second, 2 GiB and 12 GiB
+ceilings or below the 20 GiB free-space floor. `NATIVE_PROOF_MEMORY_MIB=2049`
+was rejected before spawning a child. Injected watcher failures produced
+preserved reports in the same build directory:
+
+| Fault | Preserved report | Child PID | Cleanup check |
+| --- | --- | ---: | --- |
+| `ps` | `failure-20260929T213159-41634.json` | 41646 | Reaped; PID absent; no cleanup errors |
+| `du` | `failure-20260929T213232-41822.json` | 41834 | Reaped; PID absent; no cleanup errors |
+| `df` | `failure-20260929T213240-41853.json` | 41865 | Reaped; PID absent; no cleanup errors |
+
+Each failure report records its source hashes, limits, reason, phase, tracked
+PIDs, signals and cleanup outcome. The normal final run restored `last-run.json`
+without removing these diagnostics. The watcher smoke exercised this small
+build/test child tree; it did not launch the AppKit app or prove all detached
+descendant timing cases.
 
 ## Native interaction record
 

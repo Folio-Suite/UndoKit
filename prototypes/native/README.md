@@ -12,6 +12,15 @@ shown by the runner and each window's event log. Launch with the printed command
 The package contains no production UndoKit source and uses a tiny JSON snapshot
 fixture to test routing and relaunch.
 
+Runner overrides may tighten limits. The accepted ceilings are 600 seconds,
+2 GiB child-process memory, 12 GiB owned temporary disk and a minimum 20 GiB
+free-space floor; weaker settings are rejected. The runner counts its build,
+app bundle and both scratch fixtures, and stops/reaps its child tree if a
+watcher fails. A failed run preserves a timestamped JSON diagnostic beside
+`last-run.json`. `NATIVE_PROOF_WATCHER_FAULT=ps`, `du` or `df` injects a watcher
+failure for a small cleanup smoke. These limits cover build and tests, not the
+interactive app session.
+
 Two `NSDocument` instances, A and B, open as separate windows. The document text
 view accepts real AppKit text input. Pause 0.55 seconds to settle one semantic
 group, then use the Edit menu or Command-Z / Shift-Command-Z. The local draft

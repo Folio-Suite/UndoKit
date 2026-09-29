@@ -5,9 +5,9 @@ SPDX-License-Identifier: MIT
 
 # Package proof results
 
-Initial checkout baseline: `00852f423740655fc596761e1321fa663e0320cd` on `codex/prototype-undokit-native-storage-scale`. The final runner observed HEAD `427574d60018fdd3ee8fcbe798d81a6305fecbcb` after other coordinated work advanced the shared branch. The runner's local JSON artifact records exact package source hashes at execution time; these repair changes await coordinated review.
+Initial checkout baseline: `00852f423740655fc596761e1321fa663e0320cd` on `codex/prototype-undokit-native-storage-scale`. The final runner observed HEAD `8fe3d41fecfe4f6a21ff22ce3eb9d832f2eadb71` after other coordinated work advanced the shared branch. The runner's local JSON artifact records exact package source hashes at execution time; the runner safety change awaits coordinated review.
 
-Run on 2026-09-29: Apple Swift 6.4, macOS Darwin 27.0.0, arm64. `ruby UndoKit/prototypes/package/run.rb` completed with eleven Swift Testing cases passing. The wrapper enforced a 180-second run limit, 2 GiB combined child RSS, 12 GiB owned disk and a 20 GiB free-space floor. The last completed run sampled 393,576,448 bytes peak child RSS, 78,307,328 bytes peak owned disk and 3.59 seconds elapsed. These are watchdog samples, not calibrated benchmarks. [The execution ledger](evidence.md) preserves the exact source hashes, command, exit status and metrics; the full generated report and log remain under `.build/` locally.
+Run on 2026-09-29: Apple Swift 6.4, macOS Darwin 27.0.0, arm64. `ruby UndoKit/prototypes/package/run.rb` completed with eleven Swift Testing cases passing. The wrapper enforced a 180-second run limit, 2 GiB combined child RSS, 12 GiB owned disk and a 20 GiB free-space floor. The last completed run sampled 156,663,808 bytes peak child RSS, 77,926,400 bytes peak owned disk and 2.08 seconds elapsed. These are watchdog samples, not calibrated benchmarks. A separate injected monitor failure exited 124 after killing and reaping its child. [The execution ledger](evidence.md) preserves the exact source hashes, commands, exit statuses and metrics; the full final report and log remain under `.build/` locally.
 
 | Case | Observed result |
 | --- | --- |

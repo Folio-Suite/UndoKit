@@ -32,18 +32,38 @@ def descendants(root)
 end
 
 def stop_children(root, ids)
+  errors = []
+  # The child starts in its own process group; kill it first so newly spawned
+  # grandchildren are included even if the last ps sample missed them.
+  begin
+    Process.kill('KILL', -root)
+  rescue Errno::ESRCH
+    nil
+  rescue SystemCallError => error
+    errors << "process group #{root}: #{error.class}: #{error.message}"
+  end
   ids.reverse_each do |child|
     begin
       Process.kill('KILL', child)
     rescue Errno::ESRCH
       nil
+    rescue SystemCallError => error
+      errors << "process #{child}: #{error.class}: #{error.message}"
     end
   end
-  begin
-    Process.kill('KILL', -root)
-  rescue Errno::ESRCH
-    nil
+  errors
+end
+
+def reap_child(pid, timeout_seconds: 5)
+  deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout_seconds
+  loop do
+    completed = Process.waitpid2(pid, Process::WNOHANG)
+    return completed.last if completed
+    return nil if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+    sleep 0.05
   end
+rescue Errno::ECHILD
+  nil
 end
 
 package = File.expand_path(__dir__)
@@ -75,18 +95,23 @@ reason = nil
 child_status = nil
 child_ids = []
 pid = nil
+phase = 'spawn'
+stop_errors = []
 begin
   File.open(log_path, 'w') do |log|
     pid = Process.spawn({ 'TMPDIR' => fixture_dir, 'PACKAGE_PROBE_KEEP_FIXTURES' => '1' },
                         'xcrun', 'swift', 'test', '--package-path', package,
                         '-Xswiftc', '-strict-concurrency=complete', '-Xswiftc', '-warnings-as-errors',
                         chdir: package, pgroup: true, out: log, err: log)
+    report[:child_pid] = pid
+    phase = 'monitor'
     loop do
       completed = Process.waitpid2(pid, Process::WNOHANG)
       if completed
         child_status = completed.last
         break
       end
+      raise 'injected monitor failure' if ENV['PACKAGE_PROBE_INJECT_MONITOR_FAILURE'] == '1'
       child_ids, resident = descendants(pid)
       usage = IO.popen(['du', '-sk', fixture_dir, build], &:read)
       raise 'Could not read owned disk usage' unless $?.success?
@@ -108,20 +133,24 @@ begin
     end
   end
 rescue StandardError, Interrupt => error
-  reason = "runner failure: #{error.class}: #{error.message}"
+  reason = "runner failure during #{phase}: #{error.class}: #{error.message}"
 ensure
   if pid && child_status.nil?
-    stop_children(pid, child_ids)
-    begin
-      _, child_status = Process.waitpid2(pid)
-    rescue Errno::ECHILD
-      nil
+    stop_errors = stop_children(pid, child_ids)
+    child_status = reap_child(pid)
+    unless child_status
+      stop_errors.concat(stop_children(pid, child_ids))
+      child_status = reap_child(pid, timeout_seconds: 1)
     end
+    reason = [reason, 'child could not be reaped after termination'].compact.join('; ') unless child_status
   end
   report[:elapsed_seconds] = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
   report[:reason] = reason
   report[:child_exit_status] = child_status&.exitstatus
   report[:child_signal] = child_status&.termsig
+  report[:child_reaped] = !child_status.nil?
+  report[:failure_phase] = reason ? phase : nil
+  report[:termination_errors] = stop_errors
   begin
     File.write(report_path, JSON.pretty_generate(report) + "\n")
   rescue StandardError => error

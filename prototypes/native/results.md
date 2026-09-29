@@ -7,8 +7,9 @@ SPDX-License-Identifier: MIT
 
 ## Automated run
 
-- Source base: `00852f423740655fc596761e1321fa663e0320cd` plus the uncommitted
-  `UndoKit/prototypes/native` files identified in [evidence.md](evidence.md).
+- Latest runner source base: `8fe3d41fecfe4f6a21ff22ce3eb9d832f2eadb71`
+  plus the `run.rb` hardening in [evidence.md](evidence.md). The earlier native
+  UI observations retain their separate pre-commit source identity.
 - Host: macOS 27.0, arm64, Apple Swift 6.4, Swift 6 strict-concurrency mode,
   warnings treated as errors, Debug build. The shell sandbox did not expose
   the CPU model, so this report does not identify it from the tool output.
@@ -22,6 +23,10 @@ SPDX-License-Identifier: MIT
 - App: system temporary directory `FolioNativeUndoProof.app`. The bundle is a
   disposable host, and the fixture is JSON snapshots in the scratch directory
   shown in the app log. No production document or UndoKit store is used.
+- Runner cleanup: injected `ps`, `du` and `df` watcher failures each wrote a
+  preserved JSON report, signaled the child process group, reaped the root and
+  left the recorded child PID absent. Limit overrides above 600 seconds, 2 GiB
+  memory or 12 GiB disk, or below a 20 GiB free-space floor, are rejected.
 
 ## Native AppKit observations
 

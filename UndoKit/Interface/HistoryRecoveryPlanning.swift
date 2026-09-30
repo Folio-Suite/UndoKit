@@ -33,6 +33,13 @@ extension HistoryEngine {
 
         let targetSequence = try recoveryTargetSequence(target)
 
+        if source == .current, case .group = target,
+           (!scopeRow.bool("recordingEnabled") ||
+            (scopeRow.int64("currentBaselineSequence") > 0 &&
+             targetSequence < scopeRow.int64("currentBaselineSequence"))) {
+            throw HistoryFailure(.compatibility, stage: .admission, disposition: .usable)
+        }
+
         // A checkpoint target is already a complete host-authored baseline.
         let effectiveSource: HistoryRecoverySource = {
             if case .checkpoint(let id) = target { return .checkpoint(id) }

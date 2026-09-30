@@ -148,6 +148,7 @@ extension HistoryEngine {
             await withCheckedContinuation { continuation in closeWaiters.append(continuation) }
         }
         do {
+            try releaseSessionReferences()
             try saveContext()
         } catch {
             publishSnapshot(canUndo: false, canRedo: false, isSuspended: true,

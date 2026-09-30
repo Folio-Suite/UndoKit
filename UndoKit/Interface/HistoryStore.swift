@@ -213,6 +213,7 @@ extension HistoryStore {
             engines[scope] = engine
             await engine.reconcileOnOpen()
             try engine.refreshSnapshot()
+            try engine.releaseSessionReferences()
             return engine
         } catch {
             context.rollback()

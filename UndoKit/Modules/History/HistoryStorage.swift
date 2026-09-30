@@ -26,6 +26,10 @@ extension HistoryEngine {
             new.setValue(UUID().uuidString, forKey: "generationID")
             new.setValue(Int64(1), forKey: "nextSequence")
             new.setValue(false, forKey: "suspended")
+            new.setValue(true, forKey: "recordingEnabled")
+            new.setValue(Int64(0), forKey: "undoFloorSequence")
+            new.setValue(Int64(0), forKey: "currentBaselineSequence")
+            new.setValue(false, forKey: "requiresGenerationBinding")
             try saveContext()
         case .existing:
             guard row?.string("workingID") == store.workingIdentity.uuidString else {
@@ -53,8 +57,8 @@ extension HistoryEngine {
     func refreshSnapshot() throws {
         let row = try scopeRecord()
         let suspended = row.bool("suspended")
-        let canUndo = try eligibleGroup(for: .undo) != nil
-        let canRedo = try eligibleGroup(for: .redo) != nil
+        let canUndo = try sessionGroups.contains(where: { $0.applied }) || eligibleGroup(for: .undo) != nil
+        let canRedo = try sessionGroups.contains(where: { !$0.applied }) || eligibleGroup(for: .redo) != nil
         publishSnapshot(canUndo: !suspended && !store.writeFailed && canUndo,
                         canRedo: !suspended && !store.writeFailed && canRedo,
                         isSuspended: suspended || store.writeFailed,
@@ -96,8 +100,9 @@ extension HistoryEngine {
 
     func eligibleGroup(for kind: HistoryDeliveryKind) throws -> NSManagedObject? {
         let request = NSFetchRequest<NSManagedObject>(entityName: "HistoryGroupRecord")
-        request.predicate = NSPredicate(format: "scopeKey == %@ AND kind == %@ AND state != %@",
-                                        scope.uuidString, HistoryDeliveryKind.command.rawValue, "branched")
+        let floor = try scopeRecord().int64("undoFloorSequence")
+        request.predicate = NSPredicate(format: "scopeKey == %@ AND kind == %@ AND state != %@ AND sequence >= %@",
+                                        scope.uuidString, HistoryDeliveryKind.command.rawValue, "branched", NSNumber(value: floor))
         request.sortDescriptors = [NSSortDescriptor(key: "sequence", ascending: false)]
         request.fetchLimit = limits.maxUndoGroups
         let groups = try context.fetch(request)

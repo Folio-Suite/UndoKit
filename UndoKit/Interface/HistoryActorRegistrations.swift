@@ -60,7 +60,8 @@ public extension HistoryOperationHandler {
                 id: command.id, fingerprint: command.fingerprint,
                 payload: HistoryPayload(family: registration.identity.operation,
                                         version: registration.identity.commandVersion,
-                                        data: try encodeEnvelope(command.value, using: registration.commandCodec))
+                                        data: try encodeEnvelope(command.value, using: registration.commandCodec)),
+                expectedGeneration: command.expectedGeneration
             ))
         } catch {
             return .failure(HistoryFailure(.compatibility, stage: .admission,

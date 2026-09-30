@@ -27,8 +27,8 @@ public enum HistoryOpenMode: Sendable {
 
     enum Request {
         case command(HistoryCommand)
-        case undo
-        case redo
+        case undo(expectedGeneration: UUID?)
+        case redo(expectedGeneration: UUID?)
     }
 
     struct Waiting {
@@ -53,6 +53,19 @@ public enum HistoryOpenMode: Sendable {
     /// Open-session recovery protection. The engine owns these handles and releases
     /// them on deallocation even if a host forgets explicit release.
     var recoveryPlans: [UUID: HistoryRecoveryPlan] = [:]
+    struct SessionGroup {
+        let id: UUID
+        let effects: [HistoryEffect]
+        var applied = true
+    }
+    var sessionGroups: [SessionGroup] = []
+    var sessionEffectBytes: Int64 {
+        sessionGroups.reduce(0) { total, group in
+            total + group.effects.reduce(0) { bytes, effect in
+                bytes + Int64(effect.undo.data.count + effect.redo.data.count)
+            }
+        }
+    }
 
     init(store: HistoryStore, scope: UUID, limits: HistoryLimits, host: any HistoryHost) {
         self.store = store
@@ -95,10 +108,14 @@ public enum HistoryOpenMode: Sendable {
 
     /// Reverses the latest eligible complete Undo Group through one host delivery.
     /// Rejection invalidates the affected group without creating an Action.
-    public func undo() async -> HistoryResult { await enqueue(.undo) }
+    public func undo(expectedGeneration: UUID? = nil) async -> HistoryResult {
+        await enqueue(.undo(expectedGeneration: expectedGeneration))
+    }
 
     /// Reapplies the next eligible complete Undo Group through one host delivery.
-    public func redo() async -> HistoryResult { await enqueue(.redo) }
+    public func redo(expectedGeneration: UUID? = nil) async -> HistoryResult {
+        await enqueue(.redo(expectedGeneration: expectedGeneration))
+    }
 
     func enqueue(_ request: Request) async -> HistoryResult {
         guard !HistoryHostCallbackContext.activeEngines.contains(ObjectIdentifier(self)) else {

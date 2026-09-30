@@ -41,21 +41,28 @@ public struct HistoryCommand: Equatable, Sendable {
     public let restorationOrigin: UUID?
     /// Small host-authored display data. It is never required to recover an effect.
     public let presentation: HistoryPayload?
+    /// Required after an explicit generation reset; binds delayed submissions
+    /// to the generation in which the host created them.
+    public let expectedGeneration: UUID?
 
     public init(id: UUID = UUID(), fingerprint: Data, members: [HistoryMember],
-                restorationOrigin: UUID? = nil, presentation: HistoryPayload? = nil) {
+                restorationOrigin: UUID? = nil, presentation: HistoryPayload? = nil,
+                expectedGeneration: UUID? = nil) {
         self.id = id
         self.fingerprint = fingerprint
         self.members = members
         self.restorationOrigin = restorationOrigin
         self.presentation = presentation
+        self.expectedGeneration = expectedGeneration
     }
 
     public init(id: UUID = UUID(), fingerprint: Data, payload: HistoryPayload,
-                restorationOrigin: UUID? = nil, presentation: HistoryPayload? = nil) {
+                restorationOrigin: UUID? = nil, presentation: HistoryPayload? = nil,
+                expectedGeneration: UUID? = nil) {
         self.init(id: id, fingerprint: fingerprint,
                   members: [HistoryMember(id: id, payload: payload)],
-                  restorationOrigin: restorationOrigin, presentation: presentation)
+                  restorationOrigin: restorationOrigin, presentation: presentation,
+                  expectedGeneration: expectedGeneration)
     }
 }
 

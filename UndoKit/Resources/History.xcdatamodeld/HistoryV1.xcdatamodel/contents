@@ -10,6 +10,10 @@
         <attribute name="committedVersion" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="suspended" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
         <attribute name="latestAcceptedSequence" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="recordingEnabled" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="YES"/>
+        <attribute name="undoFloorSequence" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="currentBaselineSequence" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="requiresGenerationBinding" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
         <uniquenessConstraints><uniquenessConstraint><constraint value="key"/></uniquenessConstraint></uniquenessConstraints>
     </entity>
     <entity name="HistoryTransactionRecord" representedClassName="NSManagedObject" syncable="YES">
@@ -29,6 +33,7 @@
         <attribute name="restorationOrigin" optional="YES" attributeType="String"/>
         <attribute name="memberCount" attributeType="Integer 64" usesScalarValueType="YES"/>
         <attribute name="recordedAt" attributeType="Date"/>
+        <attribute name="recordsAction" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="YES"/>
         <attribute name="presentationFamily" optional="YES" attributeType="String"/>
         <attribute name="presentationVersion" optional="YES" attributeType="Integer 64" usesScalarValueType="YES"/>
         <attribute name="presentationPayload" optional="YES" attributeType="Binary"/>

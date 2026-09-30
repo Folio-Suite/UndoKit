@@ -9,17 +9,21 @@ extension HistoryEngine {
     public func readIdentity() throws -> HistoryReadIdentity {
         guard !closed else { throw HistoryFailure(.busy, stage: .admission, disposition: .usable) }
         let scopeRow = try scopeRecord()
+        let floor = scopeRow.int64("undoFloorSequence")
         let request = NSFetchRequest<NSManagedObject>(entityName: "HistoryGroupRecord")
-        request.predicate = NSPredicate(format: "scopeKey == %@", scope.uuidString)
+        request.predicate = NSPredicate(format: "scopeKey == %@ AND sequence >= %@",
+                                        scope.uuidString, NSNumber(value: floor))
         request.sortDescriptors = [NSSortDescriptor(key: "sequence", ascending: false)]
         request.fetchLimit = 1
         let latest = try context.fetch(request).first
-        guard (latest?.int64("sequence") ?? 0) == scopeRow.int64("latestAcceptedSequence") else {
+        let currentAccepted = scopeRow.int64("latestAcceptedSequence") >= floor
+            ? scopeRow.int64("latestAcceptedSequence") : 0
+        guard (latest?.int64("sequence") ?? 0) == currentAccepted else {
             throw HistoryFailure(.corruptHistory, stage: .reconciliation, disposition: .usable)
         }
         return HistoryReadIdentity(scope: scope, generation: try scopeRow.uuid("generationID"),
             committedVersion: scopeRow.int64("committedVersion"),
-            latestAcceptedSequence: latest?.int64("sequence") ?? 0,
+            latestAcceptedSequence: currentAccepted,
             latestGroupID: try latest?.uuid("key"))
     }
 

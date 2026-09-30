@@ -176,10 +176,11 @@ extension HistoryStore {
         }
     }
 
-    func copyIdle(to destination: URL) throws {
+    func copyIdle(to destination: URL, allowingUnresolved: Bool = false) throws {
         guard access == .readWrite, !closed, !closing,
               engines.values.allSatisfy({ engine in
-                  !engine.draining && engine.queue.isEmpty && !engine.reconciling && !engine.snapshot.isSuspended
+                  !engine.draining && engine.queue.isEmpty && !engine.reconciling &&
+                  (allowingUnresolved || !engine.snapshot.isSuspended)
               }) else {
             throw HistoryFailure(.busy, stage: .admission, disposition: .usable)
         }
@@ -190,7 +191,7 @@ extension HistoryStore {
         pending.predicate = NSPredicate(format: "stage != %@ AND stage != %@ AND stage != %@",
                                         "accepted", "rejected", "cancelled")
         pending.fetchLimit = 1
-        guard try context.fetch(pending).isEmpty else {
+        guard try allowingUnresolved || context.fetch(pending).isEmpty else {
             throw HistoryFailure(.unresolved, stage: .admission, disposition: .suspended)
         }
         let footprint = physicalFootprint()

@@ -144,6 +144,7 @@ public struct HistoryTypedCommand<Value> {
     public let id: UUID
     public let fingerprint: Data
     public let value: Value
+    public let expectedGeneration: UUID?
 
     /// Pairs a host-owned value with its stable identity and canonical intent fingerprint.
     /// The value stays on the handler's actor; the fingerprint is passed to UndoKit unchanged.
@@ -151,10 +152,12 @@ public struct HistoryTypedCommand<Value> {
     ///   - id: Stable identity reused for a retry of the same intent.
     ///   - fingerprint: Host-supplied fingerprint of canonical intent.
     ///   - value: Typed Command value to encode before submission.
-    public init(id: UUID = UUID(), fingerprint: Data, value: Value) {
+    public init(id: UUID = UUID(), fingerprint: Data, value: Value,
+                expectedGeneration: UUID? = nil) {
         self.id = id
         self.fingerprint = fingerprint
         self.value = value
+        self.expectedGeneration = expectedGeneration
     }
 }
 

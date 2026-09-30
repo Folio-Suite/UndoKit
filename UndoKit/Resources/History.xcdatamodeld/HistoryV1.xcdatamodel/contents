@@ -92,4 +92,10 @@
         <attribute name="stateDigest" attributeType="Binary"/>
         <uniquenessConstraints><uniquenessConstraint><constraint value="key"/></uniquenessConstraint></uniquenessConstraints>
     </entity>
+    <entity name="HistoryStoreRecord" representedClassName="NSManagedObject" syncable="YES">
+        <attribute name="key" attributeType="String"/>
+        <attribute name="workingID" attributeType="String"/>
+        <attribute name="storeID" attributeType="String"/>
+        <uniquenessConstraints><uniquenessConstraint><constraint value="key"/></uniquenessConstraint></uniquenessConstraints>
+    </entity>
 </model>

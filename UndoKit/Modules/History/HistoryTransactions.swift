@@ -186,7 +186,7 @@ extension HistoryEngine {
             case .failure(let failure):
                 guard failure.disposition == .usable else {
                     transaction.setValue("unresolved", forKey: "stage")
-                    try context.save()
+                    try saveContext()
                     suspend()
                     return .failure(failure)
                 }
@@ -234,7 +234,7 @@ extension HistoryEngine {
         transaction.setValue(recorded.stage.rawValue, forKey: "failureStage")
         transaction.setValue(recorded.underlyingDescription, forKey: "failureDescription")
         transaction.setValue("cancelled", forKey: "stage")
-        try context.save()
+        try saveContext()
         updateSnapshot()
         return .failure(recorded)
     }

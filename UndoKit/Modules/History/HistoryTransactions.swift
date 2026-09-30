@@ -279,7 +279,7 @@ extension HistoryEngine {
             for row in try ordinaryGroups(state: "undone") { row.setValue("branched", forKey: "state") }
         case .undo, .redo:
             if let key = transaction.string("targetGroupID"),
-               let target = try fetchOne("HistoryGroupRecord", key: key) {
+               let target = try groupRecord(key: key) {
                 target.setValue(kind == .undo ? "undone" : "applied", forKey: "state")
             }
         }
@@ -293,7 +293,7 @@ extension HistoryEngine {
     func finalizeRejected(_ transaction: NSManagedObject) throws -> HistoryResult {
         let kind = HistoryDeliveryKind(rawValue: transaction.string("kind") ?? "") ?? .command
         if kind != .command, let targetKey = transaction.string("targetGroupID"),
-           let target = try fetchOne("HistoryGroupRecord", key: targetKey) {
+           let target = try groupRecord(key: targetKey) {
             target.setValue("invalid", forKey: "state")
         }
         transaction.setValue("rejected", forKey: "stage")

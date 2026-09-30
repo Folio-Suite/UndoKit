@@ -61,7 +61,7 @@
         <attribute name="memberCount" attributeType="Integer 64" usesScalarValueType="YES"/>
         <attribute name="recordedAt" attributeType="Date"/>
         <relationship name="actions" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="HistoryActionRecord" inverseName="group" inverseEntity="HistoryActionRecord"/>
-        <uniquenessConstraints><uniquenessConstraint><constraint value="key"/></uniquenessConstraint></uniquenessConstraints>
+        <uniquenessConstraints><uniquenessConstraint><constraint value="scopeKey"/><constraint value="key"/></uniquenessConstraint></uniquenessConstraints>
     </entity>
     <entity name="HistoryActionRecord" representedClassName="NSManagedObject" syncable="YES">
         <attribute name="key" attributeType="String"/>

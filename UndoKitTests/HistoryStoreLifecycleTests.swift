@@ -109,6 +109,41 @@ import XCTest
         try await reopened.close()
     }
 
+    func testSameCommandIdentityInTwoScopesKeepsGroupsAndInversesIndependent() async throws {
+        let directory = try testDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try await HistoryStore.open(at: directory.appendingPathComponent("History.sqlite"),
+                                                workingIdentity: UUID(), mode: .create)
+        let firstHost = try CounterHost(url: directory.appendingPathComponent("first.json"))
+        let secondHost = try CounterHost(url: directory.appendingPathComponent("second.json"))
+        let first = try await store.openScope(UUID(), mode: .create, host: firstHost)
+        let second = try await store.openScope(UUID(), mode: .create, host: secondHost)
+        let sharedCommand = UUID()
+        let firstResult = await first.submit(HistoryCommand(id: sharedCommand,
+            fingerprint: Data("first intent".utf8), payload: payload(3)))
+        let secondResult = await second.submit(HistoryCommand(id: sharedCommand,
+            fingerprint: Data("second intent".utf8), payload: payload(7)))
+        guard case .accepted = firstResult, case .accepted = secondResult else {
+            return XCTFail("A command identity belongs to its scope")
+        }
+        guard case .accepted = await second.undo() else { return XCTFail("Second scope could not undo") }
+        XCTAssertTrue(first.snapshot.canUndo)
+        XCTAssertEqual(firstHost.value, 3)
+        XCTAssertEqual(secondHost.value, 0)
+        guard case .accepted = await first.undo(),
+              case .accepted = await second.redo(),
+              case .accepted = await first.redo() else {
+            return XCTFail("Inverses crossed scopes")
+        }
+        XCTAssertEqual(firstHost.value, 3)
+        XCTAssertEqual(secondHost.value, 7)
+        secondHost.rejectNext = true
+        guard case .rejected = await second.undo() else { return XCTFail("Second inverse was not rejected") }
+        XCTAssertTrue(first.snapshot.canUndo)
+        XCTAssertFalse(second.snapshot.canUndo)
+        try await store.close()
+    }
+
     func testReadOnlyClientSurvivesWriterAndCannotMutate() async throws {
         let directory = try testDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }

@@ -205,6 +205,12 @@ extension HistoryEngine {
         return row
     }
 
+    func groupRecord(key: String) throws -> NSManagedObject? {
+        try fetch("HistoryGroupRecord", predicate: NSPredicate(
+            format: "scopeKey == %@ AND key == %@", scope.uuidString, key
+        )).first
+    }
+
     func transactionKey(_ id: UUID) -> String { scope.uuidString + ":" + id.uuidString }
 
     func insert(_ name: String) -> NSManagedObject {

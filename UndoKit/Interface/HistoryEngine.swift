@@ -68,6 +68,32 @@ public enum HistoryOpenMode: Sendable {
         }
     }
 
+    private static func makeContainer(at url: URL) throws -> NSPersistentContainer {
+        #if SWIFT_PACKAGE
+        let bundle = Bundle.module
+        #else
+        let bundle = Bundle(for: HistoryEngine.self)
+        #endif
+        guard let modelURL = bundle.url(forResource: "History", withExtension: "momd"),
+              let model = NSManagedObjectModel(contentsOf: modelURL) else {
+            throw HistoryFailure(.compatibility, stage: .admission, disposition: .usable)
+        }
+        let container = NSPersistentContainer(name: "History", managedObjectModel: model)
+        let description = NSPersistentStoreDescription(url: url)
+        description.type = NSSQLiteStoreType
+        description.shouldAddStoreAsynchronously = false
+        description.shouldMigrateStoreAutomatically = false
+        description.shouldInferMappingModelAutomatically = false
+        container.persistentStoreDescriptions = [description]
+        var loadError: Error?
+        container.loadPersistentStores { _, error in loadError = error }
+        if let loadError {
+            throw HistoryFailure(.storage, stage: .admission, disposition: .usable,
+                                 underlyingDescription: String(describing: loadError))
+        }
+        return container
+    }
+
     /// Opens only the requested store. Existing history is never replaced by a new empty store.
     /// A copied store requires an explicit source and new working identity. Opening reconciles
     /// interrupted transactions with the host before exposing ordinary Undo or Redo.
@@ -102,28 +128,7 @@ public enum HistoryOpenMode: Sendable {
         }
         var descriptorOwned = true
         do {
-            #if SWIFT_PACKAGE
-            let bundle = Bundle.module
-            #else
-            let bundle = Bundle(for: HistoryEngine.self)
-            #endif
-            guard let modelURL = bundle.url(forResource: "History", withExtension: "momd"),
-                  let model = NSManagedObjectModel(contentsOf: modelURL) else {
-                throw HistoryFailure(.compatibility, stage: .admission, disposition: .usable)
-            }
-            let container = NSPersistentContainer(name: "History", managedObjectModel: model)
-            let description = NSPersistentStoreDescription(url: url)
-            description.type = NSSQLiteStoreType
-            description.shouldAddStoreAsynchronously = false
-            description.shouldMigrateStoreAutomatically = false
-            description.shouldInferMappingModelAutomatically = false
-            container.persistentStoreDescriptions = [description]
-            var loadError: Error?
-            container.loadPersistentStores { _, error in loadError = error }
-            if let loadError {
-                throw HistoryFailure(.storage, stage: .admission,
-                                     disposition: .usable, underlyingDescription: String(describing: loadError))
-            }
+            let container = try makeContainer(at: url)
             let engine = HistoryEngine(url: url, scope: scope, limits: limits, host: host,
                                        container: container, lockDescriptor: descriptor)
             descriptorOwned = false

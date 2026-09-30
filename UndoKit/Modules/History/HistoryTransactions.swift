@@ -46,7 +46,7 @@ extension HistoryEngine {
     }
 
     func execute(command: HistoryCommand, kind: HistoryDeliveryKind,
-                         targetGroup: UUID?) async -> HistoryResult {
+                 targetGroup: UUID?) async -> HistoryResult {
         let key = transactionKey(command.id)
         do {
             if let prior = try fetchOne("HistoryTransactionRecord", key: key) {
@@ -55,53 +55,16 @@ extension HistoryEngine {
                 }
                 return await reconcile(prior)
             }
-            guard command.members.count <= limits.maxMembers,
-                  command.members.allSatisfy({ $0.payload.data.count <= limits.maxPayloadBytes }),
-                  command.members.reduce(0, { $0 + $1.payload.data.count }) <= limits.maxPayloadBytes else {
-                return .failure(HistoryFailure(.capacity, stage: .admission, disposition: .usable))
-            }
-            guard valid(command) else {
-                return .failure(HistoryFailure(.invalidInput, stage: .admission, disposition: .usable))
-            }
-            guard hasCapacity(for: command) else {
-                return .failure(HistoryFailure(.capacity, stage: .admission, disposition: .usable))
+            if let failure = admissionFailure(for: command) {
+                return .failure(failure)
             }
             let scopeRow = try scopeRecord()
             let generation = try scopeRow.uuid("generationID")
             let sequence = scopeRow.int64("nextSequence")
             let token = HistoryToken(scope: scope, generation: generation,
                                      sequence: sequence, command: command.id)
-            let transaction = insert("HistoryTransactionRecord")
-            transaction.setValue(key, forKey: "key")
-            transaction.setValue(scope.uuidString, forKey: "scopeKey")
-            transaction.setValue(command.id.uuidString, forKey: "commandID")
-            transaction.setValue(command.fingerprint, forKey: "fingerprint")
-            transaction.setValue(generation.uuidString, forKey: "generationID")
-            transaction.setValue(sequence, forKey: "sequence")
-            transaction.setValue("prepared", forKey: "stage")
-            transaction.setValue(kind.rawValue, forKey: "kind")
-            transaction.setValue(command.id.uuidString, forKey: "groupID")
-            transaction.setValue(targetGroup?.uuidString, forKey: "targetGroupID")
-            transaction.setValue(command.restorationOrigin?.uuidString, forKey: "restorationOrigin")
-            transaction.setValue(Int64(command.members.count), forKey: "memberCount")
-            transaction.setValue(Date(), forKey: "recordedAt")
-            for (ordinal, member) in command.members.enumerated() {
-                let row = insert("HistoryMemberRecord")
-                row.setValue("\(key):\(ordinal)", forKey: "key")
-                row.setValue(Int64(ordinal), forKey: "ordinal")
-                row.setValue(member.id.uuidString, forKey: "memberID")
-                row.setValue(member.payload.family, forKey: "family")
-                row.setValue(Int64(member.payload.version), forKey: "version")
-                row.setValue(member.payload.data, forKey: "payload")
-                row.setValue(digest(member.payload), forKey: "payloadDigest")
-                row.setValue(transaction, forKey: "transaction")
-            }
-            scopeRow.setValue(sequence + 1, forKey: "nextSequence")
-            try context.save()
-            transaction.setValue("deliveryStarted", forKey: "stage")
-            try context.save()
-            let delivery = HistoryDelivery(token: token, kind: kind, members: command.members,
-                                           restorationOrigin: command.restorationOrigin)
+            let delivery = try prepare(command, kind: kind, targetGroup: targetGroup,
+                                       token: token, scopeRow: scopeRow)
             let outcome = await host.deliver(delivery)
             return await finish(transactionKey: key, outcome: outcome)
         } catch {
@@ -126,11 +89,69 @@ extension HistoryEngine {
             if durableStage == "deliveryStarted" || durableStage == "acceptancePending" {
                 suspend()
                 return .failure(HistoryFailure(.storage, stage: .finalization,
-                                               disposition: .suspended, underlyingDescription: String(describing: error)))
+                    disposition: .suspended, underlyingDescription: String(describing: error)
+                ))
             }
             return .failure(HistoryFailure(.storage, stage: .preparation,
                                            disposition: .usable, underlyingDescription: String(describing: error)))
         }
+    }
+
+    private func admissionFailure(for command: HistoryCommand) -> HistoryFailure? {
+        guard command.members.count <= limits.maxMembers,
+              command.members.allSatisfy({ $0.payload.data.count <= limits.maxPayloadBytes }),
+              command.members.reduce(0, { $0 + $1.payload.data.count }) <= limits.maxPayloadBytes else {
+            return HistoryFailure(.capacity, stage: .admission, disposition: .usable)
+        }
+        guard valid(command) else {
+            return HistoryFailure(.invalidInput, stage: .admission, disposition: .usable)
+        }
+        guard hasCapacity(for: command) else {
+            return HistoryFailure(.capacity, stage: .admission, disposition: .usable)
+        }
+        return nil
+    }
+
+    private func prepare(
+        _ command: HistoryCommand,
+        kind: HistoryDeliveryKind,
+        targetGroup: UUID?,
+        token: HistoryToken,
+        scopeRow: NSManagedObject
+    ) throws -> HistoryDelivery {
+        let key = transactionKey(command.id)
+        let sequence = token.sequence
+        let transaction = insert("HistoryTransactionRecord")
+        transaction.setValue(key, forKey: "key")
+        transaction.setValue(scope.uuidString, forKey: "scopeKey")
+        transaction.setValue(command.id.uuidString, forKey: "commandID")
+        transaction.setValue(command.fingerprint, forKey: "fingerprint")
+        transaction.setValue(token.generation.uuidString, forKey: "generationID")
+        transaction.setValue(sequence, forKey: "sequence")
+        transaction.setValue("prepared", forKey: "stage")
+        transaction.setValue(kind.rawValue, forKey: "kind")
+        transaction.setValue(command.id.uuidString, forKey: "groupID")
+        transaction.setValue(targetGroup?.uuidString, forKey: "targetGroupID")
+        transaction.setValue(command.restorationOrigin?.uuidString, forKey: "restorationOrigin")
+        transaction.setValue(Int64(command.members.count), forKey: "memberCount")
+        transaction.setValue(Date(), forKey: "recordedAt")
+        for (ordinal, member) in command.members.enumerated() {
+            let row = insert("HistoryMemberRecord")
+            row.setValue("\(key):\(ordinal)", forKey: "key")
+            row.setValue(Int64(ordinal), forKey: "ordinal")
+            row.setValue(member.id.uuidString, forKey: "memberID")
+            row.setValue(member.payload.family, forKey: "family")
+            row.setValue(Int64(member.payload.version), forKey: "version")
+            row.setValue(member.payload.data, forKey: "payload")
+            row.setValue(digest(member.payload), forKey: "payloadDigest")
+            row.setValue(transaction, forKey: "transaction")
+        }
+        scopeRow.setValue(sequence + 1, forKey: "nextSequence")
+        try context.save()
+        transaction.setValue("deliveryStarted", forKey: "stage")
+        try context.save()
+        return HistoryDelivery(token: token, kind: kind, members: command.members,
+                               restorationOrigin: command.restorationOrigin)
     }
 
     func finish(transactionKey key: String, outcome: HistoryHostOutcome) async -> HistoryResult {

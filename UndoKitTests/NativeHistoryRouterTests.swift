@@ -33,7 +33,7 @@ import XCTest
         XCTAssertFalse(router.isEditingBlocked)
         XCTAssertTrue(router.undoManager.canUndo)
         XCTAssertEqual(router.undoManager.undoActionName, "Edit")
-        XCTAssertEqual(barriers.last, false)
+        XCTAssertFalse(barriers.last ?? true)
     }
 
     func testMarkedTextSettlementRefusesUndoWithoutCallingHost() {

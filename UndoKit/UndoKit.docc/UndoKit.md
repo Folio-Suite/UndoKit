@@ -15,6 +15,19 @@ owns semantic meaning, validation, no-op filtering, atomic compensation, durable
 outcome receipts, resource preservation, and application policy. No Folio model
 is required. Swift clients import `UndoKit`.
 
+## Public interface map
+
+- `Interface/HistoryEngine.swift` — store opening, command submission, Undo, Redo and availability.
+- `Interface/HistoryQueries.swift` — checkpoints, bounded history pages, store copying and closing.
+- `Interface/HistoryRecovery.swift` — reconciliation of interrupted or suspended transactions.
+- `Interface/HistoryTypes.swift` — host contract, payloads, results, failures, snapshots and limits.
+- `Interface/NativeHistoryRouter.swift` — native UndoManager routing and editing barriers.
+- `Resources/History.xcdatamodeld` — the framework-owned persistence schema.
+
+Durable transaction and storage helpers are implemented in `Modules/History/`.
+The native manager helper stays with the router because it implements the public
+router's AppKit behavior.
+
 ## First supported operation
 
 ``HistoryEngine`` opens one host-defined scope in a Core Data store. The first

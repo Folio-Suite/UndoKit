@@ -6,31 +6,40 @@ import Foundation
 
 extension HistoryEngine {
     func reconcile(_ transaction: NSManagedObject) async -> HistoryResult {
-        let stage = transaction.string("stage") ?? ""
-        if stage == "accepted" {
+        switch transaction.string("stage") ?? "" {
+        case "accepted":
             do {
                 return .accepted(HistoryReceipt(token: try token(for: transaction),
                                                 groupID: try transaction.uuid("groupID")))
             } catch { return .failure(HistoryFailure(.storage, stage: .reconciliation, disposition: .suspended)) }
-        }
-        if stage == "rejected" { return .rejected }
-        if stage == "cancelled" {
+        case "rejected":
+            return .rejected
+        case "cancelled":
             return .failure(HistoryFailure(.busy, stage: .reconciliation, disposition: .usable))
-        }
-        if stage == "prepared" {
+        case "prepared":
             transaction.setValue("cancelled", forKey: "stage")
-            do { try context.save() }
-            catch { context.rollback() }
+            do { try context.save() } catch { context.rollback() }
             return .failure(HistoryFailure(.busy, stage: .reconciliation, disposition: .usable))
+        case "acceptancePending":
+            return finalize(transaction, accepting: true)
+        case "rejectionPending":
+            return finalize(transaction, accepting: false)
+        default:
+            return await reconcileDelivered(transaction)
         }
-        if stage == "acceptancePending" {
-            do { return try finalizeAccepted(transaction) }
-            catch { context.rollback(); suspend(); return .failure(HistoryFailure(.storage, stage: .finalization, disposition: .suspended)) }
+    }
+
+    private func finalize(_ transaction: NSManagedObject, accepting: Bool) -> HistoryResult {
+        do {
+            return try accepting ? finalizeAccepted(transaction) : finalizeRejected(transaction)
+        } catch {
+            context.rollback()
+            suspend()
+            return .failure(HistoryFailure(.storage, stage: .finalization, disposition: .suspended))
         }
-        if stage == "rejectionPending" {
-            do { return try finalizeRejected(transaction) }
-            catch { context.rollback(); suspend(); return .failure(HistoryFailure(.storage, stage: .finalization, disposition: .suspended)) }
-        }
+    }
+
+    private func reconcileDelivered(_ transaction: NSManagedObject) async -> HistoryResult {
         do {
             let token = try token(for: transaction)
             let outcome = await host.outcome(for: token)

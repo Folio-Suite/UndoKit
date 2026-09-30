@@ -8,7 +8,9 @@ import Foundation
 extension HistoryEngine {
     /// Records host-confirmed coherent state. The host secures its required resources first.
     /// Checkpoint creation is synchronous and requires an idle, usable scope.
-    public func createCheckpoint(id: UUID = UUID(), name: String?, state: HistoryPayload) throws -> HistoryCheckpointInfo {
+    public func createCheckpoint(
+        id: UUID = UUID(), name: String?, state: HistoryPayload
+    ) throws -> HistoryCheckpointInfo {
         guard !draining, !closed, !snapshot.isSuspended else {
             throw HistoryFailure(.busy, stage: .admission, disposition: .usable)
         }
@@ -32,8 +34,12 @@ extension HistoryEngine {
         row.setValue(state.data, forKey: "state")
         row.setValue(digest(state), forKey: "stateDigest")
         scopeRow.setValue(sequence + 1, forKey: "nextSequence")
-        do { try context.save() }
-        catch { context.rollback(); throw HistoryFailure(.storage, stage: .preparation, disposition: .usable) }
+        do {
+            try context.save()
+        } catch {
+            context.rollback()
+            throw HistoryFailure(.storage, stage: .preparation, disposition: .usable)
+        }
         return HistoryCheckpointInfo(id: id, name: name, sequence: sequence, recordedAt: date)
     }
 

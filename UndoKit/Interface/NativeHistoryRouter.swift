@@ -111,8 +111,12 @@ import Foundation
     public func didFinishQueuedEdit() { queuedEdits = max(0, queuedEdits - 1) }
 
     public var hasRegistrationMismatch: Bool { registrationObserved }
-    public var isEditingBlocked: Bool { requestPending || snapshot.isSuspended || registrationObserved }
-    public var canUndo: Bool { (snapshot.canUndo || hasProvisionalEdit || queuedEdits > 0) && !isEditingBlocked }
+    public var isEditingBlocked: Bool {
+        requestPending || snapshot.isSuspended || registrationObserved
+    }
+    public var canUndo: Bool {
+        (snapshot.canUndo || hasProvisionalEdit || queuedEdits > 0) && !isEditingBlocked
+    }
     public var canRedo: Bool { snapshot.canRedo && !isEditingBlocked }
     public var undoActionName: String { canUndo ? undoName : "" }
     public var redoActionName: String { canRedo ? redoName : "" }
@@ -120,7 +124,9 @@ import Foundation
 
     private func request(_ kind: HistoryDeliveryKind) {
         guard !isEditingBlocked else { return }
-        guard kind == .undo ? (snapshot.canUndo || hasProvisionalEdit || queuedEdits > 0) : snapshot.canRedo else { return }
+        guard kind == .undo
+            ? (snapshot.canUndo || hasProvisionalEdit || queuedEdits > 0)
+            : snapshot.canRedo else { return }
         guard settleEditing?() ?? true else { return }
         requestPending = true
         publishBarrier()
@@ -161,8 +167,10 @@ import Foundation
             super.setActionName(actionName)
         }
 
-        override func __registerUndoWithTarget(_ target: Any,
-            handler: @escaping @MainActor @Sendable (Any) -> Void) {
+        override func __registerUndoWithTarget(
+            _ target: Any,
+            handler: @escaping @MainActor @Sendable (Any) -> Void
+        ) {
             router?.registrationCount += 1
             super.__registerUndoWithTarget(target, handler: handler)
         }

@@ -20,9 +20,11 @@ stores protocol structure; host payloads remain opaque. The host owns atomic
 semantic effects and durable outcome receipts. See the public DocC catalog and
 [Work adapter description](../docs/architecture/work-history-first-operation.md).
 
-Implementation sources are separated into `UndoKit/History/` and
-`UndoKit/NativeRouting/`. Folio's translation layer lives in
-`Core/WriteKit/WorkAdapter/`; UndoKit imports no Folio domain framework.
+Public declarations are grouped in `UndoKit/Interface/`; persistence, transaction
+coordination and storage implementations live in `UndoKit/Modules/History/`.
+Folio's translation layer lives in `Core/WriteKit/WorkAdapter/`; UndoKit imports
+no Folio domain framework. The Core Data model is bundled from
+`UndoKit/Resources/`.
 
 The accepted [history-retention contract](docs/history-retention-contract.md)
 defines restoration, shared Undo/Redo depth, checkpoints, separate state and

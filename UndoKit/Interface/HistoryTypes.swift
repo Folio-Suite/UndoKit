@@ -121,7 +121,9 @@ public enum HistoryFailureCause: String, Sendable {
 }
 
 /// The transaction stage at which completion failed.
-public enum HistoryFailureStage: String, Sendable { case admission, preparation, delivery, reconciliation, finalization }
+public enum HistoryFailureStage: String, Sendable {
+    case admission, preparation, delivery, reconciliation, finalization
+}
 /// Whether this scope can continue accepting semantic mutations.
 public enum HistoryScopeDisposition: String, Sendable { case usable, suspended, resetRequired }
 

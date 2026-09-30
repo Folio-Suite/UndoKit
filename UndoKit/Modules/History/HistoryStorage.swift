@@ -40,8 +40,7 @@ extension HistoryEngine {
                             generation: snapshot.generation)
             return
         }
-        do { try refreshSnapshot() }
-        catch { suspend() }
+        do { try refreshSnapshot() } catch { suspend() }
     }
 
     func refreshSnapshot() throws {
@@ -207,15 +206,17 @@ extension HistoryEngine {
         try fetch(name, predicate: NSPredicate(format: "key == %@", key)).first
     }
 
-    func fetch(_ name: String, predicate: NSPredicate? = nil,
-                       sort: [NSSortDescriptor] = []) throws -> [NSManagedObject] {
+    func fetch(
+        _ name: String,
+        predicate: NSPredicate? = nil,
+        sort: [NSSortDescriptor] = []
+    ) throws -> [NSManagedObject] {
         let request = NSFetchRequest<NSManagedObject>(entityName: name)
         request.predicate = predicate
         request.sortDescriptors = sort
         return try context.fetch(request)
     }
 }
-
 
 extension NSManagedObject {
     func string(_ key: String) -> String? { value(forKey: key) as? String }

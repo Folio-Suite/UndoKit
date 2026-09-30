@@ -40,6 +40,7 @@ import XCTest
 }
 
 @MainActor final class HistoryStoreLifecycleTests: XCTestCase {
+    #if DEBUG
     func testFailedFirstRegistrationSaveLeavesCreateRetryable() async throws {
         let directory = try testDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -71,6 +72,8 @@ import XCTest
         XCTAssertEqual(reopened.storeIdentity, originalID)
         try await reopened.close()
     }
+
+    #endif
 
     func testTwoScopesHaveIndependentOrderAndOnePhysicalOwner() async throws {
         let directory = try testDirectory()

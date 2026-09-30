@@ -17,6 +17,9 @@ import XCTest
         router.update(snapshot: stale)
         XCTAssertTrue(router.canUndo)
         XCTAssertEqual(router.undoActionName, "Current")
+        router.update(snapshot: HistorySnapshot(canUndo: false, canRedo: false,
+            isSuspended: false, hasPending: false, scope: scope, generation: generation, version: 4))
+        XCTAssertTrue(router.canUndo, "A version cannot describe two different availability states")
         router.beginExternalOperation()
         router.finishInvocation(snapshot: stale)
         XCTAssertTrue(router.isEditingBlocked)

@@ -234,7 +234,7 @@ public enum NativeHistoryRoutingState: Equatable, Sendable {
             }
             return false
         }
-        return !requiresReattachment && candidate.version >= snapshot.version
+        return !requiresReattachment && (candidate.version > snapshot.version || candidate == snapshot)
     }
 
     private func publishBarrier() {

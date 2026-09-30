@@ -280,4 +280,42 @@ import XCTest
         XCTAssertTrue(cleaned)
         try await reopened.close()
     }
+
+    func testEmptyVersionKeyIsRefusedAndNilRemainsUnversioned() async throws {
+        let directory = try testDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let retentionStore = UUID()
+        let invalid = HistoryObjectReference(storeID: retentionStore,
+                                             objectKey: "image", versionKey: "")
+        let unversioned = HistoryObjectReference(storeID: retentionStore, objectKey: "image")
+        let store = try await HistoryStore.open(at: directory.appendingPathComponent("History.sqlite"),
+            workingIdentity: UUID(), mode: .create)
+        let host = try CounterHost(url: directory.appendingPathComponent("host.json"))
+        let engine = try await store.openScope(UUID(), mode: .create, host: host)
+        XCTAssertThrowsError(try engine.createCheckpoint(name: "Invalid", state: payload(0),
+                                                          resources: [invalid])) { error in
+            XCTAssertEqual((error as? HistoryFailure)?.cause, .capacity)
+        }
+        XCTAssertTrue(try engine.checkpoints(limit: 10).isEmpty)
+        let checkpoint = try engine.createCheckpoint(name: "Unversioned", state: payload(0),
+                                                     resources: [unversioned])
+        XCTAssertNotNil(try engine.checkpoint(id: checkpoint.id))
+        let required = try store.requiredObjects(in: retentionStore, limit: 10)
+        XCTAssertEqual(required.objects.map(\.reference), [unversioned])
+        XCTAssertEqual(required.objects.first?.referenceCount, 1)
+
+        host.resourcesByValue[1] = [invalid]
+        let outcome = await engine.submit(HistoryCommand(
+            fingerprint: Data("one".utf8), payload: payload(1)))
+        guard case .failure(let failure) = outcome else {
+            return XCTFail("Invalid accepted-effect reference was retained")
+        }
+        XCTAssertEqual(failure.cause, .hostProtocol)
+        XCTAssertEqual(failure.disposition, .suspended)
+        XCTAssertEqual(host.value, 1)
+        XCTAssertTrue(try engine.historyPage(limit: 10).isEmpty)
+        XCTAssertEqual(try store.requiredObjects(in: retentionStore, limit: 10).objects,
+                       required.objects)
+        try await store.close()
+    }
 }

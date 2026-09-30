@@ -5,6 +5,8 @@ import Foundation
 
 /// An opaque, version-specific object in a host-owned Retention Store.
 /// Keys are canonical UTF-8 identifiers, not file paths or bytes to be decoded by UndoKit.
+/// `nil` is the sole unversioned form. An explicit empty version key is rejected
+/// when a host submits references because it shares the stored unversioned value.
 public struct HistoryObjectReference: Hashable, Sendable {
     public let storeID: UUID
     public let objectKey: String

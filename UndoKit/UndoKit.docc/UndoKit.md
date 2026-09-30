@@ -33,6 +33,8 @@ is required. Swift clients import `UndoKit`.
 - `Interface/HistoryRetentionHolds.swift` — durable state and detail holds.
 - `Interface/HistoryConsolidation.swift` — bounded safe pruning against a host checkpoint.
 - `Interface/HistoryRetentionResources.swift` — cross-scope object reads and fenced cleanup.
+- `Interface/HistoryRecording.swift` — host-selected recording mode and open-session Undo.
+- `Interface/HistoryGeneration.swift` — settled clear and quarantined unresolved reset.
 - `Interface/NativeHistoryRouter.swift` — native UndoManager routing and editing barriers.
 - `Resources/History.xcdatamodeld` — the framework-owned persistence schema.
 
@@ -52,6 +54,24 @@ An engine supports bounded command groups, durable Undo/Redo, explicit checkpoin
 snapshots, restoration provenance, and retained displaced continuations. A new
 edit after Undo retires ordinary Redo eligibility while retaining its records.
 Undo and Redo create accepted records instead of deleting the original edit.
+
+The host may call `HistoryEngine.setRecording(_:baseline:resources:)` at a settled
+boundary. Off keeps accepted edits undoable in the open session without recording
+ordinary Actions for a later session. The first accepted Off edit creates a gap:
+Undo and reconstruction cannot cross it to older Actions. Re-enabling records a
+coherent host baseline and returns its checkpoint ID. Earlier retained history
+and checkpoints remain readable. `HistoryEngine.recordingMode()` throws if its
+persisted mode cannot be read.
+
+`HistoryEngine.clearHistory(adopting:resources:)` requires all work to be settled.
+For an irrecoverable unresolved outcome, the host must independently establish
+current state and explicitly call
+`HistoryEngine.resetUnresolvedHistory(adopting:resources:quarantineAt:)`.
+The latter copies failed evidence to an absent quarantine URL before resetting.
+Both calls install a new generation and baseline, preserving other scopes and
+host resources. Bind subsequent commands and reversals to the new snapshot's
+generation; a delayed request from the retired generation is refused before host
+delivery.
 
 An opaque ``HistoryHost`` may be isolated to the main actor or another actor.
 Typed hosts use ``HistoryOperationRegistration`` with stable operation, schema,
@@ -165,6 +185,14 @@ for retry. Read-only sessions can inspect requirements but cannot perform cleanu
 retains its native grouping and coalescing. The host settles provisional input
 before a reversal, submits prior edits in order, applies the router's editing
 barrier, and completes the asynchronous invocation with finalized availability.
+Capture `pendingInvocationID` when a native Undo or Redo callback starts, or use
+`beginExternalOperation()` for a host maintenance action. Supply that ID to
+`finishInvocation(_:snapshot:undoName:redoName:)`; a late completion cannot finish
+a newer invocation. After opening or resetting, settle provisional edits and
+queued work, reconcile the engine, check `canAttach`, and explicitly
+`attach(snapshot:undoName:redoName:)` to the confirmed generation. A changed
+generation produces `reattachmentRequired` until attachment succeeds. Retired
+callbacks and stale availability versions cannot unblock editing.
 Marked composition must finish before settlement. Independent local text controls
 keep their own managers and must not fall through to unrelated document history.
 
@@ -177,7 +205,6 @@ reconciles it. The bridge does not navigate or interpret affected-content data.
 
 ## Current limits
 
-Recording controls and generation reset need follow-up implementation.
 Host payloads remain bounded.
 The independent tests do not
 establish production behavior at the prototype's 100,000-group scale.
@@ -207,6 +234,7 @@ publication remain deferred. Apps and Kits ship as a coordinated Suite version.
 - ``HistoryRetentionHold``
 - ``HistoryRetentionPolicy``
 - ``HistoryObjectReference``
+- ``HistoryRecordingMode``
 
 ### Native integration
 

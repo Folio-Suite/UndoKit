@@ -22,12 +22,15 @@ extension HistoryEngine {
         if save && context.hasChanges { try saveContext() }
     }
 
-    public var recordingMode: HistoryRecordingMode {
-        (try? scopeRecord().bool("recordingEnabled")) == false ? .off : .on
+    /// Read the persisted mode; storage failures are returned to the host.
+    public func recordingMode() throws -> HistoryRecordingMode {
+        try scopeRecord().bool("recordingEnabled") ? .on : .off
     }
 
     /// Change recording only at a settled boundary. Existing retained history
-    /// and checkpoints remain available; ordinary Undo cannot cross an Off gap.
+    /// and checkpoints remain available. The first accepted Off edit creates an
+    /// Undo gap. Re-enabling requires a coherent host baseline and returns its
+    /// checkpoint ID; Off returns nil. A failed transition leaves the mode intact.
     @discardableResult public func setRecording(
         _ mode: HistoryRecordingMode, baseline: HistoryPayload? = nil,
         resources: [HistoryObjectReference] = []

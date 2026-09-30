@@ -152,6 +152,8 @@ public struct HistoryTypedCommand<Value> {
     ///   - id: Stable identity reused for a retry of the same intent.
     ///   - fingerprint: Host-supplied fingerprint of canonical intent.
     ///   - value: Typed Command value to encode before submission.
+    ///   - expectedGeneration: Generation captured when this request was created;
+    ///     required after reset so delayed values cannot enter the new generation.
     public init(id: UUID = UUID(), fingerprint: Data, value: Value,
                 expectedGeneration: UUID? = nil) {
         self.id = id

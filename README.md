@@ -102,8 +102,11 @@ store supports independent scopes, bounded groups, full checkpoint payloads,
 durable state and detail holds, bounded consolidation, opaque resource references
 and serialized host cleanup across scopes. See the DocC retention guide and
 [reconstruction](docs/history-reconstruction.md) for bounded historical reads and
-presentation metadata. Recording controls and explicit generation reset remain
-follow-up work. The current format is pre-alpha; no legacy migration is required.
+presentation metadata. Hosts can turn recording Off for new ordinary edits while
+keeping open-session Undo, then turn it On with a coherent baseline. Settled clear
+and acknowledged unresolved reset retire a scope generation; clients bind new
+commands to the returned generation. The current format is pre-alpha; no legacy
+migration is required.
 
 Run the independent tests with `swift test --package-path UndoKit`, or use the
 signed Xcode UndoKit scheme. Work integration tests use Core; native document

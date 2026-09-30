@@ -5,6 +5,61 @@ import CoreData
 import Foundation
 
 extension HistoryStore {
+    struct FileIdentity: Equatable {
+        let device: UInt64
+        let inode: UInt64
+    }
+
+    static func storeArtifactURLs(at url: URL) -> [URL] {
+        [
+            url,
+            URL(fileURLWithPath: url.path + "-wal"),
+            URL(fileURLWithPath: url.path + "-shm"),
+            URL(fileURLWithPath: url.path + "-journal"),
+        ]
+    }
+
+    static func fileIdentity(at url: URL) throws -> FileIdentity {
+        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+        guard let device = attributes[.systemNumber] as? NSNumber,
+              let inode = attributes[.systemFileNumber] as? NSNumber else {
+            throw HistoryFailure(.storage, stage: .admission, disposition: .suspended,
+                                 underlyingDescription: "Cannot identify history artifact at \(url.path)")
+        }
+        return FileIdentity(device: device.uint64Value, inode: inode.uint64Value)
+    }
+
+    static func removeCreatedArtifacts(at url: URL, preexisting: Set<URL>,
+                                       expected: [URL: FileIdentity]? = nil) throws {
+        let manager = FileManager.default
+        let candidates = storeArtifactURLs(at: url).filter { !preexisting.contains($0) }
+        let identities = try expected ?? Dictionary(uniqueKeysWithValues: candidates.compactMap { candidate in
+            manager.fileExists(atPath: candidate.path)
+                ? (candidate, try fileIdentity(at: candidate)) : nil
+        })
+        for candidate in candidates where manager.fileExists(atPath: candidate.path) {
+            guard identities[candidate] == (try fileIdentity(at: candidate)) else {
+                throw HistoryFailure(.storage, stage: .admission, disposition: .suspended,
+                                     underlyingDescription: "History artifact changed: \(candidate.path)")
+            }
+        }
+        for candidate in candidates.reversed() where manager.fileExists(atPath: candidate.path) {
+            try manager.removeItem(at: candidate)
+        }
+    }
+
+    func removeFailedCreationArtifacts(preexisting: Set<URL>) throws {
+        let candidates = Self.storeArtifactURLs(at: url).filter { !preexisting.contains($0) }
+        let identities = try Dictionary(uniqueKeysWithValues: candidates.compactMap { candidate in
+            FileManager.default.fileExists(atPath: candidate.path)
+                ? (candidate, try Self.fileIdentity(at: candidate)) : nil
+        })
+        context.rollback()
+        let coordinator = container.persistentStoreCoordinator
+        for persistentStore in coordinator.persistentStores { try coordinator.remove(persistentStore) }
+        try Self.removeCreatedArtifacts(at: url, preexisting: preexisting, expected: identities)
+    }
+
     static func safePathComponent(_ value: String) -> Bool {
         !value.isEmpty && value.utf8.count <= 255 && value != "." && value != ".." &&
         !value.contains("/") && !value.contains("\\") && !value.contains("\0")
@@ -40,6 +95,12 @@ extension HistoryStore {
         var loadError: Error?
         container.loadPersistentStores { _, error in loadError = error }
         if let loadError {
+            for persistentStore in container.persistentStoreCoordinator.persistentStores {
+                do { try container.persistentStoreCoordinator.remove(persistentStore) } catch {
+                    throw HistoryFailure(.storage, stage: .admission, disposition: .suspended,
+                        underlyingDescription: "Could not close failed store before cleanup: \(error)")
+                }
+            }
             throw HistoryFailure(openCause(for: loadError), stage: .admission, disposition: .usable,
                                  underlyingDescription: String(describing: loadError))
         }
@@ -77,7 +138,18 @@ extension HistoryStore {
             created.setValue("primary", forKey: "key")
             created.setValue(workingIdentity.uuidString, forKey: "workingID")
             created.setValue(storeIdentity.uuidString, forKey: "storeID")
-            do { try context.save() } catch { context.rollback(); throw error }
+            do {
+                #if DEBUG
+                if Self.failInitialRegistrationSave {
+                    throw HistoryFailure(.storage, stage: .admission, disposition: .usable,
+                        underlyingDescription: "Injected first registration save failure")
+                }
+                #endif
+                try context.save()
+            } catch {
+                context.rollback()
+                throw error
+            }
         case .existing:
             guard let record else {
                 throw HistoryFailure(.compatibility, stage: .admission, disposition: .usable)

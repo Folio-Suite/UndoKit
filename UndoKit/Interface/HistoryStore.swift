@@ -47,6 +47,9 @@ public struct HistoryScopeInspection: Equatable, Sendable {
 /// exclusive owner lock; readers may inspect committed records concurrently.
 @MainActor public final class HistoryStore {
     @TaskLocal static var deliveringStores: Set<ObjectIdentifier> = []
+    #if DEBUG
+    @TaskLocal static var failInitialRegistrationSave = false
+    #endif
     /// Canonical registered physical store URL; file coordination remains host-owned.
     public let url: URL
     /// Identity of the host document or app-owned data associated with this store.
@@ -142,16 +145,39 @@ public struct HistoryScopeInspection: Equatable, Sendable {
                 throw HistoryFailure(.busy, stage: .admission, disposition: .usable)
             }
         }
+        if case .create = mode, manager.fileExists(atPath: url.path) {
+            flock(descriptor, LOCK_UN)
+            Darwin.close(descriptor)
+            throw HistoryFailure(.identityConflict, stage: .admission, disposition: .usable)
+        }
+        let artifacts = Self.storeArtifactURLs(at: url)
+        let preexistingArtifacts = Set(artifacts.filter { manager.fileExists(atPath: $0.path) })
         var owned = descriptor >= 0
+        var openedStore: HistoryStore?
         do {
             let container = try makeContainer(at: url, readOnly: access == .readOnly)
             let store = HistoryStore(url: url, workingIdentity: workingIdentity,
                                      storeIdentity: UUID(), access: access, limits: limits,
                                      container: container, lockDescriptor: descriptor)
+            openedStore = store
             owned = false
             try store.register(mode: mode)
             return store
         } catch {
+            if case .create = mode {
+                do {
+                    if let openedStore {
+                        try openedStore.removeFailedCreationArtifacts(preexisting: preexistingArtifacts)
+                    } else {
+                        try Self.removeCreatedArtifacts(at: url, preexisting: preexistingArtifacts)
+                    }
+                } catch let cleanupError {
+                    if owned { flock(descriptor, LOCK_UN); Darwin.close(descriptor) }
+                    throw HistoryFailure(.storage, stage: .admission, disposition: .suspended,
+                        underlyingDescription: "Creation failed: \(error). " +
+                            "Cleanup preserved artifacts: \(cleanupError)")
+                }
+            }
             if owned { flock(descriptor, LOCK_UN); Darwin.close(descriptor) }
             throw error
         }

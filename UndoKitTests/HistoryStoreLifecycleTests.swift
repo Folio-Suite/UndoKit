@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import Foundation
-import UndoKit
+@testable import UndoKit
 import XCTest
 
 @MainActor private final class ReentrantMaintenanceHost: HistoryHost {
@@ -40,6 +40,38 @@ import XCTest
 }
 
 @MainActor final class HistoryStoreLifecycleTests: XCTestCase {
+    func testFailedFirstRegistrationSaveLeavesCreateRetryable() async throws {
+        let directory = try testDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("History.sqlite")
+        let identity = UUID()
+
+        do {
+            _ = try await HistoryStore.$failInitialRegistrationSave.withValue(true) {
+                try await HistoryStore.open(at: url, workingIdentity: identity, mode: .create)
+            }
+            XCTFail("Injected first registration save should fail")
+        } catch let failure as HistoryFailure {
+            XCTAssertEqual(failure.cause, .storage)
+        }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path + "-wal"))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path + "-shm"))
+
+        let created = try await HistoryStore.open(at: url, workingIdentity: identity, mode: .create)
+        let originalID = created.storeIdentity
+        try await created.close()
+        do {
+            _ = try await HistoryStore.open(at: url, workingIdentity: UUID(), mode: .create)
+            XCTFail("A successful existing store was overwritten")
+        } catch let failure as HistoryFailure {
+            XCTAssertEqual(failure.cause, .identityConflict)
+        }
+        let reopened = try await HistoryStore.open(at: url, workingIdentity: identity, mode: .existing)
+        XCTAssertEqual(reopened.storeIdentity, originalID)
+        try await reopened.close()
+    }
+
     func testTwoScopesHaveIndependentOrderAndOnePhysicalOwner() async throws {
         let directory = try testDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }

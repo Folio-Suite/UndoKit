@@ -7,6 +7,7 @@
         <attribute name="workingID" attributeType="String"/>
         <attribute name="generationID" attributeType="String"/>
         <attribute name="nextSequence" attributeType="Integer 64" defaultValueString="1" usesScalarValueType="YES"/>
+        <attribute name="committedVersion" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="suspended" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
         <uniquenessConstraints><uniquenessConstraint><constraint value="key"/></uniquenessConstraint></uniquenessConstraints>
     </entity>
@@ -27,6 +28,10 @@
         <attribute name="restorationOrigin" optional="YES" attributeType="String"/>
         <attribute name="memberCount" attributeType="Integer 64" usesScalarValueType="YES"/>
         <attribute name="recordedAt" attributeType="Date"/>
+        <attribute name="presentationFamily" optional="YES" attributeType="String"/>
+        <attribute name="presentationVersion" optional="YES" attributeType="Integer 64" usesScalarValueType="YES"/>
+        <attribute name="presentationPayload" optional="YES" attributeType="Binary"/>
+        <attribute name="presentationDigest" optional="YES" attributeType="Binary"/>
         <relationship name="members" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="HistoryMemberRecord" inverseName="transaction" inverseEntity="HistoryMemberRecord"/>
         <uniquenessConstraints><uniquenessConstraint><constraint value="key"/></uniquenessConstraint></uniquenessConstraints>
     </entity>
@@ -60,6 +65,10 @@
         <attribute name="restorationOrigin" optional="YES" attributeType="String"/>
         <attribute name="memberCount" attributeType="Integer 64" usesScalarValueType="YES"/>
         <attribute name="recordedAt" attributeType="Date"/>
+        <attribute name="presentationFamily" optional="YES" attributeType="String"/>
+        <attribute name="presentationVersion" optional="YES" attributeType="Integer 64" usesScalarValueType="YES"/>
+        <attribute name="presentationPayload" optional="YES" attributeType="Binary"/>
+        <attribute name="presentationDigest" optional="YES" attributeType="Binary"/>
         <relationship name="actions" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="HistoryActionRecord" inverseName="group" inverseEntity="HistoryActionRecord"/>
         <uniquenessConstraints><uniquenessConstraint><constraint value="scopeKey"/><constraint value="key"/></uniquenessConstraint></uniquenessConstraints>
     </entity>
@@ -96,6 +105,14 @@
         <attribute name="key" attributeType="String"/>
         <attribute name="workingID" attributeType="String"/>
         <attribute name="storeID" attributeType="String"/>
+        <uniquenessConstraints><uniquenessConstraint><constraint value="key"/></uniquenessConstraint></uniquenessConstraints>
+    </entity>
+    <entity name="HistoryGapRecord" representedClassName="NSManagedObject" syncable="YES">
+        <attribute name="key" attributeType="String"/>
+        <attribute name="scopeKey" attributeType="String"/>
+        <attribute name="generationID" attributeType="String"/>
+        <attribute name="lowerExclusiveSequence" attributeType="Integer 64" usesScalarValueType="YES"/>
+        <attribute name="upperInclusiveSequence" attributeType="Integer 64" usesScalarValueType="YES"/>
         <uniquenessConstraints><uniquenessConstraint><constraint value="key"/></uniquenessConstraint></uniquenessConstraints>
     </entity>
 </model>

@@ -125,6 +125,7 @@ extension HistoryEngine {
             !command.members.isEmpty && command.members.count <= limits.maxMembers &&
             Set(command.members.map(\.id)).count == command.members.count &&
             command.members.allSatisfy { valid($0.payload) } &&
+            command.presentation.map { valid($0) && $0.data.count <= 4_096 } != false &&
             command.members.reduce(0) { $0 + $1.payload.data.count } <= limits.maxPayloadBytes
     }
 

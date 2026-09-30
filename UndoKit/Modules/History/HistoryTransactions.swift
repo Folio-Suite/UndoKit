@@ -153,6 +153,9 @@ extension HistoryEngine {
         transaction.setValue(command.restorationOrigin?.uuidString, forKey: "restorationOrigin")
         transaction.setValue(Int64(command.members.count), forKey: "memberCount")
         transaction.setValue(Date(), forKey: "recordedAt")
+        if let presentation = command.presentation {
+            put(presentation, on: transaction, prefix: "presentation")
+        }
         for (ordinal, member) in command.members.enumerated() {
             let row = insert("HistoryMemberRecord")
             row.setValue("\(key):\(ordinal)", forKey: "key")
@@ -263,6 +266,12 @@ extension HistoryEngine {
         group.setValue(transaction.string("restorationOrigin"), forKey: "restorationOrigin")
         group.setValue(transaction.int64("memberCount"), forKey: "memberCount")
         group.setValue(transaction.value(forKey: "recordedAt"), forKey: "recordedAt")
+        if transaction.string("presentationFamily") != nil {
+            group.setValue(transaction.string("presentationFamily"), forKey: "presentationFamily")
+            group.setValue(transaction.value(forKey: "presentationVersion"), forKey: "presentationVersion")
+            group.setValue(transaction.value(forKey: "presentationPayload"), forKey: "presentationPayload")
+            group.setValue(transaction.value(forKey: "presentationDigest"), forKey: "presentationDigest")
+        }
         for member in try transactionMembers(transaction) {
             let action = insert("HistoryActionRecord")
             action.setValue(member.string("key"), forKey: "key")
@@ -284,6 +293,8 @@ extension HistoryEngine {
             }
         }
         transaction.setValue("accepted", forKey: "stage")
+        let scopeRow = try scopeRecord()
+        scopeRow.setValue(scopeRow.int64("committedVersion") + 1, forKey: "committedVersion")
         try saveContext()
         updateSnapshot()
         let token = try token(for: transaction)

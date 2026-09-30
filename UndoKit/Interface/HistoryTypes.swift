@@ -39,17 +39,23 @@ public struct HistoryCommand: Equatable, Sendable {
     public let fingerprint: Data
     public let members: [HistoryMember]
     public let restorationOrigin: UUID?
+    /// Small host-authored display data. It is never required to recover an effect.
+    public let presentation: HistoryPayload?
 
-    public init(id: UUID = UUID(), fingerprint: Data, members: [HistoryMember], restorationOrigin: UUID? = nil) {
+    public init(id: UUID = UUID(), fingerprint: Data, members: [HistoryMember],
+                restorationOrigin: UUID? = nil, presentation: HistoryPayload? = nil) {
         self.id = id
         self.fingerprint = fingerprint
         self.members = members
         self.restorationOrigin = restorationOrigin
+        self.presentation = presentation
     }
 
-    public init(id: UUID = UUID(), fingerprint: Data, payload: HistoryPayload, restorationOrigin: UUID? = nil) {
+    public init(id: UUID = UUID(), fingerprint: Data, payload: HistoryPayload,
+                restorationOrigin: UUID? = nil, presentation: HistoryPayload? = nil) {
         self.init(id: id, fingerprint: fingerprint,
-                  members: [HistoryMember(id: id, payload: payload)], restorationOrigin: restorationOrigin)
+                  members: [HistoryMember(id: id, payload: payload)],
+                  restorationOrigin: restorationOrigin, presentation: presentation)
     }
 }
 

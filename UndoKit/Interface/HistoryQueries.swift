@@ -52,6 +52,7 @@ extension HistoryEngine {
         row.setValue(state.data, forKey: "state")
         row.setValue(digest(state), forKey: "stateDigest")
         scopeRow.setValue(sequence + 1, forKey: "nextSequence")
+        scopeRow.setValue(scopeRow.int64("committedVersion") + 1, forKey: "committedVersion")
         do {
             try saveContext()
         } catch {

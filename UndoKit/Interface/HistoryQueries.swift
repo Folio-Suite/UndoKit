@@ -123,7 +123,7 @@ extension HistoryEngine {
     /// Stops admission and releases writable ownership after active delivery reaches a safe boundary.
     /// Requests still queued return an admission failure without reaching the host.
     public func close() async throws {
-        guard HistoryStore.deliveringStore != ObjectIdentifier(store) else {
+        guard !HistoryStore.deliveringStores.contains(ObjectIdentifier(store)) else {
             throw HistoryFailure(.busy, stage: .admission, disposition: .usable)
         }
         guard !store.maintenance else {

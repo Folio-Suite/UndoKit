@@ -68,7 +68,8 @@ extension HistoryEngine {
                                      sequence: sequence, command: command.id)
             let delivery = try prepare(command, kind: kind, targetGroup: targetGroup,
                                        token: token, scopeRow: scopeRow)
-            let outcome = await HistoryStore.$deliveringStore.withValue(ObjectIdentifier(store)) {
+            let activeStores = HistoryStore.deliveringStores.union([ObjectIdentifier(store)])
+            let outcome = await HistoryStore.$deliveringStores.withValue(activeStores) {
                 await deliverToHost(delivery)
             }
             return await finish(transactionKey: key, outcome: outcome)

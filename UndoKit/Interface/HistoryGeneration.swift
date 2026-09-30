@@ -66,7 +66,7 @@ extension HistoryEngine {
         do {
             for name in ["HistoryTransactionRecord", "HistoryGroupRecord",
                          "HistoryCheckpointRecord", "HistoryGapRecord", "HistoryHoldRecord",
-                         "HistoryRetiredCommandRecord"] {
+                         "HistoryRetiredCommandRecord",] {
                 for row in try fetch(name, predicate: NSPredicate(
                     format: "scopeKey == %@", scope.uuidString)) {
                     context.delete(row)

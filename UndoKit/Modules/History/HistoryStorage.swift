@@ -102,8 +102,9 @@ extension HistoryEngine {
     func eligibleGroup(for kind: HistoryDeliveryKind) throws -> NSManagedObject? {
         let request = NSFetchRequest<NSManagedObject>(entityName: "HistoryGroupRecord")
         let floor = try scopeRecord().int64("undoFloorSequence")
-        request.predicate = NSPredicate(format: "scopeKey == %@ AND kind == %@ AND state != %@ AND sequence >= %@",
-                                        scope.uuidString, HistoryDeliveryKind.command.rawValue, "branched", NSNumber(value: floor))
+        request.predicate = NSPredicate(
+            format: "scopeKey == %@ AND kind == %@ AND state != %@ AND sequence >= %@",
+            scope.uuidString, HistoryDeliveryKind.command.rawValue, "branched", NSNumber(value: floor))
         request.sortDescriptors = [NSSortDescriptor(key: "sequence", ascending: false)]
         request.fetchLimit = limits.maxUndoGroups
         let groups = try context.fetch(request)

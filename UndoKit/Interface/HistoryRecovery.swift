@@ -38,9 +38,9 @@ extension HistoryEngine {
 
     private func finalize(_ transaction: NSManagedObject, accepting: Bool) -> HistoryResult {
         do {
-            return try accepting
-                ? (transaction.bool("recordsAction") ? finalizeAccepted(transaction) : finalizeSessionAccepted(transaction))
-                : finalizeRejected(transaction)
+            if !accepting { return try finalizeRejected(transaction) }
+            return try transaction.bool("recordsAction")
+                ? finalizeAccepted(transaction) : finalizeSessionAccepted(transaction)
         } catch {
             context.rollback()
             suspend()

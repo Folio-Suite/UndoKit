@@ -34,9 +34,9 @@ extension HistoryEngine {
         let targetSequence = try recoveryTargetSequence(target)
 
         if source == .current, case .group = target,
-           (!scopeRow.bool("recordingEnabled") ||
-            (scopeRow.int64("currentBaselineSequence") > 0 &&
-             targetSequence < scopeRow.int64("currentBaselineSequence"))) {
+           !scopeRow.bool("recordingEnabled") ||
+           (scopeRow.int64("currentBaselineSequence") > 0 &&
+            targetSequence < scopeRow.int64("currentBaselineSequence")) {
             throw HistoryFailure(.compatibility, stage: .admission, disposition: .usable)
         }
 

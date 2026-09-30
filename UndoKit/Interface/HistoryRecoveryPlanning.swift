@@ -7,6 +7,12 @@ import Foundation
 extension HistoryEngine {
     /// Plans protect their sequence interval until explicit release or session close.
     /// The host captures the current domain baseline before requesting `.current`.
+    /// - Parameters:
+    ///   - source: Coherent current domain state or a stored checkpoint baseline.
+    ///   - target: Accepted group state or complete checkpoint to reconstruct.
+    ///   - evidence: Explicit host promise that accepted effects represent state transitions.
+    /// - Returns: A session-bound handle; release it on success, failure or abandonment.
+    /// - Throws: Busy/suspended scope, plan capacity, cancellation, missing target or retained gap.
     public func beginRecoveryPlan(
         from source: HistoryRecoverySource = .current,
         to target: HistoryRecoveryTarget,
@@ -45,6 +51,9 @@ extension HistoryEngine {
     }
 
     /// Reads at most `limit` accepted transitions; no host payload is materialized.
+    /// Pass only the preceding page's cursor for this handle. Throws for an invalid
+    /// handle/cursor, limit, missing interval or cancellation. Cancellation releases
+    /// the handle. Nil `nextCursor` means this traversal is complete.
     public func recoveryPage(_ plan: HistoryRecoveryPlan, after cursor: Int64? = nil,
                              limit: Int) throws -> HistoryRecoveryPage {
         try requirePlan(plan)
@@ -86,6 +95,9 @@ extension HistoryEngine {
     }
 
     /// Fetches one intact opaque accepted-effect member from a plan step.
+    /// `groupID` and `ordinal` must identify a member in this plan's interval.
+    /// Throws on missing/corrupt material, invalid selection or cancellation;
+    /// it never invokes the host or mutates live state.
     public func recoveryMaterial(_ plan: HistoryRecoveryPlan, groupID: UUID,
                                  ordinal: Int) throws -> HistoryRecoveryMaterial {
         try requirePlan(plan)
@@ -122,6 +134,7 @@ extension HistoryEngine {
         return try checkpoint(id: id)
     }
 
+    /// Ends temporary retention protection. Releasing an already-ended handle is harmless.
     public func releaseRecoveryPlan(_ plan: HistoryRecoveryPlan) {
         recoveryPlans.removeValue(forKey: plan.id)
     }
@@ -134,19 +147,6 @@ extension HistoryEngine {
     /// Called by store and scope closure; all handles from this session become invalid.
     func invalidateRecoveryPlans() {
         recoveryPlans.removeAll()
-    }
-
-    /// #93 prunes against these intervals and their checkpoint baselines.
-    var protectedRecoveryIntervals: [HistoryProtectedInterval] {
-        guard !closed else { return [] }
-        return recoveryPlans.values.map { plan in
-            let checkpointID: UUID?
-            if case .checkpoint(let id) = plan.source { checkpointID = id } else { checkpointID = nil }
-            return HistoryProtectedInterval(
-                lowerExclusiveSequence: min(plan.baselineSequence, plan.targetSequence),
-                upperInclusiveSequence: max(plan.baselineSequence, plan.targetSequence),
-                checkpointID: checkpointID)
-        }
     }
 
     private func recoveryTargetSequence(_ target: HistoryRecoveryTarget) throws -> Int64 {

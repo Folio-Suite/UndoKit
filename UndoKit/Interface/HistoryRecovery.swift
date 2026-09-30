@@ -15,6 +15,13 @@ extension HistoryEngine {
         case "rejected":
             return .rejected
         case "cancelled":
+            if let causeName = transaction.string("failureCause"),
+               let stageName = transaction.string("failureStage"),
+               let cause = HistoryFailureCause(rawValue: causeName),
+               let stage = HistoryFailureStage(rawValue: stageName) {
+                return .failure(HistoryFailure(cause, stage: stage, disposition: .usable,
+                                               underlyingDescription: transaction.string("failureDescription")))
+            }
             return .failure(HistoryFailure(.busy, stage: .reconciliation, disposition: .usable))
         case "prepared":
             transaction.setValue("cancelled", forKey: "stage")

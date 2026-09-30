@@ -57,7 +57,8 @@ import Foundation
     ///   - registration: Current codec and explicit older decoders.
     /// - Returns: The host-owned state value.
     /// - Throws: A compatibility failure for an unknown version or mismatched envelope, or a codec error.
-    func decodeState(_ payload: HistoryPayload, using registration: HistoryOperationRegistration<Self>) throws -> State {
+    func decodeState(_ payload: HistoryPayload,
+                     using registration: HistoryOperationRegistration<Self>) throws -> State {
         guard payload.family == registration.identity.operation,
               let codec = registration.stateDecoder(for: payload.version) else {
             throw HistoryFailure(.compatibility, stage: .reconciliation, disposition: .usable)
@@ -81,20 +82,9 @@ import Foundation
         do {
             switch delivery.kind {
             case .command:
-                let commands = try delivery.members.map { member in
-                    guard let codec = registration.commandDecoder(for: member.payload.version) else {
-                        throw HistoryFailure(.compatibility, stage: .delivery, disposition: .usable)
-                    }
-                    return (member.id, try decodeEnvelope(member.payload.data, using: codec, stage: .delivery))
-                }
-                typedOutcome = await apply(commands, token: delivery.token)
+                typedOutcome = await apply(try registration.decodeCommands(delivery.members), token: delivery.token)
             case .undo, .redo:
-                let effects = try delivery.members.map { member in
-                    guard let codec = registration.effectDecoder(for: member.payload.version) else {
-                        throw HistoryFailure(.compatibility, stage: .delivery, disposition: .usable)
-                    }
-                    return (member.id, try decodeEnvelope(member.payload.data, using: codec, stage: .delivery))
-                }
+                let effects = try registration.decodeEffects(delivery.members)
                 typedOutcome = delivery.kind == .undo
                     ? await undo(effects, token: delivery.token)
                     : await redo(effects, token: delivery.token)
@@ -110,48 +100,19 @@ import Foundation
             guard effects.count == delivery.members.count,
                   effects.map(\.memberID) == delivery.members.map(\.id) else { return .unresolved }
             do {
-                return .accepted(try effects.map { effect in
-                    HistoryEffect(memberID: effect.memberID,
-                                  undo: HistoryPayload(
-                                    family: registration.identity.operation,
-                                    version: registration.identity.effectVersion,
-                                    data: try encodeEnvelope(
-                                        effect.undo,
-                                        using: registration.effectCodec
-                                    )
-                                  ),
-                                  redo: HistoryPayload(
-                                    family: registration.identity.operation,
-                                    version: registration.identity.effectVersion,
-                                    data: try encodeEnvelope(
-                                        effect.redo,
-                                        using: registration.effectCodec
-                                    )
-                                  )
-                    )
-                })
+                return .accepted(try registration.encodeEffects(effects))
             } catch { return .unresolved }
         }
     }
 
     internal func lookup(_ token: HistoryToken,
-                            registration: HistoryOperationRegistration<Self>) async -> HistoryHostOutcome {
+                         registration: HistoryOperationRegistration<Self>) async -> HistoryHostOutcome {
         do {
             switch await outcome(for: token) {
             case .rejected: return .rejected
             case .unresolved: return .unresolved
             case .accepted(let effects):
-                return .accepted(try effects.map { effect in
-                    HistoryEffect(memberID: effect.memberID,
-                                  undo: HistoryPayload(family: registration.identity.operation,
-                                                       version: registration.identity.effectVersion,
-                                                       data: try encodeEnvelope(effect.undo,
-                                                                                using: registration.effectCodec)),
-                                  redo: HistoryPayload(family: registration.identity.operation,
-                                                       version: registration.identity.effectVersion,
-                                                       data: try encodeEnvelope(effect.redo,
-                                                                                using: registration.effectCodec)))
-                })
+                return .accepted(try registration.encodeEffects(effects))
             }
         } catch { return .unresolved }
     }

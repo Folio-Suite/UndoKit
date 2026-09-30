@@ -21,7 +21,10 @@ private func versionedCodec(_ version: Int) -> HistoryCodec<DomainBox> {
                  configuration: Data("format-\(version)".utf8),
                  encode: { Data("\(version):\($0.value)".utf8) },
                  decode: { data in
-                     let parts = String(decoding: data, as: UTF8.self).split(separator: ":")
+                     guard let text = String(bytes: data, encoding: .utf8) else {
+                         throw CocoaError(.coderReadCorrupt)
+                     }
+                     let parts = text.split(separator: ":")
                      guard parts.count == 2, parts[0] == String(version), let value = Int(parts[1]) else {
                          throw CocoaError(.coderReadCorrupt)
                      }
@@ -59,8 +62,9 @@ private actor TypedCounter: HistoryOperationHandler {
                      using: registration, to: engine)
     }
 
-    func submitFourTwice(to engine: HistoryEngine,
-                         registration: HistoryOperationRegistration<TypedCounter>) async -> (HistoryResult, HistoryResult) {
+    func submitFourTwice(
+        to engine: HistoryEngine, registration: HistoryOperationRegistration<TypedCounter>
+    ) async -> (HistoryResult, HistoryResult) {
         let command = HistoryTypedCommand(id: UUID(), fingerprint: Data("set four".utf8), value: DomainBox(4))
         let first = await submit(command, using: registration, to: engine)
         let retry = await submit(command, using: registration, to: engine)
@@ -94,7 +98,9 @@ private actor TypedCounter: HistoryOperationHandler {
         return try decodeState(payload, using: registration).value
     }
 
-    func encodeStateValue(_ value: Int, using registration: HistoryOperationRegistration<TypedCounter>) throws -> HistoryPayload {
+    func encodeStateValue(
+        _ value: Int, using registration: HistoryOperationRegistration<TypedCounter>
+    ) throws -> HistoryPayload {
         try encodeState(DomainBox(value), using: registration)
     }
 
@@ -226,6 +232,29 @@ private actor TypedCounter: HistoryOperationHandler {
         try await first.close()
 
         let currentCodec = versionedCodec(2)
+        let incompatibleHandler = TypedCounter()
+        let incompatibleRegistration = HistoryOperationRegistration(
+            identity: versionedIdentity(currentCodec, version: 2), commandCodec: currentCodec,
+            effectCodec: currentCodec, stateCodec: currentCodec,
+            oldCommandCodecs: [1: oldCodec], oldStateCodecs: [1: oldCodec],
+            handler: incompatibleHandler
+        )
+        let incompatible = try await HistoryEngine.open(
+            at: store, scope: scope, workingIdentity: workingID, mode: .existing,
+            host: HistoryRegisteredHost(incompatibleRegistration)
+        )
+        guard case .failure(let missingDecoder) = await incompatible.undo() else {
+            XCTFail("Missing old effect decoder must refuse Undo")
+            return
+        }
+        XCTAssertEqual(missingDecoder.cause, .compatibility)
+        XCTAssertEqual(missingDecoder.disposition, .usable)
+        XCTAssertTrue(incompatible.snapshot.canUndo)
+        XCTAssertEqual(try incompatible.historyPage(limit: 10).count, 1)
+        let valueAfterRefusedUndo = await incompatibleHandler.currentValue
+        XCTAssertEqual(valueAfterRefusedUndo, 0)
+        try await incompatible.close()
+
         let newHandler = TypedCounter()
         let registration = HistoryOperationRegistration(
             identity: versionedIdentity(currentCodec, version: 2), commandCodec: currentCodec,
@@ -249,8 +278,9 @@ private actor TypedCounter: HistoryOperationHandler {
         }
         let countBeforeRefusal = await newHandler.applicationCount
         let unknown = HistoryPayload(family: original.family, version: 99, data: original.data)
+        let failedCommand = HistoryCommand(fingerprint: Data("unsupported".utf8), payload: unknown)
         guard case .failure(let failure) = await reopened.submit(
-            HistoryCommand(fingerprint: Data("unsupported".utf8), payload: unknown)
+            failedCommand
         ) else {
             XCTFail("Unregistered Command version was not refused")
             return
@@ -260,6 +290,14 @@ private actor TypedCounter: HistoryOperationHandler {
         XCTAssertEqual(countAfterRefusal, countBeforeRefusal)
         XCTAssertEqual(try reopened.checkpoint(id: checkpoint.id)?.state, original)
         try await reopened.close()
+
+        let retried = try await HistoryEngine.open(at: store, scope: scope, workingIdentity: workingID,
+                                                  mode: .existing, host: HistoryRegisteredHost(registration))
+        let repeatedResult = await retried.submit(failedCommand)
+        XCTAssertEqual(repeatedResult, .failure(failure))
+        let countAfterRetry = await newHandler.applicationCount
+        XCTAssertEqual(countAfterRetry, countBeforeRefusal)
+        try await retried.close()
     }
 
     func testMainActorReopenReadsOldHostVersionsAndRefusesUnknown() async throws {
@@ -368,7 +406,7 @@ private actor TypedCounter: HistoryOperationHandler {
         let codec = HistoryCodec<DomainBox>(identifier: "domain.integer.v1", encode: {
             Data(String($0.value).utf8)
         }, decode: { data in
-            guard let value = Int(String(decoding: data, as: UTF8.self)) else {
+            guard let value = Int(String(bytes: data, encoding: .utf8) ?? "") else {
                 throw CocoaError(.coderReadCorrupt)
             }
             return DomainBox(value)
@@ -400,7 +438,7 @@ private actor TypedCounter: HistoryOperationHandler {
         defer { try? FileManager.default.removeItem(at: directory) }
         let codec = HistoryCodec<DomainBox>(identifier: "domain.integer.v1", encode: {
             Data(String($0.value).utf8)
-        }, decode: { DomainBox(Int(String(decoding: $0, as: UTF8.self)) ?? 0) })
+        }, decode: { DomainBox(Int(String(bytes: $0, encoding: .utf8) ?? "") ?? 0) })
         let handler = MainActorTypedCounter()
         let identity = HistorySchemaIdentity(operation: "counter", commandCodec: codec.identifier,
                                              effectCodec: codec.identifier, stateCodec: codec.identifier)
@@ -422,7 +460,7 @@ private actor TypedCounter: HistoryOperationHandler {
         defer { try? FileManager.default.removeItem(at: directory) }
         let codec = HistoryCodec<DomainBox>(identifier: "domain.integer.v1", encode: {
             Data(String($0.value).utf8)
-        }, decode: { DomainBox(Int(String(decoding: $0, as: UTF8.self)) ?? 0) })
+        }, decode: { DomainBox(Int(String(bytes: $0, encoding: .utf8) ?? "") ?? 0) })
         let handler = TypedCounter()
         let identity = HistorySchemaIdentity(operation: "counter", commandCodec: codec.identifier,
                                              effectCodec: codec.identifier, stateCodec: codec.identifier)

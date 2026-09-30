@@ -86,11 +86,13 @@ carry the Folio Project's MIT SPDX notices.
 
 ## Scope of this implementation
 
-The initial public host adapter is main-actor isolated and opens one scope per
-physical store. It supports bounded groups and full checkpoint payloads. Retention
-holds, pruning, recording controls, explicit reset, resource cleanup, other actor
-adapters and large paged reconstruction remain follow-up work. The current format
-is the first concrete pre-alpha format; no legacy storage migration is required.
+The public typed host adapters support main-actor and actor-owned models, with
+host-registered codecs for current writes and earlier payload versions. The
+engine opens one scope per physical store. It supports bounded groups and full
+checkpoint payloads. Retention holds, pruning, recording controls, explicit
+reset, resource cleanup and large paged reconstruction remain follow-up work.
+The current format is the first concrete pre-alpha format; no legacy storage
+migration is required.
 
 Run the independent tests with `swift test --package-path UndoKit`, or use the
 signed Xcode UndoKit scheme. Work integration tests use Core; native document

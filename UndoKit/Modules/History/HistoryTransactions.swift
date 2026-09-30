@@ -179,10 +179,7 @@ extension HistoryEngine {
                     suspend()
                     return .failure(failure)
                 }
-                transaction.setValue("rejectionPending", forKey: "stage")
-                try context.save()
-                _ = try finalizeRejected(transaction)
-                return .failure(failure)
+                return try closeUsableFailure(failure, transaction: transaction)
             case .rejected:
                 transaction.setValue("rejectionPending", forKey: "stage")
                 try context.save()
@@ -212,6 +209,23 @@ extension HistoryEngine {
             return .failure(HistoryFailure(.storage, stage: .finalization,
                                            disposition: .suspended, underlyingDescription: String(describing: error)))
         }
+    }
+
+    private func closeUsableFailure(_ failure: HistoryFailure,
+                                    transaction: NSManagedObject) throws -> HistoryResult {
+        // A usable failure proves no effect, but does not authoritatively
+        // reject the target's semantic Undo/Redo eligibility.
+        let recorded = HistoryFailure(
+            failure.cause, stage: failure.stage, disposition: .usable,
+            underlyingDescription: failure.underlyingDescription.map { String($0.prefix(1_024)) }
+        )
+        transaction.setValue(recorded.cause.rawValue, forKey: "failureCause")
+        transaction.setValue(recorded.stage.rawValue, forKey: "failureStage")
+        transaction.setValue(recorded.underlyingDescription, forKey: "failureDescription")
+        transaction.setValue("cancelled", forKey: "stage")
+        try context.save()
+        updateSnapshot()
+        return .failure(recorded)
     }
 
     func finalizeAccepted(_ transaction: NSManagedObject) throws -> HistoryResult {

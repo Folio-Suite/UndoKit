@@ -18,6 +18,9 @@
         <attribute name="generationID" attributeType="String"/>
         <attribute name="sequence" attributeType="Integer 64" usesScalarValueType="YES"/>
         <attribute name="stage" attributeType="String"/>
+        <attribute name="failureCause" optional="YES" attributeType="String"/>
+        <attribute name="failureStage" optional="YES" attributeType="String"/>
+        <attribute name="failureDescription" optional="YES" attributeType="String"/>
         <attribute name="kind" attributeType="String"/>
         <attribute name="groupID" attributeType="String"/>
         <attribute name="targetGroupID" optional="YES" attributeType="String"/>

@@ -73,6 +73,36 @@ public struct HistoryOperationRegistration<Handler: HistoryTypedOperationHandler
         guard version < currentVersion else { return nil }
         return old[version]
     }
+
+    func decodeCommands(_ members: [HistoryMember]) throws -> [(UUID, Handler.Command)] {
+        try members.map { member in
+            guard let codec = commandDecoder(for: member.payload.version) else {
+                throw HistoryFailure(.compatibility, stage: .delivery, disposition: .usable)
+            }
+            return (member.id, try decodeEnvelope(member.payload.data, using: codec, stage: .delivery))
+        }
+    }
+
+    func decodeEffects(_ members: [HistoryMember]) throws -> [(UUID, Handler.Effect)] {
+        try members.map { member in
+            guard let codec = effectDecoder(for: member.payload.version) else {
+                throw HistoryFailure(.compatibility, stage: .delivery, disposition: .usable)
+            }
+            return (member.id, try decodeEnvelope(member.payload.data, using: codec, stage: .delivery))
+        }
+    }
+
+    func encodeEffects(_ effects: [HistoryTypedEffect<Handler.Effect>]) throws -> [HistoryEffect] {
+        try effects.map { effect in
+            HistoryEffect(
+                memberID: effect.memberID,
+                undo: HistoryPayload(family: identity.operation, version: identity.effectVersion,
+                                     data: try encodeEnvelope(effect.undo, using: effectCodec)),
+                redo: HistoryPayload(family: identity.operation, version: identity.effectVersion,
+                                     data: try encodeEnvelope(effect.redo, using: effectCodec))
+            )
+        }
+    }
 }
 
 /// Bridges one actor-owned typed operation family to the opaque history engine.

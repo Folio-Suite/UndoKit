@@ -85,20 +85,9 @@ public extension HistoryOperationHandler {
         do {
             switch delivery.kind {
             case .command:
-                let values = try delivery.members.map { member in
-                    guard let codec = registration.commandDecoder(for: member.payload.version) else {
-                        throw HistoryFailure(.compatibility, stage: .delivery, disposition: .usable)
-                    }
-                    return (member.id, try decodeEnvelope(member.payload.data, using: codec, stage: .delivery))
-                }
-                effect = await apply(values, token: delivery.token)
+                effect = await apply(try registration.decodeCommands(delivery.members), token: delivery.token)
             case .undo, .redo:
-                let typedInputs = try delivery.members.map { member in
-                    guard let codec = registration.effectDecoder(for: member.payload.version) else {
-                        throw HistoryFailure(.compatibility, stage: .delivery, disposition: .usable)
-                    }
-                    return (member.id, try decodeEnvelope(member.payload.data, using: codec, stage: .delivery))
-                }
+                let typedInputs = try registration.decodeEffects(delivery.members)
                 effect = delivery.kind == .undo
                     ? await undo(typedInputs, token: delivery.token)
                     : await redo(typedInputs, token: delivery.token)
@@ -114,17 +103,7 @@ public extension HistoryOperationHandler {
             guard effects.count == delivery.members.count,
                   effects.map(\.memberID) == delivery.members.map(\.id) else { return .unresolved }
             do {
-                return .accepted(try effects.map { item in
-                    HistoryEffect(
-                        memberID: item.memberID,
-                        undo: HistoryPayload(family: registration.identity.operation,
-                                             version: registration.identity.effectVersion,
-                                             data: try encodeEnvelope(item.undo, using: registration.effectCodec)),
-                        redo: HistoryPayload(family: registration.identity.operation,
-                                             version: registration.identity.effectVersion,
-                                             data: try encodeEnvelope(item.redo, using: registration.effectCodec))
-                    )
-                })
+                return .accepted(try registration.encodeEffects(effects))
             } catch {
                 // The host already returned an accepted effect, but UndoKit cannot
                 // persist its required evidence. Reconciliation must remain unresolved.
@@ -142,17 +121,7 @@ public extension HistoryOperationHandler {
             case .rejected: return .rejected
             case .unresolved: return .unresolved
             case .accepted(let effects):
-                return .accepted(try effects.map { effect in
-                    HistoryEffect(
-                        memberID: effect.memberID,
-                        undo: HistoryPayload(family: registration.identity.operation,
-                                             version: registration.identity.effectVersion,
-                                             data: try encodeEnvelope(effect.undo, using: registration.effectCodec)),
-                        redo: HistoryPayload(family: registration.identity.operation,
-                                             version: registration.identity.effectVersion,
-                                             data: try encodeEnvelope(effect.redo, using: registration.effectCodec))
-                    )
-                })
+                return .accepted(try registration.encodeEffects(effects))
             }
         } catch { return .unresolved }
     }

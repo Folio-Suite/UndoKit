@@ -13,11 +13,17 @@ public enum HistoryStoreAccess: Sendable { case readWrite, readOnly }
 
 /// Measured on-disk history bytes and configured headroom for future writes.
 public struct HistoryStoreFootprint: Equatable, Sendable {
+    /// Current size of the main SQLite file, excluding its live sidecars.
     public let databaseBytes: Int64
+    /// Current write-ahead log size.
     public let journalBytes: Int64
+    /// Current SQLite shared-memory sidecar size.
     public let sharedMemoryBytes: Int64
+    /// Closed copy size while its host capture callback is active; zero otherwise.
     public let temporaryMaintenanceBytes: Int64
+    /// Conservative write reserve, capped by configured store capacity; not free disk.
     public let estimatedWorkingHeadroomBytes: Int64
+    /// Sum of measured history files and the active maintenance copy.
     public var totalBytes: Int64 {
         databaseBytes + journalBytes + sharedMemoryBytes + temporaryMaintenanceBytes
     }
@@ -26,9 +32,13 @@ public struct HistoryStoreFootprint: Equatable, Sendable {
 /// Read-only structural state for one registered scope. Pending recovery
 /// records remain visible without invoking a host or guessing an outcome.
 public struct HistoryScopeInspection: Equatable, Sendable {
+    /// Registered host scope identity.
     public let scope: UUID
+    /// Current continuity boundary for this scope.
     public let generation: UUID
+    /// Whether scope evidence requires reconciliation before normal history use.
     public let isSuspended: Bool
+    /// Transactions without a finalized accepted, rejected or cancelled outcome.
     public let pendingRecoveryCount: Int
 }
 
@@ -37,9 +47,12 @@ public struct HistoryScopeInspection: Equatable, Sendable {
 /// exclusive owner lock; readers may inspect committed records concurrently.
 @MainActor public final class HistoryStore {
     @TaskLocal static var deliveringStores: Set<ObjectIdentifier> = []
+    /// Canonical registered physical store URL; file coordination remains host-owned.
     public let url: URL
+    /// Identity of the host document or app-owned data associated with this store.
     public let workingIdentity: UUID
     public internal(set) var storeIdentity: UUID
+    /// Session access selected at opening and fixed until closure.
     public let access: HistoryStoreAccess
     let limits: HistoryLimits
     let container: NSPersistentContainer
@@ -73,6 +86,15 @@ public struct HistoryScopeInspection: Equatable, Sendable {
 
     /// Opens a physical store without substituting an empty database for missing history.
     /// Read-only opening neither creates directories nor an owner file.
+    /// - Parameters:
+    ///   - requestedURL: Host-coordinated file location; no fallback store is created.
+    ///   - workingIdentity: Stable identity of the corresponding host data.
+    ///   - mode: Explicit creation, existing open, or adoption of an independent copy.
+    ///   - access: Writable ownership or inspection without command delivery.
+    ///   - limits: Per-store bounds inherited by its scopes.
+    /// - Returns: An open session that the host must explicitly close.
+    /// - Throws: Invalid bounds, identity or owner conflict, missing/corrupt history,
+    ///   unavailable storage or incompatible model. Existing data is not reset.
     public static func open(at requestedURL: URL, workingIdentity: UUID,
                             mode: HistoryOpenMode, access: HistoryStoreAccess = .readWrite,
                             limits: HistoryLimits = HistoryLimits()) async throws -> HistoryStore {
@@ -246,6 +268,14 @@ extension HistoryStore {
     /// Gives the host a coherent closed SQLite copy while admission is stopped
     /// across every scope. The host captures matching domain state and resources
     /// in `capture` before the boundary is released.
+    /// - Parameters:
+    ///   - destination: A new file path; an existing file is never replaced.
+    ///   - capture: Host capture performed while all store admissions remain fenced.
+    /// - Throws: Busy/reentrant/failed store, unresolved evidence, insufficient capacity,
+    ///   cancellation while draining, copy failure, or the host callback's error.
+    /// A failed callback leaves the completed copy at the destination for the host
+    /// to manage. Cancellation after capture starts is cooperatively host-owned.
+    /// The admission fence is released on every exit; source history stays intact.
     public func withCoordinatedCopy(
         to destination: URL,
         capture: @MainActor (URL) async throws -> Void

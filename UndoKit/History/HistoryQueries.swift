@@ -1,0 +1,155 @@
+// SPDX-FileCopyrightText: 2026 the Folio Project
+// SPDX-License-Identifier: MIT
+
+import CoreData
+import Darwin
+import Foundation
+
+extension HistoryEngine {
+    /// Records host-confirmed coherent state. The host secures its required resources first.
+    /// Checkpoint creation is synchronous and requires an idle, usable scope.
+    public func createCheckpoint(id: UUID = UUID(), name: String?, state: HistoryPayload) throws -> HistoryCheckpointInfo {
+        guard !draining, !closed, !snapshot.isSuspended else {
+            throw HistoryFailure(.busy, stage: .admission, disposition: .usable)
+        }
+        guard valid(state), (name?.utf8.count ?? 0) <= 4096, hasCapacity(bytes: state.data.count) else {
+            throw HistoryFailure(.capacity, stage: .admission, disposition: .usable)
+        }
+        guard try fetchOne("HistoryCheckpointRecord", key: id.uuidString) == nil else {
+            throw HistoryFailure(.identityConflict, stage: .admission, disposition: .usable)
+        }
+        let scopeRow = try scopeRecord()
+        let date = Date()
+        let sequence = scopeRow.int64("nextSequence")
+        let row = insert("HistoryCheckpointRecord")
+        row.setValue(id.uuidString, forKey: "key")
+        row.setValue(scope.uuidString, forKey: "scopeKey")
+        row.setValue(name, forKey: "name")
+        row.setValue(sequence, forKey: "sequence")
+        row.setValue(date, forKey: "recordedAt")
+        row.setValue(state.family, forKey: "family")
+        row.setValue(Int64(state.version), forKey: "version")
+        row.setValue(state.data, forKey: "state")
+        row.setValue(digest(state), forKey: "stateDigest")
+        scopeRow.setValue(sequence + 1, forKey: "nextSequence")
+        do { try context.save() }
+        catch { context.rollback(); throw HistoryFailure(.storage, stage: .preparation, disposition: .usable) }
+        return HistoryCheckpointInfo(id: id, name: name, sequence: sequence, recordedAt: date)
+    }
+
+    public func checkpoint(id: UUID) throws -> HistoryCheckpoint? {
+        guard !closed else { throw HistoryFailure(.busy, stage: .admission, disposition: .usable) }
+        guard let row = try fetchOne("HistoryCheckpointRecord", key: id.uuidString),
+              row.string("scopeKey") == scope.uuidString else { return nil }
+        let state = HistoryPayload(family: row.string("family") ?? "",
+                                   version: Int(row.int64("version")), data: row.data("state"))
+        guard row.data("stateDigest") == digest(state) else {
+            throw HistoryFailure(.storage, stage: .reconciliation, disposition: .suspended)
+        }
+        return HistoryCheckpoint(info: try checkpointInfo(row), state: state)
+    }
+
+    /// Returns only metadata; state bytes require a separate checkpoint lookup.
+    /// The page size cannot exceed the configured maximum.
+    public func checkpoints(after sequence: Int64? = nil, limit: Int) throws -> [HistoryCheckpointInfo] {
+        guard !closed else { throw HistoryFailure(.busy, stage: .admission, disposition: .usable) }
+        guard limit > 0, limit <= limits.maxReadPage else {
+            throw HistoryFailure(.capacity, stage: .admission, disposition: .usable)
+        }
+        let request = NSFetchRequest<NSManagedObject>(entityName: "HistoryCheckpointRecord")
+        request.predicate = NSPredicate(format: "scopeKey == %@ AND sequence > %@",
+                                        scope.uuidString, NSNumber(value: sequence ?? 0))
+        request.sortDescriptors = [NSSortDescriptor(key: "sequence", ascending: true)]
+        request.fetchLimit = limit
+        return try context.fetch(request).map(checkpointInfo)
+    }
+
+    /// Returns committed structural history in bounded pages without decoding host payloads.
+    public func historyPage(after sequence: Int64? = nil, limit: Int) throws -> [HistoryEntry] {
+        guard !closed else { throw HistoryFailure(.busy, stage: .admission, disposition: .usable) }
+        guard limit > 0, limit <= limits.maxReadPage else {
+            throw HistoryFailure(.capacity, stage: .admission, disposition: .usable)
+        }
+        let request = NSFetchRequest<NSManagedObject>(entityName: "HistoryGroupRecord")
+        request.predicate = NSPredicate(format: "scopeKey == %@ AND sequence > %@",
+                                        scope.uuidString, NSNumber(value: sequence ?? 0))
+        request.sortDescriptors = [NSSortDescriptor(key: "sequence", ascending: true)]
+        request.fetchLimit = limit
+        return try context.fetch(request).map { row in
+            HistoryEntry(groupID: try row.uuid("key"), sequence: row.int64("sequence"),
+                         kind: HistoryEntryKind(rawValue: row.string("kind") ?? "") ?? .command,
+                         sourceGroupID: row.string("sourceGroupID").flatMap(UUID.init(uuidString:)),
+                         compensationGroupID: row.string("compensationGroupID").flatMap(UUID.init(uuidString:)),
+                         restorationOrigin: row.string("restorationOrigin").flatMap(UUID.init(uuidString:)),
+                         memberCount: Int(row.int64("memberCount")),
+                         recordedAt: row.value(forKey: "recordedAt") as? Date ?? .distantPast)
+        }
+    }
+
+    /// Copies one idle and reconciled history store to a separate closed SQLite file.
+    /// The host captures matching domain state and resources and registers the copy independently.
+    public func copyStore(to destination: URL) throws {
+        guard !draining, queue.isEmpty, !closed, !snapshot.isSuspended else {
+            throw HistoryFailure(.busy, stage: .admission, disposition: .usable)
+        }
+        guard !FileManager.default.fileExists(atPath: destination.path) else {
+            throw HistoryFailure(.identityConflict, stage: .admission, disposition: .usable)
+        }
+        try context.save()
+        let coordinator = container.persistentStoreCoordinator
+        let options: [AnyHashable: Any] = [NSSQLitePragmasOption: ["journal_mode": "DELETE"]]
+        try coordinator.replacePersistentStore(at: destination, destinationOptions: options,
+                                               withPersistentStoreFrom: url, sourceOptions: nil,
+                                               ofType: NSSQLiteStoreType)
+        // Consolidate copied journal state through Core Data before returning a closed snapshot.
+        let snapshotCoordinator = NSPersistentStoreCoordinator(managedObjectModel: container.managedObjectModel)
+        let snapshotStore = try snapshotCoordinator.addPersistentStore(ofType: NSSQLiteStoreType,
+            configurationName: nil, at: destination, options: options)
+        try snapshotCoordinator.remove(snapshotStore)
+        guard !FileManager.default.fileExists(atPath: destination.path + "-wal") else {
+            throw HistoryFailure(.storage, stage: .finalization, disposition: .usable)
+        }
+        // A copied shared-memory index has no persistent content after DELETE-mode consolidation.
+        let sharedMemory = URL(fileURLWithPath: destination.path + "-shm")
+        if FileManager.default.fileExists(atPath: sharedMemory.path) {
+            try FileManager.default.removeItem(at: sharedMemory)
+        }
+    }
+
+    /// Stops admission and releases writable ownership after active delivery reaches a safe boundary.
+    /// Requests still queued return an admission failure without reaching the host.
+    public func close() async throws {
+        guard !closed else { return }
+        guard !reconciling else {
+            throw HistoryFailure(.busy, stage: .reconciliation, disposition: .suspended)
+        }
+        closing = true
+        let unexecuted = queue
+        queue.removeAll()
+        for waiting in unexecuted {
+            waiting.continuation.resume(returning: .failure(
+                HistoryFailure(.busy, stage: .admission, disposition: .usable)
+            ))
+        }
+        if draining {
+            await withCheckedContinuation { continuation in closeWaiters.append(continuation) }
+        }
+        do {
+            try context.save()
+            let coordinator = container.persistentStoreCoordinator
+            for store in coordinator.persistentStores { try coordinator.remove(store) }
+        } catch {
+            // Keep ownership and admission closed for retry. Do not write new state
+            // through a coordinator whose store removal may have partly completed.
+            publishSnapshot(canUndo: false, canRedo: false, isSuspended: true,
+                            hasPending: false, generation: snapshot.generation)
+            throw HistoryFailure(.storage, stage: .finalization, disposition: .suspended,
+                                 underlyingDescription: String(describing: error))
+        }
+        flock(lockDescriptor, LOCK_UN)
+        Darwin.close(lockDescriptor)
+        lockDescriptor = -1
+        closed = true
+        updateSnapshot()
+    }
+}

@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!-- SPDX-FileCopyrightText: 2026 the Folio Project -->
+<!-- SPDX-License-Identifier: MIT -->
+<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="27100" systemVersion="27.0" minimumToolsVersion="Automatic" sourceLanguage="Swift" userDefinedModelVersionIdentifier="HistoryV1">
+    <entity name="HistoryScopeRecord" representedClassName="NSManagedObject" syncable="YES">
+        <attribute name="key" attributeType="String"/>
+        <attribute name="workingID" attributeType="String"/>
+        <attribute name="generationID" attributeType="String"/>
+        <attribute name="nextSequence" attributeType="Integer 64" defaultValueString="1" usesScalarValueType="YES"/>
+        <attribute name="suspended" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <uniquenessConstraints><uniquenessConstraint><constraint value="key"/></uniquenessConstraint></uniquenessConstraints>
+    </entity>
+    <entity name="HistoryTransactionRecord" representedClassName="NSManagedObject" syncable="YES">
+        <attribute name="key" attributeType="String"/>
+        <attribute name="scopeKey" attributeType="String"/>
+        <attribute name="commandID" attributeType="String"/>
+        <attribute name="fingerprint" attributeType="Binary"/>
+        <attribute name="generationID" attributeType="String"/>
+        <attribute name="sequence" attributeType="Integer 64" usesScalarValueType="YES"/>
+        <attribute name="stage" attributeType="String"/>
+        <attribute name="kind" attributeType="String"/>
+        <attribute name="groupID" attributeType="String"/>
+        <attribute name="targetGroupID" optional="YES" attributeType="String"/>
+        <attribute name="restorationOrigin" optional="YES" attributeType="String"/>
+        <attribute name="memberCount" attributeType="Integer 64" usesScalarValueType="YES"/>
+        <attribute name="recordedAt" attributeType="Date"/>
+        <relationship name="members" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="HistoryMemberRecord" inverseName="transaction" inverseEntity="HistoryMemberRecord"/>
+        <uniquenessConstraints><uniquenessConstraint><constraint value="key"/></uniquenessConstraint></uniquenessConstraints>
+    </entity>
+    <entity name="HistoryMemberRecord" representedClassName="NSManagedObject" syncable="YES">
+        <attribute name="key" attributeType="String"/>
+        <attribute name="ordinal" attributeType="Integer 64" usesScalarValueType="YES"/>
+        <attribute name="memberID" attributeType="String"/>
+        <attribute name="family" attributeType="String"/>
+        <attribute name="version" attributeType="Integer 64" usesScalarValueType="YES"/>
+        <attribute name="payload" attributeType="Binary"/>
+        <attribute name="payloadDigest" attributeType="Binary"/>
+        <attribute name="undoFamily" optional="YES" attributeType="String"/>
+        <attribute name="undoVersion" optional="YES" attributeType="Integer 64" usesScalarValueType="YES"/>
+        <attribute name="undoPayload" optional="YES" attributeType="Binary"/>
+        <attribute name="undoDigest" optional="YES" attributeType="Binary"/>
+        <attribute name="redoFamily" optional="YES" attributeType="String"/>
+        <attribute name="redoVersion" optional="YES" attributeType="Integer 64" usesScalarValueType="YES"/>
+        <attribute name="redoPayload" optional="YES" attributeType="Binary"/>
+        <attribute name="redoDigest" optional="YES" attributeType="Binary"/>
+        <relationship name="transaction" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="HistoryTransactionRecord" inverseName="members" inverseEntity="HistoryTransactionRecord"/>
+        <uniquenessConstraints><uniquenessConstraint><constraint value="key"/></uniquenessConstraint></uniquenessConstraints>
+    </entity>
+    <entity name="HistoryGroupRecord" representedClassName="NSManagedObject" syncable="YES">
+        <attribute name="key" attributeType="String"/>
+        <attribute name="scopeKey" attributeType="String"/>
+        <attribute name="sequence" attributeType="Integer 64" usesScalarValueType="YES"/>
+        <attribute name="kind" attributeType="String"/>
+        <attribute name="state" attributeType="String"/>
+        <attribute name="sourceGroupID" optional="YES" attributeType="String"/>
+        <attribute name="compensationGroupID" optional="YES" attributeType="String"/>
+        <attribute name="restorationOrigin" optional="YES" attributeType="String"/>
+        <attribute name="memberCount" attributeType="Integer 64" usesScalarValueType="YES"/>
+        <attribute name="recordedAt" attributeType="Date"/>
+        <relationship name="actions" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="HistoryActionRecord" inverseName="group" inverseEntity="HistoryActionRecord"/>
+        <uniquenessConstraints><uniquenessConstraint><constraint value="key"/></uniquenessConstraint></uniquenessConstraints>
+    </entity>
+    <entity name="HistoryActionRecord" representedClassName="NSManagedObject" syncable="YES">
+        <attribute name="key" attributeType="String"/>
+        <attribute name="transactionKey" attributeType="String"/>
+        <attribute name="memberID" attributeType="String"/>
+        <attribute name="ordinal" attributeType="Integer 64" usesScalarValueType="YES"/>
+        <attribute name="kind" attributeType="String"/>
+        <attribute name="undoFamily" attributeType="String"/>
+        <attribute name="undoVersion" attributeType="Integer 64" usesScalarValueType="YES"/>
+        <attribute name="undoPayload" attributeType="Binary"/>
+        <attribute name="undoDigest" attributeType="Binary"/>
+        <attribute name="redoFamily" attributeType="String"/>
+        <attribute name="redoVersion" attributeType="Integer 64" usesScalarValueType="YES"/>
+        <attribute name="redoPayload" attributeType="Binary"/>
+        <attribute name="redoDigest" attributeType="Binary"/>
+        <relationship name="group" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="HistoryGroupRecord" inverseName="actions" inverseEntity="HistoryGroupRecord"/>
+        <uniquenessConstraints><uniquenessConstraint><constraint value="key"/></uniquenessConstraint></uniquenessConstraints>
+    </entity>
+    <entity name="HistoryCheckpointRecord" representedClassName="NSManagedObject" syncable="YES">
+        <attribute name="key" attributeType="String"/>
+        <attribute name="scopeKey" attributeType="String"/>
+        <attribute name="name" optional="YES" attributeType="String"/>
+        <attribute name="sequence" attributeType="Integer 64" usesScalarValueType="YES"/>
+        <attribute name="recordedAt" attributeType="Date"/>
+        <attribute name="family" attributeType="String"/>
+        <attribute name="version" attributeType="Integer 64" usesScalarValueType="YES"/>
+        <attribute name="state" attributeType="Binary"/>
+        <attribute name="stateDigest" attributeType="Binary"/>
+        <uniquenessConstraints><uniquenessConstraint><constraint value="key"/></uniquenessConstraint></uniquenessConstraints>
+    </entity>
+</model>

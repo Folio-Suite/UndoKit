@@ -13,11 +13,16 @@ MIT license, domain vocabulary, research, and unresolved design decisions were
 imported from the original repository; see [provenance](UPSTREAM.md) and the
 [design index](docs/imported-design/README.md).
 
-The framework remains a Swift scaffold. The template tests
-do not establish durable-history behavior. The accepted
-[durable-acceptance contract](docs/durable-acceptance-contract.md) now defines
-the host/framework transaction and recovery boundary; its public API, storage
-model and durable runtime remain future work. Disposable proofs are listed below.
+The framework now implements the first bounded durable-history operation from
+[#53](https://github.com/Folio-Suite/Folio/issues/53): accepted command groups,
+reopenable Undo/Redo, checkpoint snapshots and restoration provenance. Core Data
+stores protocol structure; host payloads remain opaque. The host owns atomic
+semantic effects and durable outcome receipts. See the public DocC catalog and
+[Work adapter description](../docs/architecture/work-history-first-operation.md).
+
+Implementation sources are separated into `UndoKit/History/` and
+`UndoKit/NativeRouting/`. Folio's translation layer lives in
+`Core/WriteKit/WorkAdapter/`; UndoKit imports no Folio domain framework.
 
 The accepted [history-retention contract](docs/history-retention-contract.md)
 defines restoration, shared Undo/Redo depth, checkpoints, separate state and
@@ -33,7 +38,7 @@ fresh-process decoding; it does not implement the production history engine.
 The accepted [native-routing contract](docs/native-routing-contract.md) defines
 the reusable bridge, pending editing barriers, local text routing, coherent
 availability and host presentation obligations. The #48 harness has native
-observations and documented mechanism gaps; no production bridge is implemented.
+observations and documented mechanism gaps; the first production bridge extends native UndoManager routing.
 
 The accepted [store-lifecycle contract](docs/store-lifecycle-contract.md) defines
 host-registered document stores, an Application Support default for app-owned
@@ -67,7 +72,7 @@ Build the shared `UndoKit` scheme in `UndoKit.xcodeproj`, or use the enclosing
 `Folio` workspace scheme. The Folio adaptation supplies a public Swift module,
 macOS 14 deployment, coordinated Suite release identity, and development
 signing. UndoKit has no dependency on FolioKit or any application domain Kit.
-The accepted next implementation is Swift, serving Folio first and KitchenMemory second while keeping domain-independent interfaces. External Objective-C/XCFramework distribution is deferred until after Folio Suite 1.0. Historical interoperability research remains preserved.
+The implementation is Swift, serving Folio first and an independent bounded host second while keeping domain-independent interfaces. External Objective-C/XCFramework distribution is deferred until after Folio Suite 1.0. Historical interoperability research remains preserved.
 
 `Project.xcconfig` provides standalone version defaults and optionally inherits
 the enclosing Suite's version configuration. The shared scheme can archive the
@@ -76,3 +81,16 @@ settled before publishing a usable external history API.
 
 The original source license and authorship are retained. New integration files
 carry the Folio Project's MIT SPDX notices.
+
+## Scope of this implementation
+
+The initial public host adapter is main-actor isolated and opens one scope per
+physical store. It supports bounded groups and full checkpoint payloads. Retention
+holds, pruning, recording controls, explicit reset, resource cleanup, other actor
+adapters and large paged reconstruction remain follow-up work. The current format
+is the first concrete pre-alpha format; no legacy storage migration is required.
+
+Run the independent tests with `swift test --package-path UndoKit`, or use the
+signed Xcode UndoKit scheme. Work integration tests use Core; native document
+integration tests use Write. Historical prototype results below are separate
+from tests of the implemented engine and do not imply release readiness.

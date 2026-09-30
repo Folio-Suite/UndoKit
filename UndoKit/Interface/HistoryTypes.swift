@@ -3,6 +3,10 @@
 
 import Foundation
 
+enum HistoryHostCallbackContext {
+    @TaskLocal static var activeEngines: Set<ObjectIdentifier> = []
+}
+
 /// An opaque, versioned value supplied and interpreted by a history host.
 public struct HistoryPayload: Equatable, Sendable {
     public let family: String
@@ -103,12 +107,16 @@ public enum HistoryHostOutcome: Equatable, Sendable {
     case accepted([HistoryEffect])
     case rejected
     case unresolved
+    /// A callback may report a known pre-effect failure. Failures after a possible
+    /// semantic effect must remain `unresolved` until authoritative lookup.
+    case failure(HistoryFailure)
 }
 
 /// A host adapter must persist an accepted receipt with its semantic mutation.
-/// Callbacks run on the main actor in this first slice and must not await reentrant
-/// submission to the same scope. Outcome lookup never applies a command again.
-@MainActor public protocol HistoryHost: AnyObject {
+/// Implementations may be isolated to any actor. Only opaque, Sendable history
+/// values cross this boundary; domain values remain on the host's actor.
+/// Outcome lookup never applies a command again.
+public protocol HistoryHost: AnyObject, Sendable {
     /// Applies all members atomically or proves that none took effect.
     func deliver(_ delivery: HistoryDelivery) async -> HistoryHostOutcome
     /// Reads authoritative durable evidence for an already prepared token.

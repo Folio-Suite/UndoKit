@@ -42,7 +42,10 @@ extension HistoryEngine {
     private func reconcileDelivered(_ transaction: NSManagedObject) async -> HistoryResult {
         do {
             let token = try token(for: transaction)
-            let outcome = await host.outcome(for: token)
+            let activeEngines = HistoryHostCallbackContext.activeEngines.union([ObjectIdentifier(self)])
+            let outcome = await HistoryHostCallbackContext.$activeEngines.withValue(activeEngines) {
+                await host.outcome(for: token)
+            }
             return await finish(transactionKey: transaction.string("key") ?? "", outcome: outcome)
         } catch {
             suspend()

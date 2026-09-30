@@ -21,6 +21,10 @@ is required. Swift clients import `UndoKit`.
 - `Interface/HistoryQueries.swift` — checkpoints, bounded history pages, store copying and closing.
 - `Interface/HistoryRecovery.swift` — reconciliation of interrupted or suspended transactions.
 - `Interface/HistoryTypes.swift` — host contract, payloads, results, failures, snapshots and limits.
+- `Interface/HistoryCodecs.swift` — explicit payload codecs and host handler contracts.
+- `Interface/HistoryRegistrations.swift` — typed operation registrations and host families.
+- `Interface/HistoryActorRegistrations.swift` — actor-isolated typed submission and dispatch.
+- `Interface/HistoryMainActorRegistrations.swift` — Cocoa main-actor typed submission and dispatch.
 - `Interface/NativeHistoryRouter.swift` — native UndoManager routing and editing barriers.
 - `Resources/History.xcdatamodeld` — the framework-owned persistence schema.
 
@@ -36,12 +40,25 @@ snapshots, restoration provenance, and retained displaced continuations. A new
 edit after Undo retires ordinary Redo eligibility while retaining its records.
 Undo and Redo create accepted records instead of deleting the original edit.
 
-Implement ``HistoryHost`` on the main actor. Each delivery contains the complete
-ordered group; commit all of its semantic effects and the token's receipt
-atomically. Return ``HistoryHostOutcome/accepted(_:)`` only with authoritative
-per-member evidence. A callback failure or missing receipt is unresolved. Do not
-reenter the same engine from a host callback. The first adapter surface is main
-actor isolated; other actor-owned adapters remain future work.
+An opaque ``HistoryHost`` may be isolated to the main actor or another actor.
+Typed hosts use ``HistoryOperationRegistration`` with stable operation, schema,
+codec, configuration, and version identifiers. Register again from application
+code after opening; runtime closures and actors are never stored in the history.
+``HistoryCodec`` provides explicitly selected JSON, XML property-list, and
+binary property-list conveniences, plus custom codecs. Codec identity and
+configuration are embedded with encoded values, so same-version bytes cannot be
+silently interpreted using changed settings. A custom codec owns the meaning of
+its configuration bytes; built-in Foundation codecs use their documented
+defaults. Supply a host-defined canonical intent fingerprint rather than
+deriving it from an ordinary encoding.
+
+``HistoryOperationHandler`` keeps non-Sendable values on its actor;
+``MainActorHistoryOperationHandler`` supports Cocoa document models. Each
+delivery contains the complete ordered group, and the handler must apply all
+members atomically or prove that none took effect. A mixed-family group needs an
+explicit atomic group executor in ``HistoryHostRegistry``. A callback failure
+after possible effect is unresolved. Reentry into the same engine is rejected
+before it can wait behind the active request.
 
 ``HistoryEngine/submit(_:)`` preserves queue admission order. Applications must
 establish their intended submission order. Completion follows history
@@ -92,8 +109,7 @@ reconciles it. The bridge does not navigate or interpret affected-content data.
 ## Current limits
 
 The first operation is not the complete accepted UndoKit design. Multi-scope
-physical stores, other actor-isolated typed registrations, codec conveniences,
-recording controls, generation reset, retention holds, resource-reference
+physical stores, recording controls, generation reset, retention holds, resource-reference
 maintenance, pruning/consolidation, and large paged reconstruction need follow-up
 implementation. Host payloads remain bounded. The independent tests do not
 establish production behavior at the prototype's 100,000-group scale.
@@ -113,6 +129,12 @@ publication remain deferred. Apps and Kits ship as a coordinated Suite version.
 - ``HistoryResult``
 - ``HistoryFailure``
 - ``HistoryLimits``
+- ``HistoryCodec``
+- ``HistorySchemaIdentity``
+- ``HistoryOperationRegistration``
+- ``HistoryOperationHandler``
+- ``MainActorHistoryOperationHandler``
+- ``HistoryHostRegistry``
 
 ### Native integration
 

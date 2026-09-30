@@ -160,6 +160,9 @@ public enum HistoryOpenMode: Sendable {
     public func redo() async -> HistoryResult { await enqueue(.redo) }
 
     func enqueue(_ request: Request) async -> HistoryResult {
+        guard !HistoryHostCallbackContext.activeEngines.contains(ObjectIdentifier(self)) else {
+            return .failure(HistoryFailure(.busy, stage: .admission, disposition: .usable))
+        }
         if Task.isCancelled {
             return .failure(HistoryFailure(.cancelled, stage: .admission, disposition: .usable))
         }

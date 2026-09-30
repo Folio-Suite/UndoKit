@@ -65,7 +65,7 @@ extension HistoryEngine {
                                      sequence: sequence, command: command.id)
             let delivery = try prepare(command, kind: kind, targetGroup: targetGroup,
                                        token: token, scopeRow: scopeRow)
-            let outcome = await host.deliver(delivery)
+            let outcome = await deliverToHost(delivery)
             return await finish(transactionKey: key, outcome: outcome)
         } catch {
             context.rollback()
@@ -94,6 +94,13 @@ extension HistoryEngine {
             }
             return .failure(HistoryFailure(.storage, stage: .preparation,
                                            disposition: .usable, underlyingDescription: String(describing: error)))
+        }
+    }
+
+    private func deliverToHost(_ delivery: HistoryDelivery) async -> HistoryHostOutcome {
+        let activeEngines = HistoryHostCallbackContext.activeEngines.union([ObjectIdentifier(self)])
+        return await HistoryHostCallbackContext.$activeEngines.withValue(activeEngines) {
+            await host.deliver(delivery)
         }
     }
 
@@ -165,6 +172,17 @@ extension HistoryEngine {
                 try context.save()
                 suspend()
                 return .failure(HistoryFailure(.unresolved, stage: .reconciliation, disposition: .suspended))
+            case .failure(let failure):
+                guard failure.disposition == .usable else {
+                    transaction.setValue("unresolved", forKey: "stage")
+                    try context.save()
+                    suspend()
+                    return .failure(failure)
+                }
+                transaction.setValue("rejectionPending", forKey: "stage")
+                try context.save()
+                _ = try finalizeRejected(transaction)
+                return .failure(failure)
             case .rejected:
                 transaction.setValue("rejectionPending", forKey: "stage")
                 try context.save()

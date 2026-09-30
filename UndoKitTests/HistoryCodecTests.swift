@@ -111,8 +111,10 @@ private actor MixedFamilyReceiptStore {
         let delivery = HistoryDelivery(
             token: HistoryToken(scope: UUID(), generation: UUID(), sequence: 1, command: UUID()),
             kind: .command,
-            members: [HistoryMember(payload: HistoryPayload(family: "first", data: Data([1]))),
-                      HistoryMember(payload: HistoryPayload(family: "second", data: Data([2])))],
+            members: [
+                HistoryMember(payload: HistoryPayload(family: "first", data: Data([1]))),
+                HistoryMember(payload: HistoryPayload(family: "second", data: Data([2]))),
+            ],
             restorationOrigin: nil
         )
 
@@ -141,7 +143,7 @@ private actor MixedFamilyReceiptStore {
                                                  mode: .create, host: firstRegistry)
         let command = HistoryCommand(fingerprint: Data("atomic mixed family".utf8), members: [
             HistoryMember(payload: HistoryPayload(family: "text.replace", data: Data("new".utf8))),
-            HistoryMember(payload: HistoryPayload(family: "unit.move", data: Data("destination".utf8)))
+            HistoryMember(payload: HistoryPayload(family: "unit.move", data: Data("destination".utf8))),
         ])
         guard case .failure(let failure) = await first.submit(command) else {
             XCTFail("Lost mixed-group response did not suspend history")

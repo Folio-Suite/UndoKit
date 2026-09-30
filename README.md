@@ -49,8 +49,10 @@ are advisory; candidate production limits require measurement and review.
 
 These hosts and stores are isolated from the framework target. Their reports
 separate observed behavior, simplified fixtures and unmet requirements. Passing
-prototype tests does not establish production support or close the proof tickets;
-maintainer acceptance and the #51 readiness decision remain outstanding.
+prototype tests does not establish production support. The maintainer accepted
+the bounded proofs in #47–#50 with their documented limitations; those tickets
+are closed. The #51 design-readiness and implementation-handoff decision remains
+outstanding.
 
 | Proof | Evidence |
 | --- | --- |

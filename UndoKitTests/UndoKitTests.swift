@@ -24,6 +24,7 @@ import XCTest
     var rejectNext = false
     var loseReplyAfterSave = false
     var pauseBeforeSave = false
+    var resourcesByValue: [Int: [HistoryObjectReference]] = [:]
     private var deliveryContinuation: CheckedContinuation<Void, Never>?
 
     init(url: URL) throws {
@@ -73,7 +74,8 @@ import XCTest
     private func outcome(_ receipt: Receipt) -> HistoryHostOutcome {
         guard receipt.accepted else { return .rejected }
         return .accepted(zip(receipt.memberIDs, zip(receipt.priorValues, receipt.newValues)).map { id, values in
-            HistoryEffect(memberID: id, undo: payload(values.0), redo: payload(values.1))
+            HistoryEffect(memberID: id, undo: payload(values.0), redo: payload(values.1),
+                          resources: resourcesByValue[values.1] ?? [])
         })
     }
 }

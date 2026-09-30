@@ -1,0 +1,119 @@
+// SPDX-FileCopyrightText: 2026 the Folio Project
+// SPDX-License-Identifier: MIT
+
+import CoreData
+import Foundation
+
+extension HistoryEngine {
+    /// Holds one host-authored coherent checkpoint state until this hold is released.
+    @discardableResult public func holdState(_ checkpointID: UUID, id: UUID = UUID()) throws -> HistoryRetentionHold {
+        try requireIdleRetention()
+        guard try checkpoint(id: checkpointID) != nil else {
+            throw HistoryFailure(.invalidInput, stage: .admission, disposition: .usable)
+        }
+        return try insertHold(id: id, kind: .state(checkpointID: checkpointID))
+    }
+
+    /// Holds accepted groups between two structural endpoints, inclusive.
+    /// Sequence holes from checkpoints and rejected commands are harmless;
+    /// an existing removed-acceptance gap makes the hold impossible.
+    @discardableResult public func holdDetail(from firstGroupID: UUID, through lastGroupID: UUID,
+                                               id: UUID = UUID()) throws -> HistoryRetentionHold {
+        try requireIdleRetention()
+        guard let first = try fetchOne("HistoryGroupRecord", key: firstGroupID.uuidString),
+              let last = try fetchOne("HistoryGroupRecord", key: lastGroupID.uuidString),
+              first.string("scopeKey") == scope.uuidString,
+              last.string("scopeKey") == scope.uuidString,
+              first.int64("sequence") <= last.int64("sequence") else {
+            throw HistoryFailure(.invalidInput, stage: .admission, disposition: .usable)
+        }
+        let lower = first.int64("sequence")
+        let upper = last.int64("sequence")
+        let gaps = try fetch("HistoryGapRecord", predicate: NSPredicate(
+            format: "scopeKey == %@ AND upperInclusiveSequence >= %@ AND lowerExclusiveSequence < %@",
+            scope.uuidString, NSNumber(value: lower), NSNumber(value: upper)))
+        guard gaps.isEmpty else {
+            throw HistoryFailure(.compatibility, stage: .admission, disposition: .usable)
+        }
+        return try insertHold(id: id, kind: .detail(firstSequence: lower, lastSequence: upper))
+    }
+
+    /// Releases only the named hold. Other holds and ordinary Undo protection remain.
+    public func releaseHold(_ id: UUID) throws {
+        try requireIdleRetention()
+        guard let row = try fetchOne("HistoryHoldRecord", key: id.uuidString),
+              row.string("scopeKey") == scope.uuidString else {
+            throw HistoryFailure(.invalidInput, stage: .admission, disposition: .usable)
+        }
+        context.delete(row)
+        try saveRetention()
+    }
+
+    /// Lists durable holds for the current History Generation.
+    public func retentionHolds() throws -> [HistoryRetentionHold] {
+        guard !closed else { throw HistoryFailure(.busy, stage: .admission, disposition: .usable) }
+        let generation = try scopeRecord().uuid("generationID")
+        return try fetch("HistoryHoldRecord", predicate: NSPredicate(
+            format: "scopeKey == %@ AND generationID == %@", scope.uuidString, generation.uuidString))
+            .map { row in
+                let kind: HistoryRetentionHold.Kind
+                if row.string("kind") == "state" {
+                    kind = .state(checkpointID: try row.uuid("checkpointID"))
+                } else {
+                    kind = .detail(firstSequence: row.int64("lowerSequence"),
+                                   lastSequence: row.int64("upperSequence"))
+                }
+                return HistoryRetentionHold(id: try row.uuid("key"), scope: scope,
+                                            generation: generation, kind: kind)
+            }
+    }
+
+    func requireIdleRetention() throws {
+        if store.writeFailed {
+            throw HistoryFailure(.storage, stage: .admission, disposition: .suspended)
+        }
+        guard store.access == .readWrite, !store.closed, !store.closing, !store.maintenance,
+              !closed, !closing, !draining, queue.isEmpty, !reconciling,
+              !snapshot.isSuspended,
+              !HistoryStore.deliveringStores.contains(ObjectIdentifier(store)) else {
+            throw HistoryFailure(.busy, stage: .admission, disposition: .usable)
+        }
+        let pending = try fetch("HistoryTransactionRecord", predicate: NSPredicate(
+            format: "scopeKey == %@ AND stage != %@ AND stage != %@ AND stage != %@",
+            scope.uuidString, "accepted", "rejected", "cancelled"))
+        guard pending.isEmpty else {
+            throw HistoryFailure(.unresolved, stage: .admission, disposition: .suspended)
+        }
+    }
+
+    func saveRetention() throws {
+        do { try saveContext() }
+        catch {
+            context.rollback()
+            throw HistoryFailure(.storage, stage: .finalization, disposition: .suspended,
+                                 underlyingDescription: String(describing: error))
+        }
+    }
+
+    private func insertHold(id: UUID, kind: HistoryRetentionHold.Kind) throws -> HistoryRetentionHold {
+        guard try fetchOne("HistoryHoldRecord", key: id.uuidString) == nil else {
+            throw HistoryFailure(.identityConflict, stage: .admission, disposition: .usable)
+        }
+        let generation = try scopeRecord().uuid("generationID")
+        let row = insert("HistoryHoldRecord")
+        row.setValue(id.uuidString, forKey: "key")
+        row.setValue(scope.uuidString, forKey: "scopeKey")
+        row.setValue(generation.uuidString, forKey: "generationID")
+        switch kind {
+        case .state(let checkpointID):
+            row.setValue("state", forKey: "kind")
+            row.setValue(checkpointID.uuidString, forKey: "checkpointID")
+        case .detail(let first, let last):
+            row.setValue("detail", forKey: "kind")
+            row.setValue(first, forKey: "lowerSequence")
+            row.setValue(last, forKey: "upperSequence")
+        }
+        try saveRetention()
+        return HistoryRetentionHold(id: id, scope: scope, generation: generation, kind: kind)
+    }
+}

@@ -23,6 +23,8 @@ extension HistoryEngine {
                 guard let target = try eligibleGroup(for: .redo) else { return .rejected }
                 return await executeInverse(target: target, kind: .redo)
             }
+        } catch let failure as HistoryFailure where failure.cause == .identityConflict {
+            return .failure(failure)
         } catch {
             return .failure(HistoryFailure(.storage, stage: .admission, disposition: .usable))
         }
@@ -58,6 +60,9 @@ extension HistoryEngine {
                 }
                 return await reconcile(prior)
             }
+            if let receipt = try retiredCommandReceipt(key: key, fingerprint: command.fingerprint) {
+                return .accepted(receipt)
+            }
             if let failure = admissionFailure(for: command) {
                 return .failure(failure)
             }
@@ -73,6 +78,8 @@ extension HistoryEngine {
                 await deliverToHost(delivery)
             }
             return await finish(transactionKey: key, outcome: outcome)
+        } catch let failure as HistoryFailure where failure.cause == .identityConflict {
+            return .failure(failure)
         } catch {
             context.rollback()
             let durableStage = (try? fetchOne("HistoryTransactionRecord", key: key))?.string("stage")
@@ -203,7 +210,7 @@ extension HistoryEngine {
                 guard effects.count == members.count,
                       Set(effects.map(\.memberID)).count == members.count,
                       zip(effects, members).allSatisfy({ $0.memberID.uuidString == $1.string("memberID") }),
-                      effects.allSatisfy({ valid($0.undo) && valid($0.redo) }),
+                      effects.allSatisfy({ valid($0.undo) && valid($0.redo) && valid($0.resources) }),
                       effects.reduce(0, { $0 + $1.undo.data.count + $1.redo.data.count })
                         <= limits.maxPayloadBytes * 2 else {
                     suspend()
@@ -212,6 +219,8 @@ extension HistoryEngine {
                 for (effect, member) in zip(effects, members) {
                     put(effect.undo, on: member, prefix: "undo")
                     put(effect.redo, on: member, prefix: "redo")
+                    try addResourceReferences(effect.resources, ownerType: "action",
+                                              ownerKey: member.string("key") ?? "")
                 }
                 transaction.setValue("acceptancePending", forKey: "stage")
                 try saveContext()
@@ -272,7 +281,8 @@ extension HistoryEngine {
             group.setValue(transaction.value(forKey: "presentationPayload"), forKey: "presentationPayload")
             group.setValue(transaction.value(forKey: "presentationDigest"), forKey: "presentationDigest")
         }
-        for member in try transactionMembers(transaction) {
+        let finalizedMembers = try transactionMembers(transaction)
+        for member in finalizedMembers {
             let action = insert("HistoryActionRecord")
             action.setValue(member.string("key"), forKey: "key")
             action.setValue(transaction.string("key"), forKey: "transactionKey")
@@ -283,6 +293,9 @@ extension HistoryEngine {
             put(try payload(on: member, prefix: "redo"), on: action, prefix: "redo")
             action.setValue(group, forKey: "group")
         }
+        // Action payloads are the accepted historical material. The prepared
+        // delivery members are terminal duplicates and no longer aid recovery.
+        for member in finalizedMembers { context.delete(member) }
         switch kind {
         case .command:
             for row in try ordinaryGroups(state: "undone") { row.setValue("branched", forKey: "state") }
@@ -293,6 +306,8 @@ extension HistoryEngine {
             }
         }
         transaction.setValue("accepted", forKey: "stage")
+        transaction.setValue(nil, forKey: "presentationPayload")
+        transaction.setValue(nil, forKey: "presentationDigest")
         let scopeRow = try scopeRecord()
         group.setValue(scopeRow.int64("latestAcceptedSequence"), forKey: "previousAcceptedSequence")
         scopeRow.setValue(transaction.int64("sequence"), forKey: "latestAcceptedSequence")
@@ -310,6 +325,10 @@ extension HistoryEngine {
             target.setValue("invalid", forKey: "state")
         }
         transaction.setValue("rejected", forKey: "stage")
+        for member in try fetch("HistoryMemberRecord", predicate: NSPredicate(
+            format: "transaction == %@", transaction)) { context.delete(member) }
+        transaction.setValue(nil, forKey: "presentationPayload")
+        transaction.setValue(nil, forKey: "presentationDigest")
         try saveContext()
         updateSnapshot()
         return .rejected

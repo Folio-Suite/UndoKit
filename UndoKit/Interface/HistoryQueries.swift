@@ -22,7 +22,8 @@ extension HistoryEngine {
     /// Records host-confirmed coherent state. The host secures its required resources first.
     /// Checkpoint creation is synchronous and requires an idle, usable scope.
     public func createCheckpoint(
-        id: UUID = UUID(), name: String?, state: HistoryPayload
+        id: UUID = UUID(), name: String?, state: HistoryPayload,
+        resources: [HistoryObjectReference] = []
     ) throws -> HistoryCheckpointInfo {
         if store.writeFailed {
             throw HistoryFailure(.storage, stage: .admission, disposition: .suspended)
@@ -31,7 +32,8 @@ extension HistoryEngine {
               !snapshot.isSuspended else {
             throw HistoryFailure(.busy, stage: .admission, disposition: .usable)
         }
-        guard valid(state), (name?.utf8.count ?? 0) <= 4096, hasCapacity(bytes: state.data.count) else {
+        guard valid(state), (name?.utf8.count ?? 0) <= 4096,
+              valid(resources), hasCapacity(bytes: state.data.count) else {
             throw HistoryFailure(.capacity, stage: .admission, disposition: .usable)
         }
         guard try fetch("HistoryCheckpointRecord", predicate: NSPredicate(
@@ -53,6 +55,8 @@ extension HistoryEngine {
         row.setValue(Int64(state.version), forKey: "version")
         row.setValue(state.data, forKey: "state")
         row.setValue(digest(state), forKey: "stateDigest")
+        try addResourceReferences(resources, ownerType: "checkpoint",
+                                  ownerKey: transactionKey(id))
         scopeRow.setValue(sequence + 1, forKey: "nextSequence")
         scopeRow.setValue(scopeRow.int64("committedVersion") + 1, forKey: "committedVersion")
         do {

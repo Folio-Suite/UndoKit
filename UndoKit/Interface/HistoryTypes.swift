@@ -99,11 +99,15 @@ public struct HistoryEffect: Equatable, Sendable {
     public let memberID: UUID
     public let undo: HistoryPayload
     public let redo: HistoryPayload
+    /// Opaque dependencies of this accepted effect, including versions required by recovery.
+    public let resources: [HistoryObjectReference]
 
-    public init(memberID: UUID, undo: HistoryPayload, redo: HistoryPayload) {
+    public init(memberID: UUID, undo: HistoryPayload, redo: HistoryPayload,
+                resources: [HistoryObjectReference] = []) {
         self.memberID = memberID
         self.undo = undo
         self.redo = redo
+        self.resources = resources
     }
 }
 

@@ -118,4 +118,37 @@
         <attribute name="upperInclusiveSequence" attributeType="Integer 64" usesScalarValueType="YES"/>
         <uniquenessConstraints><uniquenessConstraint><constraint value="key"/></uniquenessConstraint></uniquenessConstraints>
     </entity>
+    <entity name="HistoryHoldRecord" representedClassName="NSManagedObject" syncable="YES">
+        <attribute name="key" attributeType="String"/>
+        <attribute name="scopeKey" attributeType="String"/>
+        <attribute name="generationID" attributeType="String"/>
+        <attribute name="kind" attributeType="String"/>
+        <attribute name="checkpointID" optional="YES" attributeType="String"/>
+        <attribute name="lowerSequence" optional="YES" attributeType="Integer 64" usesScalarValueType="YES"/>
+        <attribute name="upperSequence" optional="YES" attributeType="Integer 64" usesScalarValueType="YES"/>
+        <uniquenessConstraints><uniquenessConstraint><constraint value="key"/></uniquenessConstraint></uniquenessConstraints>
+    </entity>
+    <entity name="HistoryResourceRecord" representedClassName="NSManagedObject" syncable="YES">
+        <attribute name="key" attributeType="String"/>
+        <attribute name="storeID" attributeType="String"/>
+        <attribute name="objectKey" attributeType="String"/>
+        <attribute name="versionKey" optional="YES" attributeType="String"/>
+        <attribute name="ownerType" attributeType="String"/>
+        <attribute name="ownerKey" attributeType="String"/>
+        <uniquenessConstraints><uniquenessConstraint><constraint value="key"/></uniquenessConstraint></uniquenessConstraints>
+    </entity>
+    <entity name="HistoryRetiredCommandRecord" representedClassName="NSManagedObject" syncable="YES">
+        <attribute name="key" attributeType="String"/>
+        <attribute name="fingerprint" attributeType="Binary"/>
+        <attribute name="generationID" attributeType="String"/>
+        <attribute name="sequence" attributeType="Integer 64" usesScalarValueType="YES"/>
+        <attribute name="groupID" attributeType="String"/>
+        <attribute name="commandID" attributeType="String"/>
+        <attribute name="scopeKey" attributeType="String"/>
+        <uniquenessConstraints><uniquenessConstraint><constraint value="key"/></uniquenessConstraint></uniquenessConstraints>
+    </entity>
+    <entity name="HistoryCleanupRecord" representedClassName="NSManagedObject" syncable="YES">
+        <attribute name="key" attributeType="String"/>
+        <uniquenessConstraints><uniquenessConstraint><constraint value="key"/></uniquenessConstraint></uniquenessConstraints>
+    </entity>
 </model>

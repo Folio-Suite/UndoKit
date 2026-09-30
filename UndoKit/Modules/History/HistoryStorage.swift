@@ -228,6 +228,7 @@ extension HistoryEngine {
         sort: [NSSortDescriptor] = []
     ) throws -> [NSManagedObject] {
         let request = NSFetchRequest<NSManagedObject>(entityName: name)
+        request.fetchBatchSize = 256
         request.predicate = predicate
         request.sortDescriptors = sort
         return try context.fetch(request)

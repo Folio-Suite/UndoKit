@@ -12,7 +12,7 @@ extension HistoryEngine {
     }
 
     func protectedGroupKeys(groups: [NSManagedObject],
-                                    targetDetailedGroups: Int) throws -> Set<String> {
+                            targetDetailedGroups: Int) throws -> Set<String> {
         var kept = Set(groups.prefix(targetDetailedGroups).compactMap { $0.string("key") })
         // The latest accepted transition is the current structural endpoint
         // even when ordinary eligibility has changed independently.

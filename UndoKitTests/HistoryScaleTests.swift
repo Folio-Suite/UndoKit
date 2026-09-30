@@ -81,7 +81,8 @@ import XCTest
         let retry = await engine.submit(try XCTUnwrap(firstCommand))
         XCTAssertEqual(retry, .accepted(try XCTUnwrap(firstReceipt)))
         XCTAssertEqual(host.deliveries, deliveredBeforeRetry)
-        print("SCALE consolidation removed=\(removed) passes=\(passes) seconds=\(Date().timeIntervalSince(consolidationStart))")
+        let consolidationSeconds = Date().timeIntervalSince(consolidationStart)
+        print("SCALE consolidation removed=\(removed) passes=\(passes) seconds=\(consolidationSeconds)")
         try await engine.close()
     }
 

@@ -18,7 +18,7 @@ extension HistoryEngine {
     /// Sequence holes from checkpoints and rejected commands are harmless;
     /// an existing removed-acceptance gap makes the hold impossible.
     @discardableResult public func holdDetail(from firstGroupID: UUID, through lastGroupID: UUID,
-                                               id: UUID = UUID()) throws -> HistoryRetentionHold {
+                                              id: UUID = UUID()) throws -> HistoryRetentionHold {
         try requireIdleRetention()
         guard let first = try fetchOne("HistoryGroupRecord", key: firstGroupID.uuidString),
               let last = try fetchOne("HistoryGroupRecord", key: lastGroupID.uuidString),
@@ -87,8 +87,7 @@ extension HistoryEngine {
     }
 
     func saveRetention() throws {
-        do { try saveContext() }
-        catch {
+        do { try saveContext() } catch {
             context.rollback()
             throw HistoryFailure(.storage, stage: .finalization, disposition: .suspended,
                                  underlyingDescription: String(describing: error))

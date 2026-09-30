@@ -10,7 +10,7 @@ extension HistoryEngine {
         resources.allSatisfy { reference in
             !reference.objectKey.isEmpty && reference.objectKey.utf8.count <= 512 &&
             !reference.objectKey.contains("\0") &&
-            reference.versionKey != "" &&
+            reference.versionKey?.isEmpty != true &&
             (reference.versionKey?.utf8.count ?? 0) <= 256 &&
             reference.versionKey?.contains("\0") != true
         }

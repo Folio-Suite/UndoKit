@@ -35,7 +35,7 @@ extension HistoryStore {
         request.propertiesToFetch = ["objectKey", "versionKey"]
         request.returnsDistinctResults = true
         request.sortDescriptors = [NSSortDescriptor(key: "objectKey", ascending: true),
-                                   NSSortDescriptor(key: "versionKey", ascending: true)]
+                                   NSSortDescriptor(key: "versionKey", ascending: true),]
         request.fetchLimit = limit + 1
         let rows = try context.fetch(request)
         let pageRows = rows.prefix(limit)
@@ -106,8 +106,7 @@ extension HistoryStore {
         let request = NSFetchRequest<NSManagedObject>(entityName: "HistoryCleanupRecord")
         request.predicate = NSPredicate(format: "key == %@", retentionStore.uuidString)
         for row in try context.fetch(request) { context.delete(row) }
-        do { try context.save() }
-        catch {
+        do { try context.save() } catch {
             context.rollback()
             noteWriteFailure()
             throw HistoryFailure(.storage, stage: .finalization, disposition: .suspended)

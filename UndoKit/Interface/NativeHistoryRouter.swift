@@ -56,7 +56,10 @@ public enum NativeHistoryRoutingState: Equatable, Sendable {
     private var snapshot = HistorySnapshot(canUndo: false, canRedo: false, isSuspended: false, hasPending: false)
     private var undoName = ""
     private var redoName = ""
-    private var requestPending = false
+    /// Capture this identity synchronously when Undo/Redo is requested, and return it
+    /// with the asynchronous completion. A later invocation has a different identity.
+    public private(set) var pendingInvocationID: UUID?
+    private var requestPending: Bool { pendingInvocationID != nil }
     private var registrationCount = 0
     private var registrationObserved = false
     private var hasProvisionalEdit = false
@@ -128,17 +131,24 @@ public enum NativeHistoryRoutingState: Equatable, Sendable {
 
     /// Call after the host's accepted, rejected, or unresolved operation has completed.
     /// Availability stays suspended when the supplied snapshot says recovery is needed.
-    /// A stale identity/version cannot finish the current invocation or lift its barrier.
-    public func finishInvocation(snapshot: HistorySnapshot, undoName: String = "", redoName: String = "") {
-        guard accepts(snapshot) else { return }
-        requestPending = false
+    /// Supply the identity captured when the invocation began. A duplicate completion,
+    /// stale identity, or stale version cannot finish another invocation or lift its barrier.
+    public func finishInvocation(_ invocation: UUID, snapshot: HistorySnapshot,
+                                 undoName: String = "", redoName: String = "") {
+        guard pendingInvocationID == invocation, accepts(snapshot) else { return }
+        pendingInvocationID = nil
         update(snapshot: snapshot, undoName: undoName, redoName: redoName)
     }
 
-    /// Apply the same editing barrier to a host-originated restoration transaction.
-    public func beginExternalOperation() {
-        requestPending = true
+    /// Apply the editing barrier to a host-originated restoration or maintenance operation.
+    /// Returns its completion identity, or nil if a native operation is already pending.
+    /// Capture the returned identity before starting asynchronous work.
+    @discardableResult public func beginExternalOperation() -> UUID? {
+        guard !requestPending else { return nil }
+        let invocation = UUID()
+        pendingInvocationID = invocation
         publishBarrier()
+        return invocation
     }
 
     /// Pause semantic Undo/Redo after an unexplained native registration. The host can
@@ -196,7 +206,7 @@ public enum NativeHistoryRoutingState: Equatable, Sendable {
             ? (snapshot.canUndo || hasProvisionalEdit || queuedEdits > 0)
             : snapshot.canRedo else { return }
         guard settleEditing?() ?? true else { return }
-        requestPending = true
+        pendingInvocationID = UUID()
         publishBarrier()
         if kind == .undo { undoRequested?() } else { redoRequested?() }
     }

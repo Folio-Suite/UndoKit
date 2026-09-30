@@ -6,7 +6,7 @@ import UndoKit
 import XCTest
 
 @MainActor final class NativeHistoryRouterTests: XCTestCase {
-    func testOlderAvailabilityCannotReplaceCurrentProjectionOrFinishInvocation() {
+    func testOlderAvailabilityCannotReplaceCurrentProjectionOrFinishInvocation() throws {
         let router = NativeHistoryRouter()
         let scope = UUID(), generation = UUID()
         let current = HistorySnapshot(canUndo: true, canRedo: false,
@@ -20,10 +20,10 @@ import XCTest
         router.update(snapshot: HistorySnapshot(canUndo: false, canRedo: false,
             isSuspended: false, hasPending: false, scope: scope, generation: generation, version: 4))
         XCTAssertTrue(router.canUndo, "A version cannot describe two different availability states")
-        router.beginExternalOperation()
-        router.finishInvocation(snapshot: stale)
+        let invocation = try XCTUnwrap(router.beginExternalOperation())
+        router.finishInvocation(invocation, snapshot: stale)
         XCTAssertTrue(router.isEditingBlocked)
-        router.finishInvocation(snapshot: current, undoName: "Current")
+        router.finishInvocation(invocation, snapshot: current, undoName: "Current")
         XCTAssertFalse(router.isEditingBlocked)
     }
 
@@ -44,11 +44,11 @@ import XCTest
         try router.attach(snapshot: fresh)
         XCTAssertFalse(router.requiresReattachment)
         XCTAssertFalse(router.canUndo)
-        router.beginExternalOperation()
-        router.finishInvocation(snapshot: old)
+        let invocation = try XCTUnwrap(router.beginExternalOperation())
+        router.finishInvocation(invocation, snapshot: old)
         XCTAssertTrue(router.isEditingBlocked)
         XCTAssertFalse(router.requiresReattachment, "Retired callbacks cannot invalidate the new attachment")
-        router.finishInvocation(snapshot: fresh)
+        router.finishInvocation(invocation, snapshot: fresh)
         XCTAssertFalse(router.isEditingBlocked)
     }
 
@@ -66,16 +66,31 @@ import XCTest
         router.reportUnknownRegistration()
         XCTAssertThrowsError(try router.attach(snapshot: next))
         router.reconcileRegistrations()
-        router.beginExternalOperation()
+        let invocation = try XCTUnwrap(router.beginExternalOperation())
         XCTAssertThrowsError(try router.attach(snapshot: next))
-        router.finishInvocation(snapshot: HistorySnapshot(canUndo: false, canRedo: false,
+        router.finishInvocation(invocation, snapshot: HistorySnapshot(canUndo: false, canRedo: false,
             isSuspended: false, hasPending: false))
         XCTAssertTrue(router.canAttach)
         try router.attach(snapshot: next)
         XCTAssertFalse(router.undoManager.canUndo)
     }
 
-    func testProvisionalUndoRoutesOnceAndWaitsForFinalizedAvailability() {
+    func testDuplicateCompletionCannotFinishAnotherInvocationAtTheSameVersion() throws {
+        let router = NativeHistoryRouter()
+        let snapshot = HistorySnapshot(canUndo: true, canRedo: false,
+            isSuspended: false, hasPending: false, scope: UUID(), generation: UUID(), version: 1)
+        router.update(snapshot: snapshot)
+        let first = try XCTUnwrap(router.beginExternalOperation())
+        XCTAssertNil(router.beginExternalOperation(), "An active native operation cannot be replaced")
+        router.finishInvocation(first, snapshot: snapshot)
+        let second = try XCTUnwrap(router.beginExternalOperation())
+        router.finishInvocation(first, snapshot: snapshot)
+        XCTAssertTrue(router.isEditingBlocked, "A repeated old completion must not finish the new operation")
+        router.finishInvocation(second, snapshot: snapshot)
+        XCTAssertFalse(router.isEditingBlocked)
+    }
+
+    func testProvisionalUndoRoutesOnceAndWaitsForFinalizedAvailability() throws {
         let router = NativeHistoryRouter()
         var settled = 0
         var undoRequests = 0
@@ -97,7 +112,8 @@ import XCTest
 
         router.undoManager.undo()
         XCTAssertEqual(undoRequests, 1, "A second keypress must not queue another native reversal")
-        router.finishInvocation(snapshot: HistorySnapshot(canUndo: true, canRedo: false,
+        let invocation = try XCTUnwrap(router.pendingInvocationID)
+        router.finishInvocation(invocation, snapshot: HistorySnapshot(canUndo: true, canRedo: false,
             isSuspended: false, hasPending: false), undoName: "Edit")
         XCTAssertFalse(router.isEditingBlocked)
         XCTAssertTrue(router.undoManager.canUndo)

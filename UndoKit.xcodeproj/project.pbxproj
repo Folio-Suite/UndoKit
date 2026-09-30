@@ -32,10 +32,9 @@
 		A181938D306767B700D3F601 /* UndoKitTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = UndoKitTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A18193A43067681900D3F601 /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
 		A18193A53067681900D3F601 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+		A1F223FD306C28A400633C65 /* CONTEXT.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = CONTEXT.md; sourceTree = "<group>"; };
+		A1F223FE306C28A400633C65 /* UPSTREAM.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = UPSTREAM.md; sourceTree = "<group>"; };
 /* End PBXFileReference section */
-
-/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		A1819384306767B600D3F601 /* UndoKit */ = {
@@ -71,11 +70,13 @@
 		A1819378306767B600D3F601 = {
 			isa = PBXGroup;
 			children = (
-				A18193A43067681900D3F601 /* LICENSE */,
-				A18193A53067681900D3F601 /* README.md */,
 				A1819384306767B600D3F601 /* UndoKit */,
 				A1819391306767B700D3F601 /* UndoKitTests */,
 				A120CDE9306A0D9F0097A0D5 /* Project.xcconfig */,
+				A1F223FD306C28A400633C65 /* CONTEXT.md */,
+				A1F223FE306C28A400633C65 /* UPSTREAM.md */,
+				A18193A43067681900D3F601 /* LICENSE */,
+				A18193A53067681900D3F601 /* README.md */,
 				A1819383306767B600D3F601 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -262,7 +263,6 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = "$(RECOMMENDED_MACOSX_DEPLOYMENT_TARGET)";
 				MARKETING_VERSION = "$(inherited)";
-				SWIFT_INSTALL_OBJC_HEADER = NO;
 				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
 				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
 				ONLY_ACTIVE_ARCH = NO;
@@ -275,6 +275,7 @@
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_INSTALL_OBJC_HEADER = NO;
 				TARGETED_DEVICE_FAMILY = "1,2,4,6";
 				WATCHOS_DEPLOYMENT_TARGET = "$(RECOMMENDED_WATCHOS_DEPLOYMENT_TARGET)";
 			};
@@ -303,7 +304,6 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = "$(RECOMMENDED_MACOSX_DEPLOYMENT_TARGET)";
 				MARKETING_VERSION = "$(inherited)";
-				SWIFT_INSTALL_OBJC_HEADER = NO;
 				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
 				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
 				ONLY_ACTIVE_ARCH = NO;
@@ -316,6 +316,7 @@
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_INSTALL_OBJC_HEADER = NO;
 				TARGETED_DEVICE_FAMILY = "1,2,4,6";
 				WATCHOS_DEPLOYMENT_TARGET = "$(RECOMMENDED_WATCHOS_DEPLOYMENT_TARGET)";
 			};

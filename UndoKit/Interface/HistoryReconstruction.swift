@@ -51,7 +51,6 @@ public struct HistoryRecoveryPlan: Equatable, Sendable {
     let baselineAcceptedSequence: Int64
     let targetAcceptedSequence: Int64
 
-
 }
 
 /// A lightweight reference to a complete accepted transition. Read each member's

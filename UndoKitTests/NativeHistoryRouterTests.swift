@@ -6,6 +6,72 @@ import UndoKit
 import XCTest
 
 @MainActor final class NativeHistoryRouterTests: XCTestCase {
+    func testOlderAvailabilityCannotReplaceCurrentProjectionOrFinishInvocation() {
+        let router = NativeHistoryRouter()
+        let scope = UUID(), generation = UUID()
+        let current = HistorySnapshot(canUndo: true, canRedo: false,
+            isSuspended: false, hasPending: false, scope: scope, generation: generation, version: 4)
+        let stale = HistorySnapshot(canUndo: false, canRedo: false,
+            isSuspended: false, hasPending: false, scope: scope, generation: generation, version: 3)
+        router.update(snapshot: current, undoName: "Current")
+        router.update(snapshot: stale)
+        XCTAssertTrue(router.canUndo)
+        XCTAssertEqual(router.undoActionName, "Current")
+        router.beginExternalOperation()
+        router.finishInvocation(snapshot: stale)
+        XCTAssertTrue(router.isEditingBlocked)
+        router.finishInvocation(snapshot: current, undoName: "Current")
+        XCTAssertFalse(router.isEditingBlocked)
+    }
+
+    func testGenerationChangeRequiresExplicitAttachmentAndRejectsLateCompletion() throws {
+        let router = NativeHistoryRouter()
+        let scope = UUID()
+        let old = HistorySnapshot(canUndo: true, canRedo: false,
+            isSuspended: false, hasPending: false, scope: scope, generation: UUID(), version: 4)
+        let fresh = HistorySnapshot(canUndo: false, canRedo: false,
+            isSuspended: false, hasPending: false, scope: scope, generation: UUID(), version: 5)
+        var states: [NativeHistoryRoutingState] = []
+        router.routingStateChanged = { states.append($0) }
+        try router.attach(snapshot: old)
+        router.update(snapshot: fresh)
+        XCTAssertTrue(router.requiresReattachment)
+        XCTAssertFalse(router.canUndo)
+        XCTAssertEqual(states.last, .reattachmentRequired)
+        try router.attach(snapshot: fresh)
+        XCTAssertFalse(router.requiresReattachment)
+        XCTAssertFalse(router.canUndo)
+        router.beginExternalOperation()
+        router.finishInvocation(snapshot: old)
+        XCTAssertTrue(router.isEditingBlocked)
+        XCTAssertFalse(router.requiresReattachment, "Retired callbacks cannot invalidate the new attachment")
+        router.finishInvocation(snapshot: fresh)
+        XCTAssertFalse(router.isEditingBlocked)
+    }
+
+    func testAttachmentRefusesProvisionalQueuedAndUnexplainedNativeWork() throws {
+        let router = NativeHistoryRouter()
+        let next = HistorySnapshot(canUndo: false, canRedo: false,
+            isSuspended: false, hasPending: false, scope: UUID(), generation: UUID(), version: 1)
+        router.noteProvisionalEdit()
+        XCTAssertFalse(router.canAttach)
+        XCTAssertThrowsError(try router.attach(snapshot: next))
+        XCTAssertTrue(router.canUndo, "Refusal must preserve the provisional edit")
+        router.didQueueProvisionalEdit()
+        XCTAssertThrowsError(try router.attach(snapshot: next))
+        router.didFinishQueuedEdit()
+        router.reportUnknownRegistration()
+        XCTAssertThrowsError(try router.attach(snapshot: next))
+        router.reconcileRegistrations()
+        router.beginExternalOperation()
+        XCTAssertThrowsError(try router.attach(snapshot: next))
+        router.finishInvocation(snapshot: HistorySnapshot(canUndo: false, canRedo: false,
+            isSuspended: false, hasPending: false))
+        XCTAssertTrue(router.canAttach)
+        try router.attach(snapshot: next)
+        XCTAssertFalse(router.undoManager.canUndo)
+    }
+
     func testProvisionalUndoRoutesOnceAndWaitsForFinalizedAvailability() {
         let router = NativeHistoryRouter()
         var settled = 0

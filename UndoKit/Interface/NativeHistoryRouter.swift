@@ -3,6 +3,20 @@
 
 import Foundation
 
+/// Why native semantic editing is available or requires host intervention.
+public enum NativeHistoryRoutingState: Equatable, Sendable {
+    /// The attached history can accept native requests, subject to Undo/Redo availability.
+    case ready
+    /// A native semantic request is waiting for its authoritative outcome.
+    case pending
+    /// The host must reconcile an uncertain history outcome.
+    case suspended
+    /// The host must identify an unexplained native registration.
+    case registrationMismatch
+    /// A new scope or generation requires explicit attachment after settling native work.
+    case reattachmentRequired
+}
+
 /// Projects a scope's finalized history into native Undo presentation while preserving a
 /// separate manager for provisional AppKit editing groups. The host settles editing and
 /// performs the asynchronous history operation after a request is routed.
@@ -22,6 +36,22 @@ import Foundation
     /// Apply or lift the host's semantic-editing barrier in every view of this scope.
     public var barrierChanged: ((_ blocked: Bool) -> Void)?
 
+    /// Reports the reason for routing availability. The host supplies user-facing feedback.
+    public var routingStateChanged: ((NativeHistoryRoutingState) -> Void)?
+    /// True after a new identity is observed, until the host explicitly attaches it.
+    public private(set) var requiresReattachment = false
+
+    private struct Identity: Hashable {
+        let scope: UUID
+        let generation: UUID
+
+        init?(_ snapshot: HistorySnapshot) {
+            guard let scope = snapshot.scope, let generation = snapshot.generation else { return nil }
+            self.scope = scope
+            self.generation = generation
+        }
+    }
+    private var retiredIdentities: Set<Identity> = []
     private let manager: RoutedUndoManager
     private var snapshot = HistorySnapshot(canUndo: false, canRedo: false, isSuspended: false, hasPending: false)
     private var undoName = ""
@@ -51,9 +81,45 @@ import Foundation
         NotificationCenter.default.removeObserver(self)
     }
 
+    /// Whether explicit attachment can replace native presentation without losing unsettled work.
+    /// Settle provisional groups and await queued operations before attempting a reset or scope switch.
+    public var canAttach: Bool {
+        !requestPending && !snapshot.hasPending && !hasProvisionalEdit && queuedEdits == 0
+            && !registrationObserved && registrationCount == 0 && manager.groupingLevel == 0
+    }
+
+    /// Attaches a host-confirmed scope/generation after opening or an explicit history reset.
+    /// Clears only settled native registrations; it never applies a domain edit.
+    /// - Throws: An invalid identity, or busy while provisional, queued, mismatched or active work remains.
+    /// The host must disconnect the previous engine's callbacks. Use a new router when reopening
+    /// the same generation with a new engine whose availability version starts over.
+    public func attach(snapshot: HistorySnapshot, undoName: String = "", redoName: String = "") throws {
+        guard let identity = Identity(snapshot) else {
+            throw HistoryFailure(.invalidInput, stage: .admission, disposition: .usable)
+        }
+        guard canAttach else {
+            throw HistoryFailure(.busy, stage: .admission, disposition: .usable)
+        }
+        if let previous = Identity(self.snapshot), previous != identity {
+            retiredIdentities.insert(previous)
+        }
+        retiredIdentities.remove(identity)
+        manager.clearProjection()
+        transientRegistration = false
+        recognizedGroupPendingClose = false
+        requiresReattachment = false
+        self.snapshot = snapshot
+        self.undoName = undoName
+        self.redoName = redoName
+        publishBarrier()
+    }
+
     /// Rebuild menu availability from committed history. This does not invoke native
     /// registrations or mutate a host document, so attachment cannot replay an edit.
+    /// The first identity binds automatically. Later identities require explicit `attach`;
+    /// older versions and callbacks from retired identities are ignored.
     public func update(snapshot: HistorySnapshot, undoName: String = "", redoName: String = "") {
+        guard accepts(snapshot) else { return }
         self.snapshot = snapshot
         self.undoName = undoName
         self.redoName = redoName
@@ -62,7 +128,9 @@ import Foundation
 
     /// Call after the host's accepted, rejected, or unresolved operation has completed.
     /// Availability stays suspended when the supplied snapshot says recovery is needed.
+    /// A stale identity/version cannot finish the current invocation or lift its barrier.
     public func finishInvocation(snapshot: HistorySnapshot, undoName: String = "", redoName: String = "") {
+        guard accepts(snapshot) else { return }
         requestPending = false
         update(snapshot: snapshot, undoName: undoName, redoName: redoName)
     }
@@ -112,7 +180,7 @@ import Foundation
 
     public var hasRegistrationMismatch: Bool { registrationObserved }
     public var isEditingBlocked: Bool {
-        requestPending || snapshot.isSuspended || registrationObserved
+        requestPending || snapshot.isSuspended || registrationObserved || requiresReattachment
     }
     public var canUndo: Bool {
         (snapshot.canUndo || hasProvisionalEdit || queuedEdits > 0) && !isEditingBlocked
@@ -147,12 +215,42 @@ import Foundation
         nativeGroupDidClose?(manager.provisionalActionName, count)
     }
 
-    private func publishBarrier() { barrierChanged?(isEditingBlocked) }
+    /// The current routing condition; ordinary Undo/Redo eligibility is exposed separately.
+    public var routingState: NativeHistoryRoutingState {
+        if requiresReattachment { return .reattachmentRequired }
+        if registrationObserved { return .registrationMismatch }
+        if snapshot.isSuspended { return .suspended }
+        if requestPending { return .pending }
+        return .ready
+    }
+
+    private func accepts(_ candidate: HistorySnapshot) -> Bool {
+        guard let current = Identity(snapshot) else { return true }
+        guard let incoming = Identity(candidate) else { return false }
+        guard incoming == current else {
+            if !retiredIdentities.contains(incoming) {
+                requiresReattachment = true
+                publishBarrier()
+            }
+            return false
+        }
+        return !requiresReattachment && candidate.version >= snapshot.version
+    }
+
+    private func publishBarrier() {
+        barrierChanged?(isEditingBlocked)
+        routingStateChanged?(routingState)
+    }
 
     private final class RoutedUndoManager: UndoManager {
         weak var router: NativeHistoryRouter?
         private var assignedName = ""
         var provisionalActionName: String { assignedName.isEmpty ? super.undoActionName : assignedName }
+
+        func clearProjection() {
+            removeAllActions()
+            assignedName = ""
+        }
 
         override var canUndo: Bool { router?.canUndo ?? false }
         override var canRedo: Bool { router?.canRedo ?? false }

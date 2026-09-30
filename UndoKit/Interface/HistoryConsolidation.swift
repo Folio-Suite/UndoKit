@@ -50,7 +50,12 @@ extension HistoryEngine {
         let remaining = max(0, limits.maxReadPage - selectedGroups.count)
         let selectedCheckpoints = Array(removableCheckpoints.prefix(remaining))
         do {
-            for group in selectedGroups { try retireAcceptedGroup(group) }
+            for group in selectedGroups {
+                if Task.isCancelled {
+                    throw HistoryFailure(.cancelled, stage: .admission, disposition: .usable)
+                }
+                try retireAcceptedGroup(group)
+            }
             for row in selectedCheckpoints {
                 try removeResourceReferences(ownerType: "checkpoint",
                     ownerKey: transactionKey(try row.uuid("key")))

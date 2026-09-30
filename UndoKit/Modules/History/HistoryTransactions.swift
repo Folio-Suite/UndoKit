@@ -211,6 +211,13 @@ extension HistoryEngine {
                       Set(effects.map(\.memberID)).count == members.count,
                       zip(effects, members).allSatisfy({ $0.memberID.uuidString == $1.string("memberID") }),
                       effects.allSatisfy({ valid($0.undo) && valid($0.redo) && valid($0.resources) }),
+                      effects.reduce(0, { $0 + $1.resources.count }) <= 10_000,
+                      effects.reduce(0, { total, effect in
+                          total + effect.resources.reduce(0) { bytes, reference in
+                              bytes + reference.objectKey.utf8.count +
+                                  (reference.versionKey?.utf8.count ?? 0) + 64
+                          }
+                      }) <= limits.maxPayloadBytes,
                       effects.reduce(0, { $0 + $1.undo.data.count + $1.redo.data.count })
                         <= limits.maxPayloadBytes * 2 else {
                     suspend()

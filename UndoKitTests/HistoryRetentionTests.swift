@@ -247,4 +247,37 @@ import XCTest
         XCTAssertEqual(host.value, 3)
         try await engine.close()
     }
+
+    func testCleanupWaitsForOtherScopeToReconcileAcceptedOutcome() async throws {
+        let directory = try testDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("History.sqlite")
+        let identity = UUID(), firstScope = UUID(), secondScope = UUID(), retentionStore = UUID()
+        let store = try await HistoryStore.open(at: url, workingIdentity: identity, mode: .create)
+        let firstHost = try CounterHost(url: directory.appendingPathComponent("first.json"))
+        let secondHost = try CounterHost(url: directory.appendingPathComponent("second.json"))
+        let first = try await store.openScope(firstScope, mode: .create, host: firstHost)
+        let second = try await store.openScope(secondScope, mode: .create, host: secondHost)
+        _ = try await accepted(first, 1)
+        secondHost.loseReplyAfterSave = true
+        guard case .failure = await second.submit(HistoryCommand(
+            fingerprint: Data("set two".utf8), payload: payload(2))) else {
+            return XCTFail("Second scope did not retain unresolved evidence")
+        }
+        var cleaned = false
+        do {
+            try await store.withRequiredObjects(in: retentionStore) { _ in cleaned = true }
+            XCTFail("Cleanup crossed an unresolved scope")
+        } catch let failure as HistoryFailure {
+            XCTAssertEqual(failure.cause, .unresolved)
+        }
+        XCTAssertFalse(cleaned)
+        try await store.close()
+        let reopened = try await HistoryStore.open(at: url, workingIdentity: identity, mode: .existing)
+        let reconciled = try await reopened.openScope(secondScope, mode: .existing, host: secondHost)
+        XCTAssertFalse(reconciled.snapshot.isSuspended)
+        try await reopened.withRequiredObjects(in: retentionStore) { _ in cleaned = true }
+        XCTAssertTrue(cleaned)
+        try await reopened.close()
+    }
 }

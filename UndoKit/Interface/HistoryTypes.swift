@@ -213,16 +213,19 @@ public struct HistoryLimits: Equatable, Sendable {
     public var maxStoreBytes: Int64
     public var maxUndoGroups: Int
     public var maxReadPage: Int
+    public var maxRecoveryPlans: Int
 
     public init(maxPayloadBytes: Int = 8 * 1024 * 1024, maxMembers: Int = 100,
                 maxQueueDepth: Int = 64, maxStoreBytes: Int64 = 2 * 1024 * 1024 * 1024,
-                maxUndoGroups: Int = 1_000, maxReadPage: Int = 100) {
+                maxUndoGroups: Int = 1_000, maxReadPage: Int = 100,
+                maxRecoveryPlans: Int = 32) {
         self.maxPayloadBytes = maxPayloadBytes
         self.maxMembers = maxMembers
         self.maxQueueDepth = maxQueueDepth
         self.maxStoreBytes = maxStoreBytes
         self.maxUndoGroups = maxUndoGroups
         self.maxReadPage = maxReadPage
+        self.maxRecoveryPlans = maxRecoveryPlans
     }
 }
 

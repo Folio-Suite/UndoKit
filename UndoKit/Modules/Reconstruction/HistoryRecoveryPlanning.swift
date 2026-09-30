@@ -4,10 +4,6 @@
 import CoreData
 import Foundation
 
-@MainActor private enum RecoverySessions {
-    static var plans: [ObjectIdentifier: [UUID: HistoryRecoveryPlan]] = [:]
-}
-
 extension HistoryEngine {
     /// Plans protect their sequence interval until explicit release or session close.
     /// The host captures the current domain baseline before requesting `.current`.
@@ -20,6 +16,10 @@ extension HistoryEngine {
               !snapshot.isSuspended else {
             throw HistoryFailure(.busy, stage: .admission, disposition: .usable)
         }
+        guard recoveryPlans.count < limits.maxRecoveryPlans else {
+            throw HistoryFailure(.capacity, stage: .admission, disposition: .usable)
+        }
+        try checkRecoveryCancellation()
         _ = evidence // The explicit declaration is a host promise, never inferred from payload bytes.
         let scopeRow = try scopeRecord()
         let generation = try scopeRow.uuid("generationID")
@@ -28,13 +28,13 @@ extension HistoryEngine {
         let targetSequence: Int64
         switch target {
         case .group(let id):
-            guard let row = try fetchOne("HistoryGroupRecord", key: id.uuidString),
+            guard let row = try scopedRow("HistoryGroupRecord", id: id),
                   row.string("scopeKey") == scope.uuidString else {
                 throw HistoryFailure(.compatibility, stage: .admission, disposition: .usable)
             }
             targetSequence = row.int64("sequence")
         case .checkpoint(let id):
-            guard let row = try fetchOne("HistoryCheckpointRecord", key: id.uuidString),
+            guard let row = try scopedRow("HistoryCheckpointRecord", id: id),
                   row.string("scopeKey") == scope.uuidString else {
                 throw HistoryFailure(.compatibility, stage: .admission, disposition: .usable)
             }
@@ -60,7 +60,7 @@ extension HistoryEngine {
                 throw HistoryFailure(.invalidInput, stage: .admission, disposition: .usable)
             }
         case .checkpoint(let id):
-            guard let row = try fetchOne("HistoryCheckpointRecord", key: id.uuidString),
+            guard let row = try scopedRow("HistoryCheckpointRecord", id: id),
                   row.string("scopeKey") == scope.uuidString else {
                 throw HistoryFailure(.compatibility, stage: .admission, disposition: .usable)
             }
@@ -77,7 +77,7 @@ extension HistoryEngine {
             committedVersion: version, source: effectiveSource, target: target,
             baselineSequence: baselineSequence, targetSequence: targetSequence,
             direction: direction)
-        RecoverySessions.plans[ObjectIdentifier(self), default: [:]][plan.id] = plan
+        recoveryPlans[plan.id] = plan
         return plan
     }
 
@@ -85,6 +85,7 @@ extension HistoryEngine {
     public func recoveryPage(_ plan: HistoryRecoveryPlan, after cursor: Int64? = nil,
                              limit: Int) throws -> HistoryRecoveryPage {
         try requirePlan(plan)
+        try checkRecoveryCancellation(plan)
         guard limit > 0, limit <= limits.maxReadPage else {
             throw HistoryFailure(.capacity, stage: .admission, disposition: .usable)
         }
@@ -125,7 +126,8 @@ extension HistoryEngine {
     public func recoveryMaterial(_ plan: HistoryRecoveryPlan, groupID: UUID,
                                  ordinal: Int) throws -> HistoryRecoveryMaterial {
         try requirePlan(plan)
-        guard let group = try fetchOne("HistoryGroupRecord", key: groupID.uuidString),
+        try checkRecoveryCancellation(plan)
+        guard let group = try scopedRow("HistoryGroupRecord", id: groupID),
               group.string("scopeKey") == scope.uuidString,
               ordinal >= 0, Int64(ordinal) < group.int64("memberCount") else {
             throw HistoryFailure(.invalidInput, stage: .admission, disposition: .usable)
@@ -152,23 +154,29 @@ extension HistoryEngine {
     /// Returns a checkpoint baseline only if it belongs to this live plan.
     public func recoveryCheckpoint(_ plan: HistoryRecoveryPlan) throws -> HistoryCheckpoint? {
         try requirePlan(plan)
+        try checkRecoveryCancellation(plan)
         guard case .checkpoint(let id) = plan.source else { return nil }
         return try checkpoint(id: id)
     }
 
     public func releaseRecoveryPlan(_ plan: HistoryRecoveryPlan) {
-        RecoverySessions.plans[ObjectIdentifier(self)]?.removeValue(forKey: plan.id)
+        recoveryPlans.removeValue(forKey: plan.id)
+    }
+
+    /// Stops further reads and relinquishes temporary protection immediately.
+    public func cancelRecoveryPlan(_ plan: HistoryRecoveryPlan) {
+        releaseRecoveryPlan(plan)
     }
 
     /// Called by store and scope closure; all handles from this session become invalid.
     func invalidateRecoveryPlans() {
-        RecoverySessions.plans.removeValue(forKey: ObjectIdentifier(self))
+        recoveryPlans.removeAll()
     }
 
     /// #93 prunes against these intervals and their checkpoint baselines.
     var protectedRecoveryIntervals: [HistoryProtectedInterval] {
         guard !closed else { return [] }
-        return (RecoverySessions.plans[ObjectIdentifier(self)] ?? [:]).values.map { plan in
+        return recoveryPlans.values.map { plan in
             let checkpointID: UUID?
             if case .checkpoint(let id) = plan.source { checkpointID = id }
             else { checkpointID = nil }
@@ -181,9 +189,27 @@ extension HistoryEngine {
 
     private func requirePlan(_ plan: HistoryRecoveryPlan) throws {
         guard !closed, !closing,
-              RecoverySessions.plans[ObjectIdentifier(self)]?[plan.id] == plan else {
+              recoveryPlans[plan.id] == plan else {
             throw HistoryFailure(.busy, stage: .admission, disposition: .usable)
         }
+    }
+
+    private func checkRecoveryCancellation() throws {
+        if Task.isCancelled {
+            throw HistoryFailure(.cancelled, stage: .admission, disposition: .usable)
+        }
+    }
+
+    private func checkRecoveryCancellation(_ plan: HistoryRecoveryPlan) throws {
+        if Task.isCancelled {
+            releaseRecoveryPlan(plan)
+            throw HistoryFailure(.cancelled, stage: .admission, disposition: .usable)
+        }
+    }
+
+    private func scopedRow(_ name: String, id: UUID) throws -> NSManagedObject? {
+        try fetch(name, predicate: NSPredicate(format: "scopeKey == %@ AND key == %@",
+            scope.uuidString, id.uuidString)).first
     }
 
     private func rejectGap(lowerExclusive lower: Int64, upperInclusive upper: Int64) throws {

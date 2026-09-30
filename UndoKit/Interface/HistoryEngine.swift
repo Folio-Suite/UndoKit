@@ -50,6 +50,9 @@ public enum HistoryOpenMode: Sendable {
     var closed = false
     var reconciling = false
     var closeWaiters: [CheckedContinuation<Void, Never>] = []
+    /// Open-session recovery protection. The engine owns these handles and releases
+    /// them on deallocation even if a host forgets explicit release.
+    var recoveryPlans: [UUID: HistoryRecoveryPlan] = [:]
 
     init(store: HistoryStore, scope: UUID, limits: HistoryLimits, host: any HistoryHost) {
         self.store = store

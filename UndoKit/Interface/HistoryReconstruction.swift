@@ -76,6 +76,21 @@ public struct HistoryRecoveryMaterial: Equatable, Sendable {
     public let payload: HistoryPayload
 }
 
+/// One coherent committed read point within a scope generation.
+public struct HistoryReadIdentity: Equatable, Sendable {
+    public let scope: UUID
+    public let generation: UUID
+    public let committedVersion: Int64
+    public let latestAcceptedSequence: Int64
+    public let latestGroupID: UUID?
+}
+
+/// Host-resolved names to pass to the native router with the matching snapshot.
+public struct HistoryNativeActionNames: Equatable, Sendable {
+    public let undo: String
+    public let redo: String
+}
+
 /// A retained, open-session sequence interval for pruning to respect.
 public struct HistoryProtectedInterval: Equatable, Sendable {
     public let lowerExclusiveSequence: Int64

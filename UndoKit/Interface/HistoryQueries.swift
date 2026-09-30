@@ -7,6 +7,7 @@ import Foundation
 
 extension HistoryEngine {
     func beginClosing() {
+        invalidateRecoveryPlans()
         guard !closing, !closed else { return }
         closing = true
         let unexecuted = queue

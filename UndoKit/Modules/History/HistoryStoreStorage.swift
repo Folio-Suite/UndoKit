@@ -71,7 +71,8 @@ extension HistoryStore {
         limits.maxQueueDepth > 0 && limits.maxQueueDepth <= 1_024 &&
         limits.maxStoreBytes > 0 && limits.maxStoreBytes <= 4 * 1024 * 1024 * 1024 * 1024 &&
         limits.maxUndoGroups > 0 && limits.maxUndoGroups <= 100_000 &&
-        limits.maxReadPage > 0 && limits.maxReadPage <= 1_000
+        limits.maxReadPage > 0 && limits.maxReadPage <= 1_000 &&
+        limits.maxRecoveryPlans > 0 && limits.maxRecoveryPlans <= 1_024
     }
 
     static func makeContainer(at url: URL, readOnly: Bool) throws -> NSPersistentContainer {

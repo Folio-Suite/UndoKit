@@ -71,6 +71,7 @@ extension HistoryEngine {
             row.setValue(Int64(2), forKey: "undoFloorSequence")
             row.setValue(Int64(1), forKey: "currentBaselineSequence")
             row.setValue(true, forKey: "requiresGenerationBinding")
+            row.setValue(Int64(0), forKey: "offStartSequence")
             row.setValue(false, forKey: "suspended")
             row.setValue(row.int64("committedVersion") + 1, forKey: "committedVersion")
             let checkpointID = UUID()

@@ -312,11 +312,17 @@ extension HistoryEngine {
         for member in try transactionMembers(transaction) { context.delete(member) }
         context.delete(transaction)
         let scopeRow = try scopeRecord()
-        if scopeRow.int64("undoFloorSequence") == 0 {
+        if scopeRow.int64("offStartSequence") > 0 &&
+           token.sequence >= scopeRow.int64("offStartSequence") &&
+           scopeRow.int64("undoFloorSequence") < scopeRow.int64("offStartSequence") {
             scopeRow.setValue(token.sequence, forKey: "undoFloorSequence")
         }
         scopeRow.setValue(scopeRow.int64("committedVersion") + 1, forKey: "committedVersion")
         try saveContext()
+        guard token.sequence >= sessionStartSequence else {
+            updateSnapshot()
+            return .accepted(HistoryReceipt(token: token, groupID: groupID))
+        }
         switch kind {
         case .command:
             sessionGroups.removeAll(where: { !$0.applied })

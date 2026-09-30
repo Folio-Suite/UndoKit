@@ -29,6 +29,23 @@ import XCTest
     func outcome(for token: HistoryToken) async -> HistoryHostOutcome { .unresolved }
 }
 
+@MainActor private final class AcceptedOnRecoveryHost: HistoryHost {
+    var delivery: HistoryDelivery?
+    let resource = HistoryObjectReference(storeID: UUID(), objectKey: "required")
+    func deliver(_ delivery: HistoryDelivery) async -> HistoryHostOutcome {
+        self.delivery = delivery
+        return .unresolved
+    }
+    func outcome(for token: HistoryToken) async -> HistoryHostOutcome {
+        guard let delivery, delivery.token == token, let member = delivery.members.first else {
+            return .unresolved
+        }
+        return .accepted([HistoryEffect(memberID: member.id,
+            undo: HistoryPayload(family: "counter", data: Data("-1".utf8)),
+            redo: member.payload, resources: [resource])])
+    }
+}
+
 @MainActor final class HistoryRecordingTests: XCTestCase {
     func testRecordingOffKeepsSessionUndoAndRetainedCheckpointsWithoutGapActions() async throws {
         let directory = try testDirectory()
@@ -204,5 +221,46 @@ import XCTest
         XCTAssertEqual(try retained.inspectScope(scope).pendingRecoveryCount, 1)
         try await retained.close()
         try await engine.close()
+    }
+
+    func testOffThenOnWithoutAcceptedEditKeepsEarlierUndo() async throws {
+        let directory = try testDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let host = RecordingCounterHost()
+        let engine = try await HistoryEngine.open(at: directory.appendingPathComponent("History.sqlite"),
+            scope: UUID(), workingIdentity: UUID(), mode: .create, host: host)
+        let command = HistoryCommand(fingerprint: Data("first".utf8),
+            payload: HistoryPayload(family: "counter", data: Data("1".utf8)))
+        guard case .accepted = await engine.submit(command) else { return XCTFail("first") }
+        try engine.setRecording(.off)
+        _ = try engine.setRecording(.on,
+            baseline: HistoryPayload(family: "counter", data: Data("1".utf8)))
+        XCTAssertTrue(engine.snapshot.canUndo)
+        guard case .accepted = await engine.undo() else { return XCTFail("prior Undo was lost") }
+        XCTAssertEqual(host.value, 0)
+        try await engine.close()
+    }
+
+    func testInterruptedOffAcceptanceDoesNotRestoreSessionUndoOnReopen() async throws {
+        let directory = try testDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("History.sqlite")
+        let scope = UUID(), workingID = UUID()
+        let host = AcceptedOnRecoveryHost()
+        let engine = try await HistoryEngine.open(at: url, scope: scope,
+            workingIdentity: workingID, mode: .create, host: host)
+        try engine.setRecording(.off)
+        let command = HistoryCommand(fingerprint: Data("pending".utf8),
+            payload: HistoryPayload(family: "counter", data: Data("1".utf8)))
+        guard case .failure = await engine.submit(command) else { return XCTFail("pending") }
+        try await engine.close()
+        let store = try await HistoryStore.open(at: url, workingIdentity: workingID, mode: .existing)
+        let reopened = try await store.openScope(scope, mode: .existing, host: host)
+        XCTAssertFalse(reopened.snapshot.isSuspended)
+        XCTAssertFalse(reopened.snapshot.canUndo)
+        XCTAssertTrue(try reopened.historyPage(limit: 10).isEmpty)
+        XCTAssertTrue(try store.requiredObjects(in: host.resource.storeID, limit: 10).objects.isEmpty)
+        try await reopened.close()
+        try await store.close()
     }
 }

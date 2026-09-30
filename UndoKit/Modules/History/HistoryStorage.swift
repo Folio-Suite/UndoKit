@@ -30,6 +30,7 @@ extension HistoryEngine {
             new.setValue(Int64(0), forKey: "undoFloorSequence")
             new.setValue(Int64(0), forKey: "currentBaselineSequence")
             new.setValue(false, forKey: "requiresGenerationBinding")
+            new.setValue(Int64(0), forKey: "offStartSequence")
             try saveContext()
         case .existing:
             guard row?.string("workingID") == store.workingIdentity.uuidString else {

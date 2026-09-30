@@ -210,6 +210,7 @@ extension HistoryStore {
         let engine = HistoryEngine(store: self, scope: scope, limits: limits, host: host)
         do {
             try engine.register(mode: mode)
+            engine.sessionStartSequence = try engine.scopeRecord().int64("nextSequence")
             engines[scope] = engine
             await engine.reconcileOnOpen()
             try engine.refreshSnapshot()

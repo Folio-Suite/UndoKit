@@ -59,6 +59,8 @@ public enum HistoryOpenMode: Sendable {
         var applied = true
     }
     var sessionGroups: [SessionGroup] = []
+    /// Prepared transactions below this sequence predate this engine session.
+    var sessionStartSequence: Int64 = 1
     var sessionEffectBytes: Int64 {
         sessionGroups.reduce(0) { total, group in
             total + group.effects.reduce(0) { bytes, effect in

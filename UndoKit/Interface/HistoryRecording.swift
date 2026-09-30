@@ -39,6 +39,8 @@ extension HistoryEngine {
         let row = try scopeRecord()
         let enabled = mode == .on
         guard row.bool("recordingEnabled") != enabled else { return nil }
+        let hadOffAction = row.int64("offStartSequence") > 0 &&
+            row.int64("undoFloorSequence") >= row.int64("offStartSequence")
         var baselineID: UUID?
         if enabled {
             guard let baseline, valid(baseline), valid(resources),
@@ -60,13 +62,16 @@ extension HistoryEngine {
             checkpoint.setValue(digest(baseline), forKey: "stateDigest")
             try addResourceReferences(resources, ownerType: "checkpoint", ownerKey: transactionKey(id))
             row.setValue(sequence + 1, forKey: "nextSequence")
-            row.setValue(sequence, forKey: "currentBaselineSequence")
+            if hadOffAction { row.setValue(sequence, forKey: "currentBaselineSequence") }
             baselineID = id
         }
         row.setValue(enabled, forKey: "recordingEnabled")
         if enabled {
             try releaseSessionReferences(save: false)
-            row.setValue(row.int64("nextSequence"), forKey: "undoFloorSequence")
+            if hadOffAction { row.setValue(row.int64("nextSequence"), forKey: "undoFloorSequence") }
+            row.setValue(Int64(0), forKey: "offStartSequence")
+        } else {
+            row.setValue(row.int64("nextSequence"), forKey: "offStartSequence")
         }
         row.setValue(row.int64("committedVersion") + 1, forKey: "committedVersion")
         try saveRetention()

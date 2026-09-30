@@ -17,7 +17,9 @@ extension HistoryEngine {
         guard valid(state), (name?.utf8.count ?? 0) <= 4096, hasCapacity(bytes: state.data.count) else {
             throw HistoryFailure(.capacity, stage: .admission, disposition: .usable)
         }
-        guard try fetchOne("HistoryCheckpointRecord", key: id.uuidString) == nil else {
+        guard try fetch("HistoryCheckpointRecord", predicate: NSPredicate(
+            format: "scopeKey == %@ AND key == %@", scope.uuidString, id.uuidString
+        )).isEmpty else {
             throw HistoryFailure(.identityConflict, stage: .admission, disposition: .usable)
         }
         let scopeRow = try scopeRecord()
@@ -45,8 +47,9 @@ extension HistoryEngine {
 
     public func checkpoint(id: UUID) throws -> HistoryCheckpoint? {
         guard !closed else { throw HistoryFailure(.busy, stage: .admission, disposition: .usable) }
-        guard let row = try fetchOne("HistoryCheckpointRecord", key: id.uuidString),
-              row.string("scopeKey") == scope.uuidString else { return nil }
+        guard let row = try fetch("HistoryCheckpointRecord", predicate: NSPredicate(
+            format: "scopeKey == %@ AND key == %@", scope.uuidString, id.uuidString
+        )).first else { return nil }
         let state = HistoryPayload(family: row.string("family") ?? "",
                                    version: Int(row.int64("version")), data: row.data("state"))
         guard row.data("stateDigest") == digest(state) else {
@@ -95,31 +98,10 @@ extension HistoryEngine {
     /// Copies one idle and reconciled history store to a separate closed SQLite file.
     /// The host captures matching domain state and resources and registers the copy independently.
     public func copyStore(to destination: URL) throws {
-        guard !draining, queue.isEmpty, !closed, !snapshot.isSuspended else {
+        guard store.engines.count == 1 else {
             throw HistoryFailure(.busy, stage: .admission, disposition: .usable)
         }
-        guard !FileManager.default.fileExists(atPath: destination.path) else {
-            throw HistoryFailure(.identityConflict, stage: .admission, disposition: .usable)
-        }
-        try context.save()
-        let coordinator = container.persistentStoreCoordinator
-        let options: [AnyHashable: Any] = [NSSQLitePragmasOption: ["journal_mode": "DELETE"]]
-        try coordinator.replacePersistentStore(at: destination, destinationOptions: options,
-                                               withPersistentStoreFrom: url, sourceOptions: nil,
-                                               ofType: NSSQLiteStoreType)
-        // Consolidate copied journal state through Core Data before returning a closed snapshot.
-        let snapshotCoordinator = NSPersistentStoreCoordinator(managedObjectModel: container.managedObjectModel)
-        let snapshotStore = try snapshotCoordinator.addPersistentStore(ofType: NSSQLiteStoreType,
-            configurationName: nil, at: destination, options: options)
-        try snapshotCoordinator.remove(snapshotStore)
-        guard !FileManager.default.fileExists(atPath: destination.path + "-wal") else {
-            throw HistoryFailure(.storage, stage: .finalization, disposition: .usable)
-        }
-        // A copied shared-memory index has no persistent content after DELETE-mode consolidation.
-        let sharedMemory = URL(fileURLWithPath: destination.path + "-shm")
-        if FileManager.default.fileExists(atPath: sharedMemory.path) {
-            try FileManager.default.removeItem(at: sharedMemory)
-        }
+        try store.copyIdle(to: destination)
     }
 
     /// Stops admission and releases writable ownership after active delivery reaches a safe boundary.
@@ -142,20 +124,15 @@ extension HistoryEngine {
         }
         do {
             try context.save()
-            let coordinator = container.persistentStoreCoordinator
-            for store in coordinator.persistentStores { try coordinator.remove(store) }
         } catch {
-            // Keep ownership and admission closed for retry. Do not write new state
-            // through a coordinator whose store removal may have partly completed.
             publishSnapshot(canUndo: false, canRedo: false, isSuspended: true,
                             hasPending: false, generation: snapshot.generation)
             throw HistoryFailure(.storage, stage: .finalization, disposition: .suspended,
                                  underlyingDescription: String(describing: error))
         }
-        flock(lockDescriptor, LOCK_UN)
-        Darwin.close(lockDescriptor)
-        lockDescriptor = -1
         closed = true
         updateSnapshot()
+        store.engines.removeValue(forKey: scope)
+        if ownsConvenienceStore { try await store.close() }
     }
 }

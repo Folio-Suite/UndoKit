@@ -37,12 +37,12 @@ public enum HistoryOpenMode: Sendable {
         let continuation: CheckedContinuation<HistoryResult, Never>
     }
 
-    let url: URL
+    let store: HistoryStore
+    var url: URL { store.url }
     let scope: UUID
     let limits: HistoryLimits
     let host: any HistoryHost
-    let container: NSPersistentContainer
-    var lockDescriptor: Int32
+    var container: NSPersistentContainer { store.container }
     var context: NSManagedObjectContext { container.viewContext }
     var queue: [Waiting] = []
     var draining = false
@@ -51,48 +51,14 @@ public enum HistoryOpenMode: Sendable {
     var reconciling = false
     var closeWaiters: [CheckedContinuation<Void, Never>] = []
 
-    private init(url: URL, scope: UUID, limits: HistoryLimits, host: any HistoryHost,
-                 container: NSPersistentContainer, lockDescriptor: Int32) {
-        self.url = url
+    init(store: HistoryStore, scope: UUID, limits: HistoryLimits, host: any HistoryHost) {
+        self.store = store
         self.scope = scope
         self.limits = limits
         self.host = host
-        self.container = container
-        self.lockDescriptor = lockDescriptor
     }
 
-    deinit {
-        if lockDescriptor >= 0 {
-            flock(lockDescriptor, LOCK_UN)
-            Darwin.close(lockDescriptor)
-        }
-    }
-
-    private static func makeContainer(at url: URL) throws -> NSPersistentContainer {
-        #if SWIFT_PACKAGE
-        let bundle = Bundle.module
-        #else
-        let bundle = Bundle(for: HistoryEngine.self)
-        #endif
-        guard let modelURL = bundle.url(forResource: "History", withExtension: "momd"),
-              let model = NSManagedObjectModel(contentsOf: modelURL) else {
-            throw HistoryFailure(.compatibility, stage: .admission, disposition: .usable)
-        }
-        let container = NSPersistentContainer(name: "History", managedObjectModel: model)
-        let description = NSPersistentStoreDescription(url: url)
-        description.type = NSSQLiteStoreType
-        description.shouldAddStoreAsynchronously = false
-        description.shouldMigrateStoreAutomatically = false
-        description.shouldInferMappingModelAutomatically = false
-        container.persistentStoreDescriptions = [description]
-        var loadError: Error?
-        container.loadPersistentStores { _, error in loadError = error }
-        if let loadError {
-            throw HistoryFailure(.storage, stage: .admission, disposition: .usable,
-                                 underlyingDescription: String(describing: loadError))
-        }
-        return container
-    }
+    var ownsConvenienceStore = false
 
     /// Opens only the requested store. Existing history is never replaced by a new empty store.
     /// A copied store requires an explicit source and new working identity. Opening reconciles
@@ -100,47 +66,16 @@ public enum HistoryOpenMode: Sendable {
     public static func open(at url: URL, scope: UUID, workingIdentity: UUID,
                             mode: HistoryOpenMode, host: any HistoryHost,
                             limits: HistoryLimits = HistoryLimits()) async throws -> HistoryEngine {
-        guard limits.maxPayloadBytes > 0, limits.maxPayloadBytes <= 64 * 1024 * 1024,
-              limits.maxMembers > 0, limits.maxMembers <= 1_000,
-              limits.maxQueueDepth > 0, limits.maxQueueDepth <= 1_024,
-              limits.maxStoreBytes > 0, limits.maxStoreBytes <= 4 * 1024 * 1024 * 1024 * 1024,
-              limits.maxUndoGroups > 0, limits.maxUndoGroups <= 100_000,
-              limits.maxReadPage > 0, limits.maxReadPage <= 1_000 else {
-            throw HistoryFailure(.invalidInput, stage: .admission, disposition: .usable)
-        }
-        let manager = FileManager.default
-        try manager.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        let exists = manager.fileExists(atPath: url.path)
-        switch mode {
-        case .create where exists, .existing where !exists, .independentCopy where !exists:
-            throw HistoryFailure(.compatibility, stage: .admission, disposition: .usable)
-        default:
-            break
-        }
-        let lockURL = url.appendingPathExtension("owner")
-        let descriptor = Darwin.open(lockURL.path, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR)
-        guard descriptor >= 0 else {
-            throw HistoryFailure(.storage, stage: .admission, disposition: .usable)
-        }
-        guard flock(descriptor, LOCK_EX | LOCK_NB) == 0 else {
-            Darwin.close(descriptor)
-            throw HistoryFailure(.busy, stage: .admission, disposition: .usable)
-        }
-        var descriptorOwned = true
+        let store = try await HistoryStore.open(at: url, workingIdentity: workingIdentity,
+                                                mode: mode, limits: limits)
         do {
-            let container = try makeContainer(at: url)
-            let engine = HistoryEngine(url: url, scope: scope, limits: limits, host: host,
-                                       container: container, lockDescriptor: descriptor)
-            descriptorOwned = false
-            try engine.register(workingIdentity: workingIdentity, mode: mode)
-            await engine.reconcileOnOpen()
-            try engine.refreshSnapshot()
+            let scopeMode: HistoryScopeOpenMode
+            switch mode { case .create: scopeMode = .create; case .existing, .independentCopy: scopeMode = .existing }
+            let engine = try await store.openScope(scope, mode: scopeMode, host: host)
+            engine.ownsConvenienceStore = true
             return engine
         } catch {
-            if descriptorOwned {
-                flock(descriptor, LOCK_UN)
-                Darwin.close(descriptor)
-            }
+            try? await store.close()
             throw error
         }
     }
@@ -166,7 +101,8 @@ public enum HistoryOpenMode: Sendable {
         if Task.isCancelled {
             return .failure(HistoryFailure(.cancelled, stage: .admission, disposition: .usable))
         }
-        guard !closed, !closing, !reconciling else {
+        guard !closed, !closing, !reconciling, !store.closing, !store.closed,
+              !store.maintenance else {
             return .failure(HistoryFailure(.busy, stage: .admission, disposition: .usable))
         }
         guard queue.count < limits.maxQueueDepth else {

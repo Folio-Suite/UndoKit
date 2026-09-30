@@ -6,7 +6,7 @@ import CryptoKit
 import Foundation
 
 extension HistoryEngine {
-    func register(workingIdentity: UUID, mode: HistoryOpenMode) throws {
+    func register(mode: HistoryScopeOpenMode) throws {
         let key = scope.uuidString
         let row = try fetchOne("HistoryScopeRecord", key: key)
         switch mode {
@@ -14,22 +14,15 @@ extension HistoryEngine {
             guard row == nil else { throw HistoryFailure(.identityConflict, stage: .admission, disposition: .usable) }
             let new = insert("HistoryScopeRecord")
             new.setValue(key, forKey: "key")
-            new.setValue(workingIdentity.uuidString, forKey: "workingID")
+            new.setValue(store.workingIdentity.uuidString, forKey: "workingID")
             new.setValue(UUID().uuidString, forKey: "generationID")
             new.setValue(Int64(1), forKey: "nextSequence")
             new.setValue(false, forKey: "suspended")
             try context.save()
         case .existing:
-            guard row?.string("workingID") == workingIdentity.uuidString else {
+            guard row?.string("workingID") == store.workingIdentity.uuidString else {
                 throw HistoryFailure(.identityConflict, stage: .admission, disposition: .usable)
             }
-        case .independentCopy(let source):
-            guard let row, row.string("workingID") == source.uuidString,
-                  workingIdentity != source else {
-                throw HistoryFailure(.identityConflict, stage: .admission, disposition: .usable)
-            }
-            row.setValue(workingIdentity.uuidString, forKey: "workingID")
-            try context.save()
         }
     }
 

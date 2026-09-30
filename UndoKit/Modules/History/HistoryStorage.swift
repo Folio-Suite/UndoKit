@@ -7,8 +7,7 @@ import Foundation
 
 extension HistoryEngine {
     func saveContext() throws {
-        do { try context.save() }
-        catch {
+        do { try context.save() } catch {
             context.rollback()
             store.noteWriteFailure()
             throw error

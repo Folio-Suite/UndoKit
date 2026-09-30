@@ -70,7 +70,10 @@ public enum HistoryOpenMode: Sendable {
                                                 mode: mode, limits: limits)
         do {
             let scopeMode: HistoryScopeOpenMode
-            switch mode { case .create: scopeMode = .create; case .existing, .independentCopy: scopeMode = .existing }
+            switch mode {
+            case .create: scopeMode = .create
+            case .existing, .independentCopy: scopeMode = .existing
+            }
             let engine = try await store.openScope(scope, mode: scopeMode, host: host)
             engine.ownsConvenienceStore = true
             return engine

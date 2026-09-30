@@ -98,8 +98,9 @@ public struct HistoryScopeInspection: Equatable, Sendable {
                 guard try handle.read(upToCount: 16) == Data("SQLite format 3\0".utf8) else {
                     throw HistoryFailure(.corruptHistory, stage: .admission, disposition: .usable)
                 }
-            } catch let failure as HistoryFailure { throw failure }
-            catch {
+            } catch let failure as HistoryFailure {
+                throw failure
+            } catch {
                 throw HistoryFailure(.unavailableStore, stage: .admission, disposition: .usable,
                                      underlyingDescription: String(describing: error))
             }
@@ -246,6 +247,9 @@ public struct HistoryScopeInspection: Equatable, Sendable {
         }
     }
 
+}
+
+extension HistoryStore {
     /// Registers or reopens one scope. Each scope has its own host and ordered queue.
     public func openScope(_ scope: UUID, mode: HistoryScopeOpenMode,
                           host: any HistoryHost) async throws -> HistoryEngine {
@@ -370,7 +374,9 @@ public struct HistoryScopeInspection: Equatable, Sendable {
 
     func copyIdle(to destination: URL) throws {
         guard access == .readWrite, !closed, !closing,
-              engines.values.allSatisfy({ !$0.draining && $0.queue.isEmpty && !$0.reconciling && !$0.snapshot.isSuspended }) else {
+              engines.values.allSatisfy({ engine in
+                  !engine.draining && engine.queue.isEmpty && !engine.reconciling && !engine.snapshot.isSuspended
+              }) else {
             throw HistoryFailure(.busy, stage: .admission, disposition: .usable)
         }
         guard !FileManager.default.fileExists(atPath: destination.path) else {
@@ -395,8 +401,11 @@ public struct HistoryScopeInspection: Equatable, Sendable {
             throw HistoryFailure(.capacity, stage: .admission, disposition: .usable,
                                  underlyingDescription: "Insufficient filesystem space for a full store copy")
         }
-        do { try context.save() }
-        catch { context.rollback(); noteWriteFailure(); throw error }
+        do { try context.save() } catch {
+            context.rollback()
+            noteWriteFailure()
+            throw error
+        }
         let coordinator = container.persistentStoreCoordinator
         let options: [AnyHashable: Any] = [NSSQLitePragmasOption: ["journal_mode": "DELETE"]]
         do {

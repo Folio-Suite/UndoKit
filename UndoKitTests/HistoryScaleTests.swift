@@ -20,14 +20,20 @@ import XCTest
             limits: HistoryLimits(maxUndoGroups: 100, maxReadPage: 64))
         let buildStart = Date()
         var first: UUID?
+        var firstCommand: HistoryCommand?
+        var firstReceipt: HistoryReceipt?
         var last: UUID?
         for value in 1...count {
-            let result = await engine.submit(HistoryCommand(
-                fingerprint: Data("set \(value)".utf8), payload: payload(value)))
+            let command = HistoryCommand(fingerprint: Data("set \(value)".utf8), payload: payload(value))
+            let result = await engine.submit(command)
             guard case .accepted(let receipt) = result else {
                 XCTFail("Fixture stopped at \(value): \(result)"); return
             }
-            if first == nil { first = receipt.groupID }
+            if first == nil {
+                first = receipt.groupID
+                firstCommand = command
+                firstReceipt = receipt
+            }
             last = receipt.groupID
         }
         print("SCALE fixture groups=\(count) seconds=\(Date().timeIntervalSince(buildStart))")
@@ -54,6 +60,28 @@ import XCTest
         XCTAssertEqual(host.value, -1)
         engine.releaseRecoveryPlan(branch)
         print("SCALE divergent steps=\(branchResult.steps) seconds=\(Date().timeIntervalSince(divergenceStart))")
+        let checkpoint = try engine.createCheckpoint(name: "Divergent current", state: payload(-1))
+        let consolidationStart = Date()
+        var removed = 0
+        var passes = 0
+        var more = true
+        while more {
+            let result = try engine.consolidateHistory(through: checkpoint.id,
+                policy: HistoryRetentionPolicy(targetDetailedGroups: 100))
+            removed += result.removedGroups
+            passes += 1
+            more = result.hasMore
+            XCTAssertLessThan(passes, count / 64 + 20)
+            if passes >= count / 64 + 20 { return }
+        }
+        XCTAssertGreaterThan(removed, 0)
+        XCTAssertEqual(try engine.checkpoint(id: checkpoint.id)?.state, payload(-1))
+        XCTAssertEqual(host.value, -1)
+        let deliveredBeforeRetry = host.deliveries
+        let retry = await engine.submit(try XCTUnwrap(firstCommand))
+        XCTAssertEqual(retry, .accepted(try XCTUnwrap(firstReceipt)))
+        XCTAssertEqual(host.deliveries, deliveredBeforeRetry)
+        print("SCALE consolidation removed=\(removed) passes=\(passes) seconds=\(Date().timeIntervalSince(consolidationStart))")
         try await engine.close()
     }
 
@@ -82,8 +110,10 @@ import XCTest
 /// the durable CounterHost tests. It does not model host database throughput.
 @MainActor private final class ScaleHost: HistoryHost {
     var value = 0
+    var deliveries = 0
 
     func deliver(_ delivery: HistoryDelivery) async -> HistoryHostOutcome {
+        deliveries += 1
         var effects: [HistoryEffect] = []
         for member in delivery.members {
             guard let next = Int((String(bytes: member.payload.data, encoding: .utf8) ?? "")) else {

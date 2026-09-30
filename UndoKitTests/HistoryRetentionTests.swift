@@ -300,6 +300,9 @@ import XCTest
         let checkpoint = try engine.createCheckpoint(name: "Unversioned", state: payload(0),
                                                      resources: [unversioned])
         XCTAssertNotNil(try engine.checkpoint(id: checkpoint.id))
+        XCTAssertThrowsError(try store.requiredObjects(in: retentionStore,
+            after: HistoryObjectReference(storeID: retentionStore, objectKey: "cursor", versionKey: ""),
+            limit: 10))
         let required = try store.requiredObjects(in: retentionStore, limit: 10)
         XCTAssertEqual(required.objects.map(\.reference), [unversioned])
         XCTAssertEqual(required.objects.first?.referenceCount, 1)

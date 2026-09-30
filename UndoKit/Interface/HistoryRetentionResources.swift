@@ -68,6 +68,7 @@ extension HistoryStore {
                                 after cursor: HistoryObjectReference? = nil,
                                 limit: Int) throws -> HistoryRequiredObjectPage {
         guard !closed, limit > 0, limit <= limits.maxReadPage,
+              cursor?.versionKey?.isEmpty != true,
               cursor == nil || cursor?.storeID == retentionStore else {
             throw HistoryFailure(.invalidInput, stage: .admission, disposition: .usable)
         }

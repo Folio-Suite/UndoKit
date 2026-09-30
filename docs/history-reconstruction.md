@@ -41,6 +41,8 @@ A plan records scope, generation and committed version and fixes its sequence
 bounds. Later accepted commands cannot extend it. The engine limits concurrent
 plans and protects their material during their session lifetime. Missing targets,
 explicit retained gaps, or missing/corrupt payloads refuse reconstruction.
+Persisted predecessor sequences and source anchors detect missing interior or
+latest transitions; checkpoint and rejected-request sequence gaps remain valid.
 
 ## Presentation
 

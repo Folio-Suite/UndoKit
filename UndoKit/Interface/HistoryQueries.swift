@@ -47,6 +47,7 @@ extension HistoryEngine {
         row.setValue(scope.uuidString, forKey: "scopeKey")
         row.setValue(name, forKey: "name")
         row.setValue(sequence, forKey: "sequence")
+        row.setValue(scopeRow.int64("latestAcceptedSequence"), forKey: "latestAcceptedSequence")
         row.setValue(date, forKey: "recordedAt")
         row.setValue(state.family, forKey: "family")
         row.setValue(Int64(state.version), forKey: "version")

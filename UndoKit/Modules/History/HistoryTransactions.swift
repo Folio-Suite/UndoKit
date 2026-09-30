@@ -294,6 +294,8 @@ extension HistoryEngine {
         }
         transaction.setValue("accepted", forKey: "stage")
         let scopeRow = try scopeRecord()
+        group.setValue(scopeRow.int64("latestAcceptedSequence"), forKey: "previousAcceptedSequence")
+        scopeRow.setValue(transaction.int64("sequence"), forKey: "latestAcceptedSequence")
         scopeRow.setValue(scopeRow.int64("committedVersion") + 1, forKey: "committedVersion")
         try saveContext()
         updateSnapshot()

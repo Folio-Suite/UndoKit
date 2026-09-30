@@ -14,6 +14,9 @@ extension HistoryEngine {
         request.sortDescriptors = [NSSortDescriptor(key: "sequence", ascending: false)]
         request.fetchLimit = 1
         let latest = try context.fetch(request).first
+        guard (latest?.int64("sequence") ?? 0) == scopeRow.int64("latestAcceptedSequence") else {
+            throw HistoryFailure(.corruptHistory, stage: .reconciliation, disposition: .usable)
+        }
         return HistoryReadIdentity(scope: scope, generation: try scopeRow.uuid("generationID"),
             committedVersion: scopeRow.int64("committedVersion"),
             latestAcceptedSequence: latest?.int64("sequence") ?? 0,
@@ -44,8 +47,8 @@ extension HistoryEngine {
         let redoRow = try eligibleGroup(for: .redo)
         func name(_ row: NSManagedObject?) throws -> String {
             guard let row, let id = try? row.uuid("key"),
-                  let presentation = try presentation(forGroup: id) else { return "" }
-            return try resolve(presentation) ?? ""
+                  let presentation = try? presentation(forGroup: id) else { return "" }
+            return (try? resolve(presentation)) ?? ""
         }
         return (snapshot, try HistoryNativeActionNames(undo: name(undoRow), redo: name(redoRow)))
     }

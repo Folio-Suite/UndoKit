@@ -39,13 +39,17 @@ extension HistoryEngine {
             return source
         }()
         let (baselineSequence, direction) = try recoveryBaseline(effectiveSource, target: targetSequence)
+        let baselineAccepted = try recoveryAcceptedSequence(effectiveSource)
+        let targetAccepted: Int64
+        if case .checkpoint = target { targetAccepted = baselineAccepted } else { targetAccepted = targetSequence }
         let lower = min(baselineSequence, targetSequence)
         let upper = max(baselineSequence, targetSequence)
         try rejectGap(lowerExclusive: lower, upperInclusive: upper)
         let plan = HistoryRecoveryPlan(id: UUID(), scope: scope, generation: generation,
             committedVersion: version, source: effectiveSource, target: target,
             baselineSequence: baselineSequence, targetSequence: targetSequence,
-            direction: direction)
+            direction: direction, baselineAcceptedSequence: baselineAccepted,
+            targetAcceptedSequence: targetAccepted)
         recoveryPlans[plan.id] = plan
         return plan
     }
@@ -84,6 +88,7 @@ extension HistoryEngine {
         request.fetchLimit = limit + 1
         let rows = try context.fetch(request)
         let pageRows = Array(rows.prefix(limit))
+        try validateRecoveryChain(plan, rows: pageRows, after: cursor, exhausted: rows.count <= limit)
         let steps = try pageRows.map { row in
             HistoryRecoveryStep(groupID: try row.uuid("key"), sequence: row.int64("sequence"),
                 memberCount: Int(row.int64("memberCount")),
@@ -131,7 +136,10 @@ extension HistoryEngine {
         try requirePlan(plan)
         try checkRecoveryCancellation(plan)
         guard case .checkpoint(let id) = plan.source else { return nil }
-        return try checkpoint(id: id)
+        guard let value = try checkpoint(id: id) else {
+            throw HistoryFailure(.missingHistory, stage: .reconciliation, disposition: .usable)
+        }
+        return value
     }
 
     /// Ends temporary retention protection. Releasing an already-ended handle is harmless.
@@ -166,11 +174,7 @@ extension HistoryEngine {
         throws -> (Int64, HistoryRecoveryDirection) {
         switch source {
         case .current:
-            let request = NSFetchRequest<NSManagedObject>(entityName: "HistoryGroupRecord")
-            request.predicate = NSPredicate(format: "scopeKey == %@", scope.uuidString)
-            request.sortDescriptors = [NSSortDescriptor(key: "sequence", ascending: false)]
-            request.fetchLimit = 1
-            let sequence = try context.fetch(request).first?.int64("sequence") ?? 0
+            let sequence = try scopeRecord().int64("latestAcceptedSequence")
             guard sequence >= target else {
                 throw HistoryFailure(.invalidInput, stage: .admission, disposition: .usable)
             }

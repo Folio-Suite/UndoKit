@@ -48,20 +48,10 @@ public struct HistoryRecoveryPlan: Equatable, Sendable {
     /// Determines traversal and member application order.
     public let direction: HistoryRecoveryDirection
 
-    init(id: UUID, scope: UUID, generation: UUID, committedVersion: Int64,
-                source: HistoryRecoverySource, target: HistoryRecoveryTarget,
-                baselineSequence: Int64, targetSequence: Int64,
-                direction: HistoryRecoveryDirection) {
-        self.id = id
-        self.scope = scope
-        self.generation = generation
-        self.committedVersion = committedVersion
-        self.source = source
-        self.target = target
-        self.baselineSequence = baselineSequence
-        self.targetSequence = targetSequence
-        self.direction = direction
-    }
+    let baselineAcceptedSequence: Int64
+    let targetAcceptedSequence: Int64
+
+
 }
 
 /// A lightweight reference to a complete accepted transition. Read each member's

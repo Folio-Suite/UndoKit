@@ -20,8 +20,8 @@ extension HistoryEngine {
     @discardableResult public func holdDetail(from firstGroupID: UUID, through lastGroupID: UUID,
                                               id: UUID = UUID()) throws -> HistoryRetentionHold {
         try requireIdleRetention()
-        guard let first = try fetchOne("HistoryGroupRecord", key: firstGroupID.uuidString),
-              let last = try fetchOne("HistoryGroupRecord", key: lastGroupID.uuidString),
+        guard let first = try groupRecord(key: firstGroupID.uuidString),
+              let last = try groupRecord(key: lastGroupID.uuidString),
               first.string("scopeKey") == scope.uuidString,
               last.string("scopeKey") == scope.uuidString,
               first.int64("sequence") <= last.int64("sequence") else {

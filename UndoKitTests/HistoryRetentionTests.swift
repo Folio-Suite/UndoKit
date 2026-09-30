@@ -14,6 +14,29 @@ import XCTest
         return try XCTUnwrap(engine.historyPage(limit: 100).first { $0.groupID == receipt.groupID })
     }
 
+    func testDetailHoldsResolveRepeatedGroupIDsWithinEachScope() async throws {
+        let directory = try testDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try await HistoryStore.open(at: directory.appendingPathComponent("History.sqlite"),
+            workingIdentity: UUID(), mode: .create)
+        let firstHost = try CounterHost(url: directory.appendingPathComponent("first.json"))
+        let secondHost = try CounterHost(url: directory.appendingPathComponent("second.json"))
+        let first = try await store.openScope(UUID(), mode: .create, host: firstHost)
+        let second = try await store.openScope(UUID(), mode: .create, host: secondHost)
+        let command = HistoryCommand(id: UUID(), fingerprint: Data("one".utf8), payload: payload(1))
+        guard case .accepted(let receipt) = await first.submit(command),
+              case .accepted = await second.submit(command) else {
+            return XCTFail("Independent scopes refused a shared command ID")
+        }
+        let firstHold = try first.holdDetail(from: receipt.groupID, through: receipt.groupID)
+        let secondHold = try second.holdDetail(from: receipt.groupID, through: receipt.groupID)
+        XCTAssertEqual(try first.retentionHolds().map(\.id), [firstHold.id])
+        XCTAssertEqual(try second.retentionHolds().map(\.id), [secondHold.id])
+        try first.releaseHold(firstHold.id)
+        XCTAssertEqual(try second.retentionHolds().map(\.id), [secondHold.id])
+        try await store.close()
+    }
+
     func testStateAndOverlappingDetailHoldsSurviveReleaseAndReopen() async throws {
         let directory = try testDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }

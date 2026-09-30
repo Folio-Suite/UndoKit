@@ -59,6 +59,9 @@ mandatory workloads through 100,000 retained groups, optional multi-GiB payload
 experiments, runner safeguards and evidence for all four proofs. Timing targets
 are advisory; candidate production limits require measurement and review.
 
+See [retention implementation and measurements](docs/retention-implementation.md)
+for the supported maintenance boundary and guarded production-engine case.
+
 ## Disposable proofs
 
 These hosts and stores are isolated from the framework target. Their reports

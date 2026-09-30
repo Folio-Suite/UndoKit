@@ -29,18 +29,18 @@ extension HistoryRegisteredHost {
     }
 }
 
-func decodeEnvelope(_ data: Data, codec: String, configuration: Data) throws -> Data {
+func decodeEnvelope<Value>(_ data: Data, using codec: HistoryCodec<Value>,
+                           stage: HistoryFailureStage) throws -> Value {
     let envelope = try PropertyListDecoder().decode(HistoryCodecEnvelope.self, from: data)
-    guard envelope.codec == codec, envelope.configuration == configuration else {
-        throw HistoryFailure(.compatibility, stage: .delivery, disposition: .usable)
+    guard envelope.codec == codec.identifier, envelope.configuration == codec.configuration else {
+        throw HistoryFailure(.compatibility, stage: stage, disposition: .usable)
     }
-    return envelope.bytes
+    return try codec.decode(envelope.bytes)
 }
 
-func encodeEnvelope<Value>(_ value: Value, codec: HistoryCodec<Value>,
-                           identity: HistorySchemaIdentity) throws -> Data {
-    let envelope = HistoryCodecEnvelope(codec: identity.effectCodec,
-                                        configuration: identity.effectCodecConfiguration,
+func encodeEnvelope<Value>(_ value: Value, using codec: HistoryCodec<Value>) throws -> Data {
+    let envelope = HistoryCodecEnvelope(codec: codec.identifier,
+                                        configuration: codec.configuration,
                                         bytes: try codec.encode(value))
     let encoder = PropertyListEncoder()
     encoder.outputFormat = .binary

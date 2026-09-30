@@ -16,6 +16,13 @@ public struct HistoryCodec<Value>: Sendable {
     private let encoder: @Sendable (Value) throws -> Data
     private let decoder: @Sendable (Data) throws -> Value
 
+    /// Creates a host codec. The callbacks run synchronously on the caller's actor;
+    /// they may work with non-Sendable values and must preserve their declared format.
+    /// - Parameters:
+    ///   - identifier: Stable identity stored in each encoded payload envelope.
+    ///   - configuration: Stable format settings stored with the identifier.
+    ///   - encode: Converts one host value to opaque bytes; errors propagate to the caller.
+    ///   - decode: Interprets bytes for this exact codec identity and configuration.
     public init(
         identifier: String,
         configuration: Data = Data(),
@@ -28,7 +35,13 @@ public struct HistoryCodec<Value>: Sendable {
         self.decoder = decode
     }
 
+    /// Encodes on the caller's actor; throws the host codec's error.
+    /// - Parameter value: Host value to encode.
+    /// - Returns: Opaque host bytes for the selected representation.
     public func encode(_ value: Value) throws -> Data { try encoder(value) }
+    /// Decodes on the caller's actor; throws for malformed or unsupported bytes.
+    /// - Parameter data: Opaque host bytes previously written with this codec.
+    /// - Returns: A host-owned value.
     public func decode(_ data: Data) throws -> Value { try decoder(data) }
 }
 
@@ -47,22 +60,28 @@ private enum FoundationHistoryEncoding<Value: Codable> {
     }
 }
 
-public extension HistoryCodec where Value: Codable {
-    /// Uses Foundation's JSON encoder and decoder with their documented defaults.
+public extension HistoryCodec where Value: Codable & SendableMetatype {
+    /// Uses Foundation's JSON defaults, which reject values the representation cannot encode.
+    /// - Parameter identifier: Stable codec identity recorded in the envelope.
+    /// - Returns: A synchronous codec usable on the host's actor.
     static func json(identifier: String = "undokit.codable.json") -> Self {
         Self(identifier: identifier,
              encode: { try FoundationHistoryEncoding<Value>.encodeJSON($0) },
              decode: { try FoundationHistoryEncoding<Value>.decodeJSON($0) })
     }
 
-    /// Uses Foundation's XML property-list representation.
+    /// Uses Foundation's XML property-list representation and supported Codable values.
+    /// - Parameter identifier: Stable codec identity recorded in the envelope.
+    /// - Returns: A synchronous codec usable on the host's actor.
     static func xmlPropertyList(identifier: String = "undokit.codable.plist.xml") -> Self {
         Self(identifier: identifier,
              encode: { try FoundationHistoryEncoding<Value>.encodePropertyList($0, format: .xml) },
              decode: { try FoundationHistoryEncoding<Value>.decodePropertyList($0) })
     }
 
-    /// Uses Foundation's binary property-list representation.
+    /// Uses Foundation's binary property-list representation and supported Codable values.
+    /// - Parameter identifier: Stable codec identity recorded in the envelope.
+    /// - Returns: A synchronous codec usable on the host's actor.
     static func binaryPropertyList(identifier: String = "undokit.codable.plist.binary") -> Self {
         Self(identifier: identifier,
              encode: { try FoundationHistoryEncoding<Value>.encodePropertyList($0, format: .binary) },
@@ -85,6 +104,20 @@ public struct HistorySchemaIdentity: Hashable, Sendable {
     public let effectVersion: Int
     public let stateVersion: Int
 
+    /// Declares the host's current write versions and codec identities.
+    /// Older read versions are registered separately in ``HistoryOperationRegistration``;
+    /// changing these values does not rewrite stored payloads.
+    /// - Parameters:
+    ///   - operation: Stable host operation family.
+    ///   - commandCodec: Current Command codec identifier.
+    ///   - effectCodec: Current effect codec identifier.
+    ///   - stateCodec: Current checkpoint state codec identifier.
+    ///   - commandCodecConfiguration: Current Command codec settings.
+    ///   - effectCodecConfiguration: Current effect codec settings.
+    ///   - stateCodecConfiguration: Current state codec settings.
+    ///   - commandVersion: Current Command write version.
+    ///   - effectVersion: Current effect write version.
+    ///   - stateVersion: Current state write version.
     public init(operation: String, commandCodec: String, effectCodec: String,
                 stateCodec: String = "undokit.state",
                 commandCodecConfiguration: Data = Data(), effectCodecConfiguration: Data = Data(),
@@ -110,6 +143,12 @@ public struct HistoryTypedCommand<Value> {
     public let fingerprint: Data
     public let value: Value
 
+    /// Pairs a host-owned value with its stable identity and canonical intent fingerprint.
+    /// The value stays on the handler's actor; the fingerprint is passed to UndoKit unchanged.
+    /// - Parameters:
+    ///   - id: Stable identity reused for a retry of the same intent.
+    ///   - fingerprint: Host-supplied fingerprint of canonical intent.
+    ///   - value: Typed Command value to encode before submission.
     public init(id: UUID = UUID(), fingerprint: Data, value: Value) {
         self.id = id
         self.fingerprint = fingerprint
@@ -129,6 +168,12 @@ public struct HistoryTypedEffect<Effect> {
     public let undo: Effect
     public let redo: Effect
 
+    /// Supplies typed compensation and reapplication evidence for one member.
+    /// Values stay on the handler's actor until encoded for durable history.
+    /// - Parameters:
+    ///   - memberID: Accepted member this evidence belongs to.
+    ///   - undo: Value interpreted by the host's Undo callback.
+    ///   - redo: Value interpreted by the host's Redo callback.
     public init(memberID: UUID, undo: Effect, redo: Effect) {
         self.memberID = memberID
         self.undo = undo

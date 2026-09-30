@@ -4,25 +4,28 @@
 import Foundation
 
 @MainActor public extension MainActorHistoryOperationHandler {
+    /// Encodes and submits a Command on the main actor with the current host codec.
+    /// - Parameters:
+    ///   - command: Host value and stable canonical intent fingerprint.
+    ///   - registration: Current command version and codec used for this write.
+    ///   - engine: Scope to prepare, deliver, and finalize the command.
+    /// - Returns: An accepted receipt after finalization, authoritative rejection, or structured failure.
+    ///   Cancellation after delivery may leave a suspended scope for reconciliation.
     func submit(_ command: HistoryTypedCommand<Command>,
                 using registration: HistoryOperationRegistration<Self>,
                 to engine: HistoryEngine) async -> HistoryResult {
-        guard registration.identity.commandVersion > 0,
+        guard !registration.identity.operation.isEmpty,
+              registration.identity.commandVersion > 0,
               registration.commandCodec.identifier == registration.identity.commandCodec,
               registration.commandCodec.configuration == registration.identity.commandCodecConfiguration else {
             return .failure(HistoryFailure(.compatibility, stage: .admission, disposition: .usable))
         }
         do {
-            let envelope = HistoryCodecEnvelope(codec: registration.identity.commandCodec,
-                                                configuration: registration.identity.commandCodecConfiguration,
-                                                bytes: try registration.commandCodec.encode(command.value))
-            let encoder = PropertyListEncoder()
-            encoder.outputFormat = .binary
             return await engine.submit(HistoryCommand(
                 id: command.id, fingerprint: command.fingerprint,
                 payload: HistoryPayload(family: registration.identity.operation,
                                         version: registration.identity.commandVersion,
-                                        data: try encoder.encode(envelope))
+                                        data: try encodeEnvelope(command.value, using: registration.commandCodec))
             ))
         } catch {
             return .failure(HistoryFailure(.compatibility, stage: .admission, disposition: .usable,
@@ -30,34 +33,36 @@ import Foundation
         }
     }
 
+    /// Encodes a coherent host state on the main actor for checkpoint storage.
+    /// - Parameters:
+    ///   - state: Host-owned state to persist.
+    ///   - registration: Current state version and codec used for this write.
+    /// - Returns: An opaque payload with the current state version and codec envelope.
+    /// - Throws: A compatibility failure for invalid registration, or a codec error.
     func encodeState(_ state: State, using registration: HistoryOperationRegistration<Self>) throws -> HistoryPayload {
         guard registration.stateCodec.identifier == registration.identity.stateCodec,
-              registration.stateCodec.configuration == registration.identity.stateCodecConfiguration else {
+              registration.stateCodec.configuration == registration.identity.stateCodecConfiguration,
+              registration.identity.stateVersion > 0 else {
             throw HistoryFailure(.compatibility, stage: .admission, disposition: .usable)
         }
-        let envelope = HistoryCodecEnvelope(codec: registration.identity.stateCodec,
-                                            configuration: registration.identity.stateCodecConfiguration,
-                                            bytes: try registration.stateCodec.encode(state))
-        let encoder = PropertyListEncoder()
-        encoder.outputFormat = .binary
         return HistoryPayload(family: registration.identity.operation,
                               version: registration.identity.stateVersion,
-                              data: try encoder.encode(envelope))
+                              data: try encodeEnvelope(state, using: registration.stateCodec))
     }
 
+    /// Decodes checkpoint state on the main actor using a registered host version.
+    /// The stored payload is read without modification.
+    /// - Parameters:
+    ///   - payload: The opaque checkpoint state, including its host schema version.
+    ///   - registration: Current codec and explicit older decoders.
+    /// - Returns: The host-owned state value.
+    /// - Throws: A compatibility failure for an unknown version or mismatched envelope, or a codec error.
     func decodeState(_ payload: HistoryPayload, using registration: HistoryOperationRegistration<Self>) throws -> State {
         guard payload.family == registration.identity.operation,
-              payload.version == registration.identity.stateVersion,
-              registration.stateCodec.identifier == registration.identity.stateCodec,
-              registration.stateCodec.configuration == registration.identity.stateCodecConfiguration else {
+              let codec = registration.stateDecoder(for: payload.version) else {
             throw HistoryFailure(.compatibility, stage: .reconciliation, disposition: .usable)
         }
-        let envelope = try PropertyListDecoder().decode(HistoryCodecEnvelope.self, from: payload.data)
-        guard envelope.codec == registration.identity.stateCodec,
-              envelope.configuration == registration.identity.stateCodecConfiguration else {
-            throw HistoryFailure(.compatibility, stage: .reconciliation, disposition: .usable)
-        }
-        return try registration.stateCodec.decode(envelope.bytes)
+        return try decodeEnvelope(payload.data, using: codec, stage: .reconciliation)
     }
 
     internal func deliver(
@@ -76,25 +81,19 @@ import Foundation
         do {
             switch delivery.kind {
             case .command:
-                guard delivery.members.allSatisfy({ $0.payload.version == registration.identity.commandVersion }) else {
-                    return .failure(HistoryFailure(.compatibility, stage: .delivery, disposition: .usable))
-                }
                 let commands = try delivery.members.map { member in
-                    (member.id, try registration.commandCodec.decode(decodeEnvelope(
-                        member.payload.data, codec: registration.identity.commandCodec,
-                        configuration: registration.identity.commandCodecConfiguration
-                    )))
+                    guard let codec = registration.commandDecoder(for: member.payload.version) else {
+                        throw HistoryFailure(.compatibility, stage: .delivery, disposition: .usable)
+                    }
+                    return (member.id, try decodeEnvelope(member.payload.data, using: codec, stage: .delivery))
                 }
                 typedOutcome = await apply(commands, token: delivery.token)
             case .undo, .redo:
-                guard delivery.members.allSatisfy({ $0.payload.version == registration.identity.effectVersion }) else {
-                    return .failure(HistoryFailure(.compatibility, stage: .delivery, disposition: .usable))
-                }
                 let effects = try delivery.members.map { member in
-                    (member.id, try registration.effectCodec.decode(decodeEnvelope(
-                        member.payload.data, codec: registration.identity.effectCodec,
-                        configuration: registration.identity.effectCodecConfiguration
-                    )))
+                    guard let codec = registration.effectDecoder(for: member.payload.version) else {
+                        throw HistoryFailure(.compatibility, stage: .delivery, disposition: .usable)
+                    }
+                    return (member.id, try decodeEnvelope(member.payload.data, using: codec, stage: .delivery))
                 }
                 typedOutcome = delivery.kind == .undo
                     ? await undo(effects, token: delivery.token)
@@ -118,8 +117,7 @@ import Foundation
                                     version: registration.identity.effectVersion,
                                     data: try encodeEnvelope(
                                         effect.undo,
-                                        codec: registration.effectCodec,
-                                        identity: registration.identity
+                                        using: registration.effectCodec
                                     )
                                   ),
                                   redo: HistoryPayload(
@@ -127,8 +125,7 @@ import Foundation
                                     version: registration.identity.effectVersion,
                                     data: try encodeEnvelope(
                                         effect.redo,
-                                        codec: registration.effectCodec,
-                                        identity: registration.identity
+                                        using: registration.effectCodec
                                     )
                                   )
                     )
@@ -148,12 +145,12 @@ import Foundation
                     HistoryEffect(memberID: effect.memberID,
                                   undo: HistoryPayload(family: registration.identity.operation,
                                                        version: registration.identity.effectVersion,
-                                                       data: try encodeEnvelope(effect.undo, codec: registration.effectCodec,
-                                                                                identity: registration.identity)),
+                                                       data: try encodeEnvelope(effect.undo,
+                                                                                using: registration.effectCodec)),
                                   redo: HistoryPayload(family: registration.identity.operation,
                                                        version: registration.identity.effectVersion,
-                                                       data: try encodeEnvelope(effect.redo, codec: registration.effectCodec,
-                                                                                identity: registration.identity)))
+                                                       data: try encodeEnvelope(effect.redo,
+                                                                                using: registration.effectCodec)))
                 })
             }
         } catch { return .unresolved }

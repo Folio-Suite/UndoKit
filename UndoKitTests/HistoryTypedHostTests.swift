@@ -16,6 +16,28 @@ private struct DomainCodecs {
     let state: HistoryCodec<DomainBox>
 }
 
+private func versionedCodec(_ version: Int) -> HistoryCodec<DomainBox> {
+    HistoryCodec(identifier: "domain.integer.v\(version)",
+                 configuration: Data("format-\(version)".utf8),
+                 encode: { Data("\(version):\($0.value)".utf8) },
+                 decode: { data in
+                     let parts = String(decoding: data, as: UTF8.self).split(separator: ":")
+                     guard parts.count == 2, parts[0] == String(version), let value = Int(parts[1]) else {
+                         throw CocoaError(.coderReadCorrupt)
+                     }
+                     return DomainBox(value)
+                 })
+}
+
+private func versionedIdentity(_ codec: HistoryCodec<DomainBox>, version: Int) -> HistorySchemaIdentity {
+    HistorySchemaIdentity(operation: "counter", commandCodec: codec.identifier,
+                          effectCodec: codec.identifier, stateCodec: codec.identifier,
+                          commandCodecConfiguration: codec.configuration,
+                          effectCodecConfiguration: codec.configuration,
+                          stateCodecConfiguration: codec.configuration,
+                          commandVersion: version, effectVersion: version, stateVersion: version)
+}
+
 private actor TypedCounter: HistoryOperationHandler {
     typealias Command = DomainBox
     typealias Effect = DomainBox
@@ -70,6 +92,15 @@ private actor TypedCounter: HistoryOperationHandler {
     func stateRoundTrip(using registration: HistoryOperationRegistration<TypedCounter>) throws -> Int {
         let payload = try encodeState(DomainBox(9), using: registration)
         return try decodeState(payload, using: registration).value
+    }
+
+    func encodeStateValue(_ value: Int, using registration: HistoryOperationRegistration<TypedCounter>) throws -> HistoryPayload {
+        try encodeState(DomainBox(value), using: registration)
+    }
+
+    func decodeStateValue(_ payload: HistoryPayload,
+                          using registration: HistoryOperationRegistration<TypedCounter>) throws -> Int {
+        try decodeState(payload, using: registration).value
     }
 
     func apply(_ commands: [(UUID, DomainBox)], token: HistoryToken) async -> HistoryTypedOutcome<DomainBox> {
@@ -172,6 +203,130 @@ private actor TypedCounter: HistoryOperationHandler {
 }
 
 @MainActor final class HistoryTypedHostTests: XCTestCase {
+    func testActorReopenReadsOldHostVersionsWithoutRewritingPayloads() async throws {
+        let directory = try testDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = directory.appendingPathComponent("History.sqlite")
+        let scope = UUID()
+        let workingID = UUID()
+        let oldCodec = versionedCodec(1)
+        let firstHandler = TypedCounter()
+        let firstRegistration = HistoryOperationRegistration(
+            identity: versionedIdentity(oldCodec, version: 1), commandCodec: oldCodec,
+            effectCodec: oldCodec, stateCodec: oldCodec, handler: firstHandler
+        )
+        let first = try await HistoryEngine.open(at: store, scope: scope, workingIdentity: workingID,
+                                                 mode: .create, host: HistoryRegisteredHost(firstRegistration))
+        guard case .accepted = await firstHandler.submitFour(to: first, registration: firstRegistration) else {
+            XCTFail("Version 1 command was not accepted")
+            return
+        }
+        let original = try await firstHandler.encodeStateValue(9, using: firstRegistration)
+        let checkpoint = try first.createCheckpoint(name: "Old state", state: original)
+        try await first.close()
+
+        let currentCodec = versionedCodec(2)
+        let newHandler = TypedCounter()
+        let registration = HistoryOperationRegistration(
+            identity: versionedIdentity(currentCodec, version: 2), commandCodec: currentCodec,
+            effectCodec: currentCodec, stateCodec: currentCodec,
+            oldCommandCodecs: [1: oldCodec], oldEffectCodecs: [1: oldCodec],
+            oldStateCodecs: [1: oldCodec], handler: newHandler
+        )
+        let reopened = try await HistoryEngine.open(at: store, scope: scope, workingIdentity: workingID,
+                                                    mode: .existing, host: HistoryRegisteredHost(registration))
+        XCTAssertEqual(try reopened.checkpoint(id: checkpoint.id)?.state, original)
+        let decoded = try await newHandler.decodeStateValue(original, using: registration)
+        XCTAssertEqual(decoded, 9)
+        guard case .accepted = await reopened.undo() else {
+            XCTFail("Old effect did not decode for Undo")
+            return
+        }
+        let oldCommand = HistoryCommand(fingerprint: Data("old version nine".utf8), payload: original)
+        guard case .accepted = await reopened.submit(oldCommand) else {
+            XCTFail("Registered old Command version did not decode")
+            return
+        }
+        let countBeforeRefusal = await newHandler.applicationCount
+        let unknown = HistoryPayload(family: original.family, version: 99, data: original.data)
+        guard case .failure(let failure) = await reopened.submit(
+            HistoryCommand(fingerprint: Data("unsupported".utf8), payload: unknown)
+        ) else {
+            XCTFail("Unregistered Command version was not refused")
+            return
+        }
+        XCTAssertEqual(failure.cause, .compatibility)
+        let countAfterRefusal = await newHandler.applicationCount
+        XCTAssertEqual(countAfterRefusal, countBeforeRefusal)
+        XCTAssertEqual(try reopened.checkpoint(id: checkpoint.id)?.state, original)
+        try await reopened.close()
+    }
+
+    func testMainActorReopenReadsOldHostVersionsAndRefusesUnknown() async throws {
+        let directory = try testDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = directory.appendingPathComponent("History.sqlite")
+        let scope = UUID()
+        let workingID = UUID()
+        let oldCodec = versionedCodec(1)
+        let firstHandler = MainActorTypedCounter()
+        let firstRegistration = HistoryOperationRegistration(
+            identity: versionedIdentity(oldCodec, version: 1), commandCodec: oldCodec,
+            effectCodec: oldCodec, stateCodec: oldCodec, handler: firstHandler
+        )
+        let first = try await HistoryEngine.open(at: store, scope: scope, workingIdentity: workingID,
+                                                 mode: .create, host: MainActorHistoryRegisteredHost(firstRegistration))
+        guard case .accepted = await firstHandler.submitFour(to: first, registration: firstRegistration) else {
+            XCTFail("Version 1 command was not accepted")
+            return
+        }
+        let original = try firstHandler.encodeState(DomainBox(9), using: firstRegistration)
+        let checkpoint = try first.createCheckpoint(name: "Old state", state: original)
+        try await first.close()
+
+        let currentCodec = versionedCodec(2)
+        let newHandler = MainActorTypedCounter()
+        let registration = HistoryOperationRegistration(
+            identity: versionedIdentity(currentCodec, version: 2), commandCodec: currentCodec,
+            effectCodec: currentCodec, stateCodec: currentCodec,
+            oldCommandCodecs: [1: oldCodec], oldEffectCodecs: [1: oldCodec],
+            oldStateCodecs: [1: oldCodec], handler: newHandler
+        )
+        let reopened = try await HistoryEngine.open(at: store, scope: scope, workingIdentity: workingID,
+                                                    mode: .existing, host: MainActorHistoryRegisteredHost(registration))
+        XCTAssertEqual(try reopened.checkpoint(id: checkpoint.id)?.state, original)
+        XCTAssertEqual(try newHandler.decodeState(original, using: registration).value, 9)
+        let currentState = try newHandler.encodeState(DomainBox(10), using: registration)
+        XCTAssertEqual(currentState.version, 2)
+        let mismatchedEnvelope = HistoryPayload(family: original.family, version: 1, data: currentState.data)
+        XCTAssertThrowsError(try newHandler.decodeState(mismatchedEnvelope, using: registration))
+        XCTAssertThrowsError(try newHandler.decodeState(
+            HistoryPayload(family: original.family, version: 99, data: original.data), using: registration
+        ))
+        guard case .accepted = await reopened.undo() else {
+            XCTFail("Old effect did not decode for Undo")
+            return
+        }
+        guard case .accepted = await reopened.submit(
+            HistoryCommand(fingerprint: Data("old version nine".utf8), payload: original)
+        ) else {
+            XCTFail("Registered old Command version did not decode")
+            return
+        }
+        let valueBeforeRefusal = newHandler.currentValue
+        let unknown = HistoryPayload(family: original.family, version: 99, data: original.data)
+        guard case .failure(let failure) = await reopened.submit(
+            HistoryCommand(fingerprint: Data("unsupported".utf8), payload: unknown)
+        ) else {
+            XCTFail("Unregistered Command version was not refused")
+            return
+        }
+        XCTAssertEqual(failure.cause, .compatibility)
+        XCTAssertEqual(newHandler.currentValue, valueBeforeRefusal)
+        XCTAssertEqual(try reopened.checkpoint(id: checkpoint.id)?.state, original)
+        try await reopened.close()
+    }
+
     func testActorOwnedNonSendableValuesRetryAndRoundTripState() async throws {
         let directory = try testDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }

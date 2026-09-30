@@ -1,0 +1,5 @@
+# SPDX-FileCopyrightText: 2026 the Folio Project
+# SPDX-License-Identifier: MIT
+
+# Xcode's build plugin searches only within this project directory.
+parent_config: ../.swiftlint.yml

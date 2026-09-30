@@ -25,51 +25,14 @@ extension HistoryEngine {
         let generation = try scopeRow.uuid("generationID")
         let version = scopeRow.int64("committedVersion")
 
-        let targetSequence: Int64
-        switch target {
-        case .group(let id):
-            guard let row = try scopedRow("HistoryGroupRecord", id: id),
-                  row.string("scopeKey") == scope.uuidString else {
-                throw HistoryFailure(.compatibility, stage: .admission, disposition: .usable)
-            }
-            targetSequence = row.int64("sequence")
-        case .checkpoint(let id):
-            guard let row = try scopedRow("HistoryCheckpointRecord", id: id),
-                  row.string("scopeKey") == scope.uuidString else {
-                throw HistoryFailure(.compatibility, stage: .admission, disposition: .usable)
-            }
-            targetSequence = row.int64("sequence")
-        }
+        let targetSequence = try recoveryTargetSequence(target)
 
         // A checkpoint target is already a complete host-authored baseline.
         let effectiveSource: HistoryRecoverySource = {
             if case .checkpoint(let id) = target { return .checkpoint(id) }
             return source
         }()
-        let baselineSequence: Int64
-        let direction: HistoryRecoveryDirection
-        switch effectiveSource {
-        case .current:
-            let request = NSFetchRequest<NSManagedObject>(entityName: "HistoryGroupRecord")
-            request.predicate = NSPredicate(format: "scopeKey == %@", scope.uuidString)
-            request.sortDescriptors = [NSSortDescriptor(key: "sequence", ascending: false)]
-            request.fetchLimit = 1
-            baselineSequence = try context.fetch(request).first?.int64("sequence") ?? 0
-            direction = .reverse
-            guard baselineSequence >= targetSequence else {
-                throw HistoryFailure(.invalidInput, stage: .admission, disposition: .usable)
-            }
-        case .checkpoint(let id):
-            guard let row = try scopedRow("HistoryCheckpointRecord", id: id),
-                  row.string("scopeKey") == scope.uuidString else {
-                throw HistoryFailure(.compatibility, stage: .admission, disposition: .usable)
-            }
-            baselineSequence = row.int64("sequence")
-            direction = .forward
-            guard baselineSequence <= targetSequence else {
-                throw HistoryFailure(.invalidInput, stage: .admission, disposition: .usable)
-            }
-        }
+        let (baselineSequence, direction) = try recoveryBaseline(effectiveSource, target: targetSequence)
         let lower = min(baselineSequence, targetSequence)
         let upper = max(baselineSequence, targetSequence)
         try rejectGap(lowerExclusive: lower, upperInclusive: upper)
@@ -178,12 +141,49 @@ extension HistoryEngine {
         guard !closed else { return [] }
         return recoveryPlans.values.map { plan in
             let checkpointID: UUID?
-            if case .checkpoint(let id) = plan.source { checkpointID = id }
-            else { checkpointID = nil }
+            if case .checkpoint(let id) = plan.source { checkpointID = id } else { checkpointID = nil }
             return HistoryProtectedInterval(
                 lowerExclusiveSequence: min(plan.baselineSequence, plan.targetSequence),
                 upperInclusiveSequence: max(plan.baselineSequence, plan.targetSequence),
                 checkpointID: checkpointID)
+        }
+    }
+
+    private func recoveryTargetSequence(_ target: HistoryRecoveryTarget) throws -> Int64 {
+        let entity: String
+        let id: UUID
+        switch target {
+        case .group(let value): entity = "HistoryGroupRecord"; id = value
+        case .checkpoint(let value): entity = "HistoryCheckpointRecord"; id = value
+        }
+        guard let row = try scopedRow(entity, id: id) else {
+            throw HistoryFailure(.compatibility, stage: .admission, disposition: .usable)
+        }
+        return row.int64("sequence")
+    }
+
+    private func recoveryBaseline(_ source: HistoryRecoverySource, target: Int64)
+        throws -> (Int64, HistoryRecoveryDirection) {
+        switch source {
+        case .current:
+            let request = NSFetchRequest<NSManagedObject>(entityName: "HistoryGroupRecord")
+            request.predicate = NSPredicate(format: "scopeKey == %@", scope.uuidString)
+            request.sortDescriptors = [NSSortDescriptor(key: "sequence", ascending: false)]
+            request.fetchLimit = 1
+            let sequence = try context.fetch(request).first?.int64("sequence") ?? 0
+            guard sequence >= target else {
+                throw HistoryFailure(.invalidInput, stage: .admission, disposition: .usable)
+            }
+            return (sequence, .reverse)
+        case .checkpoint(let id):
+            guard let row = try scopedRow("HistoryCheckpointRecord", id: id) else {
+                throw HistoryFailure(.compatibility, stage: .admission, disposition: .usable)
+            }
+            let sequence = row.int64("sequence")
+            guard sequence <= target else {
+                throw HistoryFailure(.invalidInput, stage: .admission, disposition: .usable)
+            }
+            return (sequence, .forward)
         }
     }
 

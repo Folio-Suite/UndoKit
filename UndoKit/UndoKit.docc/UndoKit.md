@@ -26,6 +26,9 @@ is required. Swift clients import `UndoKit`.
 - `Interface/HistoryRegistrations.swift` — typed operation registrations and host families.
 - `Interface/HistoryActorRegistrations.swift` — actor-isolated typed submission and dispatch.
 - `Interface/HistoryMainActorRegistrations.swift` — Cocoa main-actor typed submission and dispatch.
+- `Interface/HistoryReconstruction.swift` — plan, step, material and read identity types.
+- `Interface/HistoryRecoveryPlanning.swift` — bounded reads and temporary protection.
+- `Interface/HistoryPresentation.swift` — opaque metadata and coherent native names.
 - `Interface/NativeHistoryRouter.swift` — native UndoManager routing and editing barriers.
 - `Resources/History.xcdatamodeld` — the framework-owned persistence schema.
 
@@ -101,6 +104,27 @@ that all retained history occupies only that many records. This slice preserves
 history rather than implementing pruning. Payload integrity checks are separate
 from the host's canonical intent fingerprint.
 
+## Historical reconstruction
+
+Call `beginRecoveryPlan(from:to:using:)` with the host's explicit `.acceptedEffects`
+promise only when stored Undo/Redo evidence represents complete state transitions.
+Capture coherent host state before choosing `.current`; a checkpoint source
+supplies a stored baseline. A checkpoint target uses its own snapshot. Fetch bounded
+`recoveryPage` references and one `recoveryMaterial` member at a time. Apply reverse
+steps in reverse member order, or forward steps in forward member order, in an
+isolated host reconstruction. These reads never deliver commands or move live Undo.
+
+Release or cancel each plan when finished. A cancelled task's next read also
+releases its plan. Closing the scope invalidates all handles. Missing targets,
+stored gaps and unavailable member evidence produce failures. The plan's committed
+version identifies its fixed historical view even if later commands arrive.
+
+`HistoryCommand.presentation` carries at most 4 KiB of opaque host metadata.
+`presentation(forGroup:)` retrieves it without reconstruction.
+`nativeActionNames(resolve:)` returns host-decoded labels and the matching
+availability snapshot in one actor turn. `readIdentity()` exposes scope,
+generation and committed version for history presentation.
+
 ## Native hosting
 
 ``NativeHistoryRouter`` supplies an UndoManager to native controls. NSTextView
@@ -120,9 +144,9 @@ reconciles it. The bridge does not navigate or interpret affected-content data.
 ## Current limits
 
 The first operation is not the complete accepted UndoKit design. Recording
-controls, generation reset, retention holds, resource-reference
-maintenance, pruning/consolidation, and large paged reconstruction need follow-up
-implementation. Host payloads remain bounded. The independent tests do not
+controls, generation reset, retention holds, resource-reference maintenance and
+pruning/consolidation need follow-up implementation. Host payloads remain bounded.
+The independent tests do not
 establish production behavior at the prototype's 100,000-group scale.
 
 The storage format and Swift interface are pre-alpha. No old-store migration or

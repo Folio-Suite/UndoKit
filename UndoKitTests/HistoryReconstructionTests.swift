@@ -15,14 +15,14 @@ import XCTest
         for value in 1...3 {
             guard case .accepted = await engine.submit(HistoryCommand(
                 fingerprint: Data("set \(value)".utf8), payload: payload(value))) else {
-                return XCTFail("Command was not accepted")
+                XCTFail("Command was not accepted"); return
             }
         }
         let displaced = try XCTUnwrap(engine.historyPage(limit: 10).last)
-        guard case .accepted = await engine.undo() else { return XCTFail("Undo failed") }
+        guard case .accepted = await engine.undo() else { XCTFail("Undo failed"); return }
         guard case .accepted = await engine.submit(HistoryCommand(
             fingerprint: Data("set 4".utf8), payload: payload(4))) else {
-            return XCTFail("New branch failed")
+            XCTFail("New branch failed"); return
         }
         XCTAssertEqual(host.value, 4)
         let before = engine.snapshot
@@ -37,7 +37,7 @@ import XCTest
                 visited.append(step.kind)
                 for ordinal in (0..<step.memberCount).reversed() {
                     let material = try engine.recoveryMaterial(plan, groupID: step.groupID, ordinal: ordinal)
-                    reconstructed = try XCTUnwrap(Int(String(decoding: material.payload.data, as: UTF8.self)))
+                    reconstructed = try XCTUnwrap(Int((String(bytes: material.payload.data, encoding: .utf8) ?? "")))
                 }
             }
             cursor = page.nextCursor
@@ -51,10 +51,10 @@ import XCTest
         guard case .accepted = await engine.submit(HistoryCommand(
             fingerprint: Data("restore displaced".utf8), payload: payload(reconstructed),
             restorationOrigin: displaced.groupID)) else {
-            return XCTFail("Restoration failed")
+            XCTFail("Restoration failed"); return
         }
         XCTAssertEqual(host.value, 3)
-        guard case .accepted = await engine.undo() else { return XCTFail("Restoration Undo failed") }
+        guard case .accepted = await engine.undo() else { XCTFail("Restoration Undo failed"); return }
         XCTAssertEqual(host.value, 4)
         try await engine.close()
     }
@@ -67,12 +67,12 @@ import XCTest
             scope: UUID(), workingIdentity: UUID(), mode: .create, host: host,
             limits: HistoryLimits(maxReadPage: 1))
         guard case .accepted = await engine.submit(HistoryCommand(
-            fingerprint: Data("one".utf8), payload: payload(1))) else { return XCTFail("One failed") }
+            fingerprint: Data("one".utf8), payload: payload(1))) else { XCTFail("One failed"); return }
         let checkpoint = try engine.createCheckpoint(name: "One", state: payload(1))
         for value in 2...3 {
             guard case .accepted = await engine.submit(HistoryCommand(
                 fingerprint: Data("set \(value)".utf8), payload: payload(value))) else {
-                return XCTFail("Command failed")
+                XCTFail("Command failed"); return
             }
         }
         let target = try XCTUnwrap(engine.historyPage(after: 3, limit: 1).first)
@@ -83,8 +83,8 @@ import XCTest
             to: .group(target.groupID), using: .acceptedEffects)
         XCTAssertEqual(plan.committedVersion, identity.committedVersion)
         XCTAssertEqual(plan.direction, .forward)
-        var reconstructed = try XCTUnwrap(Int(String(decoding:
-            try XCTUnwrap(engine.recoveryCheckpoint(plan)).state.data, as: UTF8.self)))
+        var reconstructed = try XCTUnwrap(Int((String(bytes:
+            try XCTUnwrap(engine.recoveryCheckpoint(plan)).state.data, encoding: .utf8) ?? "")))
         var cursor: Int64?
         var count = 0
         repeat {
@@ -92,7 +92,7 @@ import XCTest
             for step in page.steps {
                 count += 1
                 let material = try engine.recoveryMaterial(plan, groupID: step.groupID, ordinal: 0)
-                reconstructed = try XCTUnwrap(Int(String(decoding: material.payload.data, as: UTF8.self)))
+                reconstructed = try XCTUnwrap(Int((String(bytes: material.payload.data, encoding: .utf8) ?? "")))
             }
             cursor = page.nextCursor
         } while cursor != nil
@@ -113,7 +113,7 @@ import XCTest
         let label = HistoryPayload(family: "test.label", data: Data("Set one".utf8))
         guard case .accepted = await engine.submit(HistoryCommand(
             fingerprint: Data("one".utf8), payload: payload(1), presentation: label)) else {
-            return XCTFail("Command failed")
+            XCTFail("Command failed"); return
         }
         let group = try XCTUnwrap(engine.historyPage(limit: 1).first)
         XCTAssertEqual(try engine.presentation(forGroup: group.groupID), label)
@@ -132,4 +132,36 @@ import XCTest
         try await engine.close()
         XCTAssertThrowsError(try engine.recoveryPage(second, limit: 1))
     }
+    func testCancelledReadReleasesProtectionAndMissingTargetsRefuseWithoutMutation() async throws {
+        let directory = try testDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let host = try CounterHost(url: directory.appendingPathComponent("host.json"))
+        let engine = try await HistoryEngine.open(at: directory.appendingPathComponent("History.cd"),
+            scope: UUID(), workingIdentity: UUID(), mode: .create, host: host,
+            limits: HistoryLimits(maxRecoveryPlans: 1))
+        guard case .accepted = await engine.submit(HistoryCommand(
+            fingerprint: Data("one".utf8), payload: payload(1))) else {
+            XCTFail("Command failed"); return
+        }
+        let group = try XCTUnwrap(engine.historyPage(limit: 1).first)
+        let before = engine.snapshot
+        XCTAssertThrowsError(try engine.beginRecoveryPlan(to: .group(UUID()), using: .acceptedEffects))
+        XCTAssertThrowsError(try engine.beginRecoveryPlan(to: .checkpoint(UUID()), using: .acceptedEffects))
+        let plan = try engine.beginRecoveryPlan(to: .group(group.groupID), using: .acceptedEffects)
+        XCTAssertThrowsError(try engine.recoveryMaterial(plan, groupID: UUID(), ordinal: 0))
+        let read = Task { @MainActor in
+            withUnsafeCurrentTask { $0?.cancel() }
+            XCTAssertThrowsError(try engine.recoveryPage(plan, limit: 1)) { error in
+                XCTAssertEqual((error as? HistoryFailure)?.cause, .cancelled)
+            }
+        }
+        try await read.value
+        let replacement = try engine.beginRecoveryPlan(to: .group(group.groupID), using: .acceptedEffects)
+        engine.releaseRecoveryPlan(replacement)
+        XCTAssertEqual(engine.snapshot, before)
+        XCTAssertEqual(host.value, 1)
+        XCTAssertEqual(host.deliveries, 1)
+        try await engine.close()
+    }
+
 }

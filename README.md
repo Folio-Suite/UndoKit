@@ -22,6 +22,8 @@ semantic effects and durable outcome receipts. See the public DocC catalog and
 
 Public declarations are grouped in `UndoKit/Interface/`; persistence, transaction
 coordination and storage implementations live in `UndoKit/Modules/History/`.
+`Interface/HistoryReconstruction.swift`, `HistoryRecoveryPlanning.swift` and
+`HistoryPresentation.swift` describe reconstruction and presentation.
 Folio's translation layer lives in `Core/WriteKit/WorkAdapter/`; UndoKit imports
 no Folio domain framework. The Core Data model is bundled from
 `UndoKit/Resources/`.
@@ -90,9 +92,11 @@ carry the Folio Project's MIT SPDX notices.
 
 The public typed host adapters support main-actor and actor-owned models, with
 host-registered codecs for current writes and earlier payload versions. A physical
-store supports independent scopes. It supports bounded groups and full checkpoint
-payloads. Retention holds, pruning, recording controls, explicit reset, resource
-cleanup and large paged reconstruction remain follow-up work. The current format
+store supports independent scopes, bounded groups and full checkpoint payloads.
+Bounded historical reconstruction and opaque presentation metadata are implemented;
+see [reconstruction](docs/history-reconstruction.md). Retention holds, pruning,
+recording controls, explicit reset and resource cleanup remain follow-up work.
+The current format
 is the first concrete pre-alpha format; no legacy storage migration is required.
 
 Run the independent tests with `swift test --package-path UndoKit`, or use the

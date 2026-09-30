@@ -34,8 +34,10 @@ extension HistoryStore {
         request.resultType = .dictionaryResultType
         request.propertiesToFetch = ["objectKey", "versionKey"]
         request.returnsDistinctResults = true
-        request.sortDescriptors = [NSSortDescriptor(key: "objectKey", ascending: true),
-                                   NSSortDescriptor(key: "versionKey", ascending: true),]
+        request.sortDescriptors = [
+            NSSortDescriptor(key: "objectKey", ascending: true),
+            NSSortDescriptor(key: "versionKey", ascending: true),
+        ]
         request.fetchLimit = limit + 1
         let rows = try context.fetch(request)
         let pageRows = rows.prefix(limit)

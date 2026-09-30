@@ -29,6 +29,10 @@ is required. Swift clients import `UndoKit`.
 - `Interface/HistoryReconstruction.swift` — plan, step, material and read identity types.
 - `Interface/HistoryRecoveryPlanning.swift` — bounded reads and temporary protection.
 - `Interface/HistoryPresentation.swift` — opaque metadata and coherent native names.
+- `Interface/HistoryRetention.swift` — holds, policy, consolidation results and object references.
+- `Interface/HistoryRetentionHolds.swift` — durable state and detail holds.
+- `Interface/HistoryConsolidation.swift` — bounded safe pruning against a host checkpoint.
+- `Interface/HistoryRetentionResources.swift` — cross-scope object reads and fenced cleanup.
 - `Interface/NativeHistoryRouter.swift` — native UndoManager routing and editing barriers.
 - `Resources/History.xcdatamodeld` — the framework-owned persistence schema.
 
@@ -100,8 +104,8 @@ validate it in the host, then submit a new command with its identifier as
 
 ``HistoryLimits`` configures admission and ordinary Undo depth. Depth counts
 complete original groups, sharing the allowance with Redo. It does not promise
-that all retained history occupies only that many records. This slice preserves
-history rather than implementing pruning. Payload integrity checks are separate
+that all retained history occupies only that many records. Consolidation never
+lowers ordinary depth. Payload integrity checks are separate
 from the host's canonical intent fingerprint.
 
 ## Historical reconstruction
@@ -125,6 +129,36 @@ version identifies its fixed historical view even if later commands arrive.
 availability snapshot in one actor turn. `readIdentity()` exposes scope,
 generation and committed version for history presentation.
 
+## Retention and host-owned resources
+
+Call `holdState(_:)` to keep one host-authored checkpoint state. Call
+`holdDetail(from:through:)` to preserve complete accepted groups in an inclusive
+interval. Holds survive reopening and overlap independently; `releaseHold(_:)`
+releases only the named promise. `retentionHolds()` lists the current generation's
+durable holds. A checkpoint without a state hold may be removed by later policy.
+
+The host provides a coherent checkpoint before calling
+`consolidateHistory(through:policy:)`. The framework removes only accepted detail
+before that checkpoint which is not needed by ordinary Undo/Redo, holds, policy,
+or active recovery plans. One call removes at most `HistoryLimits.maxReadPage`
+groups and checkpoints; call again while `hasMore` is true. A target below the
+protected group count leaves `targetUnmet` true. Removed accepted transitions
+create explicit gaps, so a recovery plan crossing one fails. Checkpoint recovery
+remains available because its host-authored state is stored separately. Accepted
+command retries still return their original receipt after detailed payloads are
+retired; a changed fingerprint is rejected without delivery.
+
+`HistoryEffect.resources` and checkpoint creation accept bounded
+``HistoryObjectReference`` values. They identify objects and versions in a
+host-owned Retention Store; UndoKit never opens those objects. The host secures
+each dependency before it reports acceptance or creates the checkpoint.
+`HistoryStore.requiredObjects(in:after:limit:)` pages distinct required objects
+across every scope in the physical store. After pruning, `cleanupPending(for:)`
+reports durable cleanup work. Use `withRequiredObjects(in:cleanup:)` to fence all
+new admissions while the host pages the required set and removes its unneeded
+objects in its own atomic transaction. A callback failure leaves cleanup pending
+for retry. Read-only sessions can inspect requirements but cannot perform cleanup.
+
 ## Native hosting
 
 ``NativeHistoryRouter`` supplies an UndoManager to native controls. NSTextView
@@ -143,9 +177,8 @@ reconciles it. The bridge does not navigate or interpret affected-content data.
 
 ## Current limits
 
-The first operation is not the complete accepted UndoKit design. Recording
-controls, generation reset, retention holds, resource-reference maintenance and
-pruning/consolidation need follow-up implementation. Host payloads remain bounded.
+Recording controls and generation reset need follow-up implementation.
+Host payloads remain bounded.
 The independent tests do not
 establish production behavior at the prototype's 100,000-group scale.
 
@@ -171,6 +204,9 @@ publication remain deferred. Apps and Kits ship as a coordinated Suite version.
 - ``HistoryOperationHandler``
 - ``MainActorHistoryOperationHandler``
 - ``HistoryHostRegistry``
+- ``HistoryRetentionHold``
+- ``HistoryRetentionPolicy``
+- ``HistoryObjectReference``
 
 ### Native integration
 

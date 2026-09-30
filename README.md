@@ -24,6 +24,9 @@ Public declarations are grouped in `UndoKit/Interface/`; persistence, transactio
 coordination and storage implementations live in `UndoKit/Modules/History/`.
 `Interface/HistoryReconstruction.swift`, `HistoryRecoveryPlanning.swift` and
 `HistoryPresentation.swift` describe reconstruction and presentation.
+`HistoryRetention.swift`, `HistoryRetentionHolds.swift`,
+`HistoryConsolidation.swift` and `HistoryRetentionResources.swift` expose
+holds, consolidation and cross-scope resource maintenance.
 Folio's translation layer lives in `Core/WriteKit/WorkAdapter/`; UndoKit imports
 no Folio domain framework. The Core Data model is bundled from
 `UndoKit/Resources/`.
@@ -92,12 +95,12 @@ carry the Folio Project's MIT SPDX notices.
 
 The public typed host adapters support main-actor and actor-owned models, with
 host-registered codecs for current writes and earlier payload versions. A physical
-store supports independent scopes, bounded groups and full checkpoint payloads.
-Bounded historical reconstruction and opaque presentation metadata are implemented;
-see [reconstruction](docs/history-reconstruction.md). Retention holds, pruning,
-recording controls, explicit reset and resource cleanup remain follow-up work.
-The current format
-is the first concrete pre-alpha format; no legacy storage migration is required.
+store supports independent scopes, bounded groups, full checkpoint payloads,
+durable state and detail holds, bounded consolidation, opaque resource references
+and serialized host cleanup across scopes. See the DocC retention guide and
+[reconstruction](docs/history-reconstruction.md) for bounded historical reads and
+presentation metadata. Recording controls and explicit generation reset remain
+follow-up work. The current format is pre-alpha; no legacy migration is required.
 
 Run the independent tests with `swift test --package-path UndoKit`, or use the
 signed Xcode UndoKit scheme. Work integration tests use Core; native document

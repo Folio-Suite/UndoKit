@@ -140,15 +140,21 @@ import XCTest
         secondHost.resourcesByValue[1] = [shared]
         let first = try await store.openScope(firstScope, mode: .create, host: firstHost)
         let second = try await store.openScope(secondScope, mode: .create, host: secondHost)
-        for (engine, value) in [(first, 1), (second, 1), (first, 2), (second, 2)] {
-            _ = try await accepted(engine, value)
-        }
+        _ = try await accepted(first, 1)
+        _ = try await accepted(second, 1)
+        let sharedCheckpointID = UUID()
+        _ = try first.createCheckpoint(id: sharedCheckpointID, name: "One", state: payload(1),
+                                       resources: [shared])
+        _ = try second.createCheckpoint(id: sharedCheckpointID, name: "One", state: payload(1),
+                                        resources: [shared])
+        _ = try await accepted(first, 2)
+        _ = try await accepted(second, 2)
         let firstBoundary = try first.createCheckpoint(name: "Two", state: payload(2))
         let secondBoundary = try second.createCheckpoint(name: "Two", state: payload(2))
-        XCTAssertEqual(try store.requiredObjects(in: storeID, limit: 10).objects.first?.referenceCount, 2)
+        XCTAssertEqual(try store.requiredObjects(in: storeID, limit: 10).objects.first?.referenceCount, 4)
         _ = try first.consolidateHistory(through: firstBoundary.id,
             policy: HistoryRetentionPolicy(targetDetailedGroups: 0))
-        XCTAssertEqual(try store.requiredObjects(in: storeID, limit: 10).objects.first?.referenceCount, 1)
+        XCTAssertEqual(try store.requiredObjects(in: storeID, limit: 10).objects.first?.referenceCount, 2)
         _ = try second.consolidateHistory(through: secondBoundary.id,
             policy: HistoryRetentionPolicy(targetDetailedGroups: 0))
         XCTAssertTrue(try store.requiredObjects(in: storeID, limit: 10).objects.isEmpty)
@@ -174,5 +180,71 @@ import XCTest
         } catch let failure as HistoryFailure { XCTAssertEqual(failure.cause, .busy) }
         try await reader.close()
         try await reopened.close()
+    }
+
+    func testOrdinaryDepthWinsOverTargetAndCancelledPassDoesNotPrune() async throws {
+        let directory = try testDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let host = try CounterHost(url: directory.appendingPathComponent("host.json"))
+        let engine = try await HistoryEngine.open(at: directory.appendingPathComponent("History.sqlite"),
+            scope: UUID(), workingIdentity: UUID(), mode: .create, host: host,
+            limits: HistoryLimits(maxPayloadBytes: 16, maxUndoGroups: 2))
+        for value in 1...4 { _ = try await accepted(engine, value) }
+        let boundary = try engine.createCheckpoint(name: "Four", state: payload(4))
+        let held = try engine.holdState(boundary.id)
+        let cancelled = Task { () -> HistoryFailure? in
+            withUnsafeCurrentTask { $0?.cancel() }
+            do {
+                _ = try engine.consolidateHistory(through: boundary.id,
+                    policy: HistoryRetentionPolicy(targetDetailedGroups: 0))
+                return nil
+            } catch { return error as? HistoryFailure }
+        }
+        let cancellationFailure = await cancelled.value
+        XCTAssertEqual(cancellationFailure?.cause, .cancelled)
+        XCTAssertEqual(try engine.historyPage(limit: 10).count, 4)
+        let oversized = HistoryCommand(fingerprint: Data("large".utf8),
+            payload: HistoryPayload(family: "counter.set", data: Data(repeating: 0, count: 17)))
+        guard case .failure(let capacity) = await engine.submit(oversized) else {
+            return XCTFail("Hard payload limit did not refuse admission")
+        }
+        XCTAssertEqual(capacity.cause, .capacity)
+        XCTAssertEqual(try engine.retentionHolds().map(\.id), [held.id])
+        let result = try engine.consolidateHistory(through: boundary.id,
+            policy: HistoryRetentionPolicy(targetDetailedGroups: 0))
+        XCTAssertEqual(result.removedGroups, 2)
+        XCTAssertEqual(result.retainedGroups, 2)
+        XCTAssertTrue(result.targetUnmet)
+        guard case .accepted = await engine.undo(), case .accepted = await engine.undo() else {
+            return XCTFail("Ordinary two-group depth was shortened")
+        }
+        XCTAssertEqual(host.value, 2)
+        XCTAssertFalse(engine.snapshot.canUndo)
+        XCTAssertTrue(engine.snapshot.canRedo)
+        try await engine.close()
+    }
+
+    func testBranchedDetailSurvivesItsHoldAndPrunesAfterRelease() async throws {
+        let directory = try testDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let host = try CounterHost(url: directory.appendingPathComponent("host.json"))
+        let engine = try await HistoryEngine.open(at: directory.appendingPathComponent("History.sqlite"),
+            scope: UUID(), workingIdentity: UUID(), mode: .create, host: host,
+            limits: HistoryLimits(maxUndoGroups: 1))
+        _ = try await accepted(engine, 1)
+        let displaced = try await accepted(engine, 2)
+        guard case .accepted = await engine.undo() else { return XCTFail("Undo failed") }
+        _ = try await accepted(engine, 3)
+        let boundary = try engine.createCheckpoint(name: "Three", state: payload(3))
+        let hold = try engine.holdDetail(from: displaced.groupID, through: displaced.groupID)
+        _ = try engine.consolidateHistory(through: boundary.id,
+            policy: HistoryRetentionPolicy(targetDetailedGroups: 0))
+        XCTAssertTrue(try engine.historyPage(limit: 10).contains { $0.groupID == displaced.groupID })
+        try engine.releaseHold(hold.id)
+        _ = try engine.consolidateHistory(through: boundary.id,
+            policy: HistoryRetentionPolicy(targetDetailedGroups: 0))
+        XCTAssertEqual(try engine.historyPage(limit: 10).count, 1)
+        XCTAssertEqual(host.value, 3)
+        try await engine.close()
     }
 }

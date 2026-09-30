@@ -105,4 +105,6 @@ A macOS 14 build target is not runtime evidence on that OS or Intel. No producti
 UndoKit API or Folio package was changed. This correctness run establishes no
 latency percentile or production safety ceiling.
 
-Maintainer acceptance is pending. #47 remains open.
+The maintainer accepted this bounded proof with its documented limitations.
+#47 is closed; the [implementation handoff](../../docs/implementation-handoff.md)
+carries remaining verification into the relevant production slices.

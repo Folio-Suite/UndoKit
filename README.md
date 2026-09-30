@@ -22,7 +22,7 @@ model and durable runtime remain future work. Disposable proofs are listed below
 The accepted [history-retention contract](docs/history-retention-contract.md)
 defines restoration, shared Undo/Redo depth, checkpoints, separate state and
 history holds, and safe pruning under host-selected policy. Its representation
-candidates and scale scenarios are being evaluated in disposable proofs.
+candidates and scale scenarios have accepted bounded proof results.
 
 The accepted [typed-interface contract](docs/typed-interface-contract.md)
 defines thin host adapters, opaque versioned payloads, JSON and XML/binary
@@ -38,7 +38,7 @@ observations and documented mechanism gaps; no production bridge is implemented.
 The accepted [store-lifecycle contract](docs/store-lifecycle-contract.md) defines
 host-registered document stores, an Application Support default for app-owned
 history, safe opening/closing, copying, migration and capacity handling. Measured
-limits require disposable storage and scale evidence in #47–#50.
+limits remain provisional; accepted storage and scale evidence is linked below.
 
 The accepted [measurement plan](docs/acceptance-measurement-plan.md) specifies
 mandatory workloads through 100,000 retained groups, optional multi-GiB payload
@@ -51,8 +51,8 @@ These hosts and stores are isolated from the framework target. Their reports
 separate observed behavior, simplified fixtures and unmet requirements. Passing
 prototype tests does not establish production support. The maintainer accepted
 the bounded proofs in #47–#50 with their documented limitations; those tickets
-are closed. The #51 design-readiness and implementation-handoff decision remains
-outstanding.
+are closed. The accepted [#51 implementation handoff](docs/implementation-handoff.md)
+authorizes implementation with verification developed alongside each slice.
 
 | Proof | Evidence |
 | --- | --- |

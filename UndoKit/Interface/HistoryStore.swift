@@ -16,14 +16,27 @@ public struct HistoryStoreFootprint: Equatable, Sendable {
     public let databaseBytes: Int64
     public let journalBytes: Int64
     public let sharedMemoryBytes: Int64
+    public let temporaryMaintenanceBytes: Int64
     public let estimatedWorkingHeadroomBytes: Int64
-    public var totalBytes: Int64 { databaseBytes + journalBytes + sharedMemoryBytes }
+    public var totalBytes: Int64 {
+        databaseBytes + journalBytes + sharedMemoryBytes + temporaryMaintenanceBytes
+    }
+}
+
+/// Read-only structural state for one registered scope. Pending recovery
+/// records remain visible without invoking a host or guessing an outcome.
+public struct HistoryScopeInspection: Equatable, Sendable {
+    public let scope: UUID
+    public let generation: UUID
+    public let isSuspended: Bool
+    public let pendingRecoveryCount: Int
 }
 
 /// Physical owner of a registered SQLite history store and its independent scopes.
 /// The host chooses and coordinates the location. A writable session holds one
 /// exclusive owner lock; readers may inspect committed records concurrently.
 @MainActor public final class HistoryStore {
+    @TaskLocal static var deliveringStore: ObjectIdentifier? = nil
     public let url: URL
     public let workingIdentity: UUID
     public private(set) var storeIdentity: UUID
@@ -35,6 +48,8 @@ public struct HistoryStoreFootprint: Equatable, Sendable {
     var closing = false
     var closed = false
     var maintenance = false
+    var activeMaintenanceURL: URL?
+    var writeFailed = false
     var context: NSManagedObjectContext { container.viewContext }
 
     private init(url: URL, workingIdentity: UUID, storeIdentity: UUID,
@@ -75,8 +90,18 @@ public struct HistoryStoreFootprint: Equatable, Sendable {
             try manager.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         case .existing, .independentCopy:
             guard exists else {
-                throw HistoryFailure(.compatibility, stage: .admission, disposition: .usable,
-                                     underlyingDescription: "Expected history is missing")
+                throw HistoryFailure(.missingHistory, stage: .admission, disposition: .usable)
+            }
+            do {
+                let handle = try FileHandle(forReadingFrom: url)
+                defer { try? handle.close() }
+                guard try handle.read(upToCount: 16) == Data("SQLite format 3\0".utf8) else {
+                    throw HistoryFailure(.corruptHistory, stage: .admission, disposition: .usable)
+                }
+            } catch let failure as HistoryFailure { throw failure }
+            catch {
+                throw HistoryFailure(.unavailableStore, stage: .admission, disposition: .usable,
+                                     underlyingDescription: String(describing: error))
             }
             if case .independentCopy = mode, access != .readWrite {
                 throw HistoryFailure(.invalidInput, stage: .admission, disposition: .usable)
@@ -87,7 +112,7 @@ public struct HistoryStoreFootprint: Equatable, Sendable {
             descriptor = Darwin.open(url.appendingPathExtension("owner").path,
                                      O_CREAT | O_RDWR, S_IRUSR | S_IWUSR)
             guard descriptor >= 0 else {
-                throw HistoryFailure(.storage, stage: .admission, disposition: .usable)
+                throw HistoryFailure(.unavailableStore, stage: .admission, disposition: .usable)
             }
             guard flock(descriptor, LOCK_EX | LOCK_NB) == 0 else {
                 Darwin.close(descriptor)
@@ -158,10 +183,27 @@ public struct HistoryStoreFootprint: Equatable, Sendable {
         var loadError: Error?
         container.loadPersistentStores { _, error in loadError = error }
         if let loadError {
-            throw HistoryFailure(.storage, stage: .admission, disposition: .usable,
+            throw HistoryFailure(openCause(for: loadError), stage: .admission, disposition: .usable,
                                  underlyingDescription: String(describing: loadError))
         }
         return container
+    }
+
+    private static func openCause(for error: Error) -> HistoryFailureCause {
+        var current: NSError? = error as NSError
+        while let problem = current {
+            if problem.domain == NSCocoaErrorDomain &&
+                (problem.code == NSPersistentStoreIncompatibleVersionHashError ||
+                 problem.code == NSMigrationError) {
+                return .compatibility
+            }
+            if problem.domain == NSSQLiteErrorDomain &&
+                (problem.code == 11 || problem.code == 26) {
+                return .corruptHistory
+            }
+            current = problem.userInfo[NSUnderlyingErrorKey] as? NSError
+        }
+        return .unavailableStore
     }
 
     private func register(mode: HistoryOpenMode) throws {
@@ -178,7 +220,7 @@ public struct HistoryStoreFootprint: Equatable, Sendable {
             created.setValue("primary", forKey: "key")
             created.setValue(workingIdentity.uuidString, forKey: "workingID")
             created.setValue(storeIdentity.uuidString, forKey: "storeID")
-            try context.save()
+            do { try context.save() } catch { context.rollback(); throw error }
         case .existing:
             guard let record else {
                 throw HistoryFailure(.compatibility, stage: .admission, disposition: .usable)
@@ -207,24 +249,34 @@ public struct HistoryStoreFootprint: Equatable, Sendable {
     /// Registers or reopens one scope. Each scope has its own host and ordered queue.
     public func openScope(_ scope: UUID, mode: HistoryScopeOpenMode,
                           host: any HistoryHost) async throws -> HistoryEngine {
-        guard access == .readWrite, !closing, !closed, !maintenance,
+        guard access == .readWrite, !closing, !closed, !maintenance, !writeFailed,
               engines[scope] == nil else {
             throw HistoryFailure(.busy, stage: .admission, disposition: .usable)
         }
         let engine = HistoryEngine(store: self, scope: scope, limits: limits, host: host)
-        try engine.register(mode: mode)
-        engines[scope] = engine
-        await engine.reconcileOnOpen()
-        try engine.refreshSnapshot()
-        return engine
+        do {
+            try engine.register(mode: mode)
+            engines[scope] = engine
+            await engine.reconcileOnOpen()
+            try engine.refreshSnapshot()
+            return engine
+        } catch {
+            context.rollback()
+            engines.removeValue(forKey: scope)
+            throw error
+        }
     }
 
     /// Reads committed group metadata from a reader session without a host adapter.
     public func historyPage(scope: UUID, after sequence: Int64? = nil,
                             limit: Int) throws -> [HistoryEntry] {
-        guard !closed, limit > 0, limit <= limits.maxReadPage else {
+        guard !closed else {
             throw HistoryFailure(.busy, stage: .admission, disposition: .usable)
         }
+        guard limit > 0, limit <= limits.maxReadPage else {
+            throw HistoryFailure(.capacity, stage: .admission, disposition: .usable)
+        }
+        _ = try inspectScope(scope)
         let request = NSFetchRequest<NSManagedObject>(entityName: "HistoryGroupRecord")
         request.predicate = NSPredicate(format: "scopeKey == %@ AND sequence > %@",
                                         scope.uuidString, NSNumber(value: sequence ?? 0))
@@ -241,6 +293,25 @@ public struct HistoryStoreFootprint: Equatable, Sendable {
         }
     }
 
+    /// Inspects a scope even when its unresolved transaction prevents mutation.
+    public func inspectScope(_ scope: UUID) throws -> HistoryScopeInspection {
+        guard !closed else { throw HistoryFailure(.busy, stage: .admission, disposition: .usable) }
+        if access == .readOnly { context.refreshAllObjects() }
+        let scopeRequest = NSFetchRequest<NSManagedObject>(entityName: "HistoryScopeRecord")
+        scopeRequest.predicate = NSPredicate(format: "key == %@", scope.uuidString)
+        scopeRequest.fetchLimit = 1
+        guard let row = try context.fetch(scopeRequest).first else {
+            throw HistoryFailure(.missingHistory, stage: .admission, disposition: .usable)
+        }
+        let pending = NSFetchRequest<NSManagedObject>(entityName: "HistoryTransactionRecord")
+        pending.predicate = NSPredicate(format: "scopeKey == %@ AND stage != %@ AND stage != %@ AND stage != %@",
+            scope.uuidString, "accepted", "rejected", "cancelled")
+        let generation = try row.uuid("generationID")
+        return HistoryScopeInspection(scope: scope, generation: generation,
+                                      isSuspended: row.bool("suspended"),
+                                      pendingRecoveryCount: try context.count(for: pending))
+    }
+
     /// Measures SQLite's database and live sidecars. Payloads and recovery rows
     /// reside in these files; host-owned referenced resources are excluded.
     public func physicalFootprint() -> HistoryStoreFootprint {
@@ -251,8 +322,19 @@ public struct HistoryStoreFootprint: Equatable, Sendable {
         return HistoryStoreFootprint(databaseBytes: size(url.path),
             journalBytes: size(url.path + "-wal"),
             sharedMemoryBytes: size(url.path + "-shm"),
+            temporaryMaintenanceBytes: activeMaintenanceURL.map { size($0.path) } ?? 0,
             estimatedWorkingHeadroomBytes: min(limits.maxStoreBytes,
                                                 Int64(limits.maxPayloadBytes) * 4 + 1_048_576))
+    }
+
+    func noteWriteFailure() {
+        guard !writeFailed else { return }
+        writeFailed = true
+        for engine in engines.values {
+            engine.publishSnapshot(canUndo: false, canRedo: false, isSuspended: true,
+                                   hasPending: engine.draining || !engine.queue.isEmpty,
+                                   generation: engine.snapshot.generation)
+        }
     }
 
     /// Gives the host a coherent closed SQLite copy while admission is stopped
@@ -262,15 +344,22 @@ public struct HistoryStoreFootprint: Equatable, Sendable {
         to destination: URL,
         capture: @MainActor (URL) async throws -> Void
     ) async throws {
-        guard access == .readWrite, !closed, !closing, !maintenance else {
+        guard access == .readWrite, !closed, !closing, !maintenance, !writeFailed,
+              Self.deliveringStore != ObjectIdentifier(self) else {
             throw HistoryFailure(.busy, stage: .admission, disposition: .usable)
         }
         maintenance = true
         defer { maintenance = false }
         while engines.values.contains(where: { $0.draining || !$0.queue.isEmpty || $0.reconciling }) {
+            if Task.isCancelled {
+                throw HistoryFailure(.cancelled, stage: .admission, disposition: .usable)
+            }
             await Task.yield()
         }
+        if Task.isCancelled { throw HistoryFailure(.cancelled, stage: .admission, disposition: .usable) }
         try copyIdle(to: destination)
+        activeMaintenanceURL = destination
+        defer { activeMaintenanceURL = nil }
         try await capture(destination)
     }
 
@@ -299,7 +388,15 @@ public struct HistoryStoreFootprint: Equatable, Sendable {
             throw HistoryFailure(.capacity, stage: .admission, disposition: .usable,
                                  underlyingDescription: "Insufficient configured headroom for a full store copy")
         }
-        try context.save()
+        if let available = try? destination.deletingLastPathComponent().resourceValues(
+            forKeys: [.volumeAvailableCapacityForImportantUsageKey]
+        ).volumeAvailableCapacityForImportantUsage,
+           available < footprint.totalBytes + footprint.estimatedWorkingHeadroomBytes {
+            throw HistoryFailure(.capacity, stage: .admission, disposition: .usable,
+                                 underlyingDescription: "Insufficient filesystem space for a full store copy")
+        }
+        do { try context.save() }
+        catch { context.rollback(); noteWriteFailure(); throw error }
         let coordinator = container.persistentStoreCoordinator
         let options: [AnyHashable: Any] = [NSSQLitePragmasOption: ["journal_mode": "DELETE"]]
         do {
@@ -329,13 +426,22 @@ public struct HistoryStoreFootprint: Equatable, Sendable {
     /// Stops all scope admission, waits for delivered work, then releases the owner.
     public func close() async throws {
         guard !closed else { return }
+        guard !maintenance else {
+            throw HistoryFailure(.busy, stage: .admission, disposition: .usable)
+        }
+        guard Self.deliveringStore != ObjectIdentifier(self) else {
+            throw HistoryFailure(.busy, stage: .admission, disposition: .usable)
+        }
         closing = true
-        for engine in Array(engines.values) { try await engine.close() }
+        let activeEngines = Array(engines.values)
+        for engine in activeEngines { engine.beginClosing() }
+        for engine in activeEngines { try await engine.close() }
         do {
             if access == .readWrite { try context.save() }
             let coordinator = container.persistentStoreCoordinator
             for persistentStore in coordinator.persistentStores { try coordinator.remove(persistentStore) }
         } catch {
+            if access == .readWrite { context.rollback(); noteWriteFailure() }
             throw HistoryFailure(.storage, stage: .finalization, disposition: .suspended,
                                  underlyingDescription: String(describing: error))
         }

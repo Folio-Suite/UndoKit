@@ -44,8 +44,10 @@ observations and documented mechanism gaps; the first production bridge extends 
 
 The accepted [store-lifecycle contract](docs/store-lifecycle-contract.md) defines
 host-registered document stores, an Application Support default for app-owned
-history, safe opening/closing, copying, migration and capacity handling. Measured
-limits remain provisional; accepted storage and scale evidence is linked below.
+history, safe opening/closing, copying, migration and capacity handling. The
+physical `HistoryStore` now supports multiple ordered scopes, one writer, read-only
+inspection, coordinated whole-store copies and asynchronous closure. Structural
+migration and measured production limits remain future work.
 
 The accepted [measurement plan](docs/acceptance-measurement-plan.md) specifies
 mandatory workloads through 100,000 retained groups, optional multi-GiB payload
@@ -87,12 +89,11 @@ carry the Folio Project's MIT SPDX notices.
 ## Scope of this implementation
 
 The public typed host adapters support main-actor and actor-owned models, with
-host-registered codecs for current writes and earlier payload versions. The
-engine opens one scope per physical store. It supports bounded groups and full
-checkpoint payloads. Retention holds, pruning, recording controls, explicit
-reset, resource cleanup and large paged reconstruction remain follow-up work.
-The current format is the first concrete pre-alpha format; no legacy storage
-migration is required.
+host-registered codecs for current writes and earlier payload versions. A physical
+store supports independent scopes. It supports bounded groups and full checkpoint
+payloads. Retention holds, pruning, recording controls, explicit reset, resource
+cleanup and large paged reconstruction remain follow-up work. The current format
+is the first concrete pre-alpha format; no legacy storage migration is required.
 
 Run the independent tests with `swift test --package-path UndoKit`, or use the
 signed Xcode UndoKit scheme. Work integration tests use Core; native document

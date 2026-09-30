@@ -101,6 +101,9 @@ public enum HistoryOpenMode: Sendable {
         if Task.isCancelled {
             return .failure(HistoryFailure(.cancelled, stage: .admission, disposition: .usable))
         }
+        if store.writeFailed {
+            return .failure(HistoryFailure(.storage, stage: .admission, disposition: .suspended))
+        }
         guard !closed, !closing, !reconciling, !store.closing, !store.closed,
               !store.maintenance else {
             return .failure(HistoryFailure(.busy, stage: .admission, disposition: .usable))

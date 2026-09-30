@@ -126,6 +126,12 @@ public protocol HistoryHost: AnyObject, Sendable {
 /// Broad failure categories independent of a host's domain vocabulary.
 public enum HistoryFailureCause: String, Sendable {
     case storage, capacity, identityConflict, invalidInput, hostProtocol, unresolved, busy, compatibility, cancelled
+    /// A host expected registered history, but no database exists at that location.
+    case missingHistory
+    /// Existing bytes are not a readable SQLite history database.
+    case corruptHistory
+    /// The expected location exists but cannot currently be opened.
+    case unavailableStore
 }
 
 /// The transaction stage at which completion failed.

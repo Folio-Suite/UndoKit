@@ -6,6 +6,15 @@ import CryptoKit
 import Foundation
 
 extension HistoryEngine {
+    func saveContext() throws {
+        do { try context.save() }
+        catch {
+            context.rollback()
+            store.noteWriteFailure()
+            throw error
+        }
+    }
+
     func register(mode: HistoryScopeOpenMode) throws {
         let key = scope.uuidString
         let row = try fetchOne("HistoryScopeRecord", key: key)
@@ -18,7 +27,7 @@ extension HistoryEngine {
             new.setValue(UUID().uuidString, forKey: "generationID")
             new.setValue(Int64(1), forKey: "nextSequence")
             new.setValue(false, forKey: "suspended")
-            try context.save()
+            try saveContext()
         case .existing:
             guard row?.string("workingID") == store.workingIdentity.uuidString else {
                 throw HistoryFailure(.identityConflict, stage: .admission, disposition: .usable)
@@ -27,6 +36,12 @@ extension HistoryEngine {
     }
 
     func updateSnapshot() {
+        if store.writeFailed {
+            publishSnapshot(canUndo: false, canRedo: false, isSuspended: true,
+                            hasPending: draining || !queue.isEmpty,
+                            generation: snapshot.generation)
+            return
+        }
         guard !closed else {
             publishSnapshot(canUndo: false, canRedo: false,
                             isSuspended: snapshot.isSuspended, hasPending: false,
@@ -41,8 +56,10 @@ extension HistoryEngine {
         let suspended = row.bool("suspended")
         let canUndo = try eligibleGroup(for: .undo) != nil
         let canRedo = try eligibleGroup(for: .redo) != nil
-        publishSnapshot(canUndo: !suspended && canUndo, canRedo: !suspended && canRedo,
-                        isSuspended: suspended, hasPending: draining || !queue.isEmpty,
+        publishSnapshot(canUndo: !suspended && !store.writeFailed && canUndo,
+                        canRedo: !suspended && !store.writeFailed && canRedo,
+                        isSuspended: suspended || store.writeFailed,
+                        hasPending: draining || !queue.isEmpty,
                         generation: try row.uuid("generationID"))
     }
 
@@ -50,7 +67,7 @@ extension HistoryEngine {
         context.rollback()
         if let row = try? scopeRecord() {
             row.setValue(true, forKey: "suspended")
-            try? context.save()
+            try? saveContext()
         }
         publishSnapshot(canUndo: false, canRedo: false, isSuspended: true,
                         hasPending: draining || !queue.isEmpty,
@@ -60,7 +77,7 @@ extension HistoryEngine {
     func unsuspend() {
         if let row = try? scopeRecord() {
             row.setValue(false, forKey: "suspended")
-            try? context.save()
+            try? saveContext()
         }
         updateSnapshot()
     }

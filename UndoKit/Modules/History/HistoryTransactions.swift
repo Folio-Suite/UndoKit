@@ -7,6 +7,9 @@ import Foundation
 extension HistoryEngine {
     func execute(_ request: Request) async -> HistoryResult {
         do {
+            guard !store.writeFailed else {
+                return .failure(HistoryFailure(.storage, stage: .admission, disposition: .suspended))
+            }
             guard !(try scopeRecord().bool("suspended")) else {
                 return .failure(HistoryFailure(.unresolved, stage: .reconciliation, disposition: .suspended))
             }
@@ -65,16 +68,23 @@ extension HistoryEngine {
                                      sequence: sequence, command: command.id)
             let delivery = try prepare(command, kind: kind, targetGroup: targetGroup,
                                        token: token, scopeRow: scopeRow)
-            let outcome = await deliverToHost(delivery)
+            let outcome = await HistoryStore.$deliveringStore.withValue(ObjectIdentifier(store)) {
+                await deliverToHost(delivery)
+            }
             return await finish(transactionKey: key, outcome: outcome)
         } catch {
             context.rollback()
             let durableStage = (try? fetchOne("HistoryTransactionRecord", key: key))?.string("stage")
+            if store.writeFailed {
+                let stage: HistoryFailureStage = durableStage == nil ? .preparation : .finalization
+                return .failure(HistoryFailure(.storage, stage: stage, disposition: .suspended,
+                                               underlyingDescription: String(describing: error)))
+            }
             if durableStage == "prepared" {
                 do {
                     let prepared = try fetchOne("HistoryTransactionRecord", key: key)
                     prepared?.setValue("cancelled", forKey: "stage")
-                    try context.save()
+                    try saveContext()
                     return .failure(HistoryFailure(.storage, stage: .preparation,
                                                    disposition: .usable,
                                                    underlyingDescription: String(describing: error)))
@@ -154,9 +164,9 @@ extension HistoryEngine {
             row.setValue(transaction, forKey: "transaction")
         }
         scopeRow.setValue(sequence + 1, forKey: "nextSequence")
-        try context.save()
+        try saveContext()
         transaction.setValue("deliveryStarted", forKey: "stage")
-        try context.save()
+        try saveContext()
         return HistoryDelivery(token: token, kind: kind, members: command.members,
                                restorationOrigin: command.restorationOrigin)
     }
@@ -169,7 +179,7 @@ extension HistoryEngine {
             switch outcome {
             case .unresolved:
                 transaction.setValue("unresolved", forKey: "stage")
-                try context.save()
+                try saveContext()
                 suspend()
                 return .failure(HistoryFailure(.unresolved, stage: .reconciliation, disposition: .suspended))
             case .failure(let failure):
@@ -182,7 +192,7 @@ extension HistoryEngine {
                 return try closeUsableFailure(failure, transaction: transaction)
             case .rejected:
                 transaction.setValue("rejectionPending", forKey: "stage")
-                try context.save()
+                try saveContext()
                 return try finalizeRejected(transaction)
             case .accepted(let effects):
                 let members = try transactionMembers(transaction)
@@ -200,7 +210,7 @@ extension HistoryEngine {
                     put(effect.redo, on: member, prefix: "redo")
                 }
                 transaction.setValue("acceptancePending", forKey: "stage")
-                try context.save()
+                try saveContext()
                 return try finalizeAccepted(transaction)
             }
         } catch {
@@ -273,7 +283,7 @@ extension HistoryEngine {
             }
         }
         transaction.setValue("accepted", forKey: "stage")
-        try context.save()
+        try saveContext()
         updateSnapshot()
         let token = try token(for: transaction)
         return .accepted(HistoryReceipt(token: token, groupID: try group.uuid("key")))
@@ -286,7 +296,7 @@ extension HistoryEngine {
             target.setValue("invalid", forKey: "state")
         }
         transaction.setValue("rejected", forKey: "stage")
-        try context.save()
+        try saveContext()
         updateSnapshot()
         return .rejected
     }

@@ -6,12 +6,28 @@ import Darwin
 import Foundation
 
 extension HistoryEngine {
+    func beginClosing() {
+        guard !closing, !closed else { return }
+        closing = true
+        let unexecuted = queue
+        queue.removeAll()
+        for waiting in unexecuted {
+            waiting.continuation.resume(returning: .failure(
+                HistoryFailure(.busy, stage: .admission, disposition: .usable)
+            ))
+        }
+    }
+
     /// Records host-confirmed coherent state. The host secures its required resources first.
     /// Checkpoint creation is synchronous and requires an idle, usable scope.
     public func createCheckpoint(
         id: UUID = UUID(), name: String?, state: HistoryPayload
     ) throws -> HistoryCheckpointInfo {
-        guard !draining, !closed, !snapshot.isSuspended else {
+        if store.writeFailed {
+            throw HistoryFailure(.storage, stage: .admission, disposition: .suspended)
+        }
+        guard !draining, !closed, !store.closing, !store.closed, !store.maintenance,
+              !snapshot.isSuspended else {
             throw HistoryFailure(.busy, stage: .admission, disposition: .usable)
         }
         guard valid(state), (name?.utf8.count ?? 0) <= 4096, hasCapacity(bytes: state.data.count) else {
@@ -37,7 +53,7 @@ extension HistoryEngine {
         row.setValue(digest(state), forKey: "stateDigest")
         scopeRow.setValue(sequence + 1, forKey: "nextSequence")
         do {
-            try context.save()
+            try saveContext()
         } catch {
             context.rollback()
             throw HistoryFailure(.storage, stage: .preparation, disposition: .usable)
@@ -107,23 +123,25 @@ extension HistoryEngine {
     /// Stops admission and releases writable ownership after active delivery reaches a safe boundary.
     /// Requests still queued return an admission failure without reaching the host.
     public func close() async throws {
-        guard !closed else { return }
+        guard HistoryStore.deliveringStore != ObjectIdentifier(store) else {
+            throw HistoryFailure(.busy, stage: .admission, disposition: .usable)
+        }
+        guard !store.maintenance else {
+            throw HistoryFailure(.busy, stage: .admission, disposition: .usable)
+        }
+        if closed {
+            if ownsConvenienceStore && !store.closed { try await store.close() }
+            return
+        }
         guard !reconciling else {
             throw HistoryFailure(.busy, stage: .reconciliation, disposition: .suspended)
         }
-        closing = true
-        let unexecuted = queue
-        queue.removeAll()
-        for waiting in unexecuted {
-            waiting.continuation.resume(returning: .failure(
-                HistoryFailure(.busy, stage: .admission, disposition: .usable)
-            ))
-        }
+        beginClosing()
         if draining {
             await withCheckedContinuation { continuation in closeWaiters.append(continuation) }
         }
         do {
-            try context.save()
+            try saveContext()
         } catch {
             publishSnapshot(canUndo: false, canRedo: false, isSuspended: true,
                             hasPending: false, generation: snapshot.generation)
@@ -133,6 +151,6 @@ extension HistoryEngine {
         closed = true
         updateSnapshot()
         store.engines.removeValue(forKey: scope)
-        if ownsConvenienceStore { try await store.close() }
+        if ownsConvenienceStore && !store.closing { try await store.close() }
     }
 }

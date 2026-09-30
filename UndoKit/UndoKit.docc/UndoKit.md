@@ -17,8 +17,9 @@ is required. Swift clients import `UndoKit`.
 
 ## Public interface map
 
-- `Interface/HistoryEngine.swift` — store opening, command submission, Undo, Redo and availability.
-- `Interface/HistoryQueries.swift` — checkpoints, bounded history pages, store copying and closing.
+- `Interface/HistoryStore.swift` — physical registration, placement, read-only inspection, copies, capacity and closure.
+- `Interface/HistoryEngine.swift` — scope command submission, Undo, Redo and availability.
+- `Interface/HistoryQueries.swift` — checkpoints, bounded history pages and scope closure.
 - `Interface/HistoryRecovery.swift` — reconciliation of interrupted or suspended transactions.
 - `Interface/HistoryTypes.swift` — host contract, payloads, results, failures, snapshots and limits.
 - `Interface/HistoryCodecs.swift` — explicit payload codecs and host handler contracts.
@@ -34,8 +35,13 @@ router's AppKit behavior.
 
 ## First supported operation
 
-``HistoryEngine`` opens one host-defined scope in a Core Data store. The first
-operation supports bounded command groups, durable Undo/Redo, explicit checkpoint
+``HistoryStore`` registers a physical Core Data database. A writable session owns
+its writer lock and may open several ``HistoryEngine`` scopes with separate hosts,
+ordering, availability and recovery state. A read-only session can inspect
+committed history and pending recovery evidence while the writer remains open.
+The `HistoryEngine.open` convenience owns one store and scope.
+
+An engine supports bounded command groups, durable Undo/Redo, explicit checkpoint
 snapshots, restoration provenance, and retained displaced continuations. A new
 edit after Undo retires ordinary Redo eligibility while retaining its records.
 Undo and Redo create accepted records instead of deleting the original edit.
@@ -70,9 +76,14 @@ identity for a possibly delivered command.
 Use `.create` only for a new store and `.existing` for a known store. An explicit
 independent copy supplies the source working identity and a new identity.
 Opening does not replace missing or unsupported history with an empty store.
-``HistoryEngine/copyStore(to:)`` requires idle, resolved history and emits a
-closed snapshot; the host must capture matching domain data and dependencies.
-``HistoryEngine/close()`` stops admission and releases ownership. The host keeps
+``HistoryStore/withCoordinatedCopy(to:capture:)`` stops admission across all
+scopes, waits for delivered work, and supplies a closed SQLite copy while the
+host captures matching domain data and dependencies. Unresolved transactions
+block an ordinary independent copy. Opening the copy with `.independentCopy`
+changes its working identity while preserving inherited history. A move retains
+the original identity. ``HistoryStore/close()`` stops all scope admission and
+releases ownership after delivered work reaches a recoverable boundary. Closing
+an individual engine leaves other scopes open. The host keeps
 its own data store and does not use UndoKit as its document write-ahead log.
 
 ## Checkpoints and bounded reading
@@ -108,8 +119,8 @@ reconciles it. The bridge does not navigate or interpret affected-content data.
 
 ## Current limits
 
-The first operation is not the complete accepted UndoKit design. Multi-scope
-physical stores, recording controls, generation reset, retention holds, resource-reference
+The first operation is not the complete accepted UndoKit design. Recording
+controls, generation reset, retention holds, resource-reference
 maintenance, pruning/consolidation, and large paged reconstruction need follow-up
 implementation. Host payloads remain bounded. The independent tests do not
 establish production behavior at the prototype's 100,000-group scale.
@@ -123,6 +134,7 @@ publication remain deferred. Apps and Kits ship as a coordinated Suite version.
 ### Durable history
 
 - ``HistoryEngine``
+- ``HistoryStore``
 - ``HistoryHost``
 - ``HistoryCommand``
 - ``HistoryPayload``

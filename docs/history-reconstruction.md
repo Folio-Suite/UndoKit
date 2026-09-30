@@ -65,3 +65,22 @@ runner holds a machine-local lock. A budget stop is reported as incomplete evide
 The fixture uses a process-local host to isolate history-engine costs; it does not
 measure host durability or full document reconstruction cost. Normal tests skip
 this fixture. Existing prototype measurements remain separate evidence.
+
+### Measured production-engine case
+
+On the maintainer's Mac on 2026-09-30, the guarded 10,000-group release case
+completed at source `25e7bbd279e57bfea0d367616b7b0526aebed143`:
+
+| Phase | Result |
+| --- | --- |
+| Fixture construction | 10,000 accepted groups in 320.25 seconds |
+| Far-back read | 9,999 transitions in 1.735 seconds, reconstructed state verified |
+| Divergent read | 101 transitions in 0.019 seconds, displaced state verified |
+| Overall including build | 341.64 seconds |
+| Peak sampled descendant RSS | 733,822,976 bytes |
+| Peak sampled owned footprint | 128,012,288 bytes |
+
+The later lifecycle rebase changes failure handling and closure; its functional
+suite is rerun separately. This case does not qualify 100,000 production groups,
+large payloads, host database throughput, or document UI responsiveness. The runner
+accepts larger opt-in cases under the same safeguards.

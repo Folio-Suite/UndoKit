@@ -90,7 +90,7 @@
         <attribute name="version" attributeType="Integer 64" usesScalarValueType="YES"/>
         <attribute name="state" attributeType="Binary"/>
         <attribute name="stateDigest" attributeType="Binary"/>
-        <uniquenessConstraints><uniquenessConstraint><constraint value="key"/></uniquenessConstraint></uniquenessConstraints>
+        <uniquenessConstraints><uniquenessConstraint><constraint value="scopeKey"/><constraint value="key"/></uniquenessConstraint></uniquenessConstraints>
     </entity>
     <entity name="HistoryStoreRecord" representedClassName="NSManagedObject" syncable="YES">
         <attribute name="key" attributeType="String"/>

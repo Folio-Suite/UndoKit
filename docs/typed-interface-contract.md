@@ -195,6 +195,28 @@ potentially expensive operations must be documented. Swift module independence
 is required. External Objective-C and binary-distribution work remains deferred
 beyond Folio Suite 1.0.
 
+## Current implementation note
+
+Public typed contracts and forwarding methods remain in `UndoKit/Interface/`.
+`UndoKit/Modules/HostAdaptation/` owns codec execution, registration binding and
+validation, version selection, typed delivery and outcome conversion, and opaque
+family routing. Registration construction derives persisted operation and codec
+identity/configuration from the codec values. It rejects empty identities,
+nonpositive current versions, and invalid older-version mappings with an
+admission `invalidInput` failure. Main-actor and actor handlers receive a
+`HistoryOperationContext` containing the transaction token and optional
+restoration origin; typed Commands carry restoration origin and presentation
+metadata, and accepted typed effects carry retained resources. A typed callback
+that cannot establish an authoritative result returns unresolved. In particular,
+encoding accepted-effect evidence after a host mutation has no durable proof on
+its own: the host must preserve evidence atomically with its semantic change, and
+a failure to produce the callback evidence cannot be turned into rejection.
+
+The compile-only independent consumer demonstrates a main-actor registration,
+codec-derived metadata, typed submission and checkpoint state conversion. Its
+handler returns unresolved because that sample has no semantic store or durable
+outcome receipt. This is interface coverage, not runtime or performance evidence.
+
 ## Accepted feasibility evidence and handoff
 
 The disposable proof is preserved separately from main on

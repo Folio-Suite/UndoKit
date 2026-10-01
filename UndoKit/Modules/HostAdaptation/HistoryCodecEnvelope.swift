@@ -9,26 +9,6 @@ struct HistoryCodecEnvelope: Codable, Sendable {
     let bytes: Data
 }
 
-extension HistoryRegisteredHost {
-    public func deliver(_ delivery: HistoryDelivery) async -> HistoryHostOutcome {
-        await registration.handler.deliver(delivery, registration: registration)
-    }
-
-    public func outcome(for token: HistoryToken) async -> HistoryHostOutcome {
-        await registration.handler.lookup(token, registration: registration)
-    }
-}
-
-@MainActor extension MainActorHistoryRegisteredHost {
-    public func deliver(_ delivery: HistoryDelivery) async -> HistoryHostOutcome {
-        await registration.handler.deliver(delivery, registration: registration)
-    }
-
-    public func outcome(for token: HistoryToken) async -> HistoryHostOutcome {
-        await registration.handler.lookup(token, registration: registration)
-    }
-}
-
 func decodeEnvelope<Value>(_ data: Data, using codec: HistoryCodec<Value>,
                            stage: HistoryFailureStage) throws -> Value {
     let envelope = try PropertyListDecoder().decode(HistoryCodecEnvelope.self, from: data)

@@ -5,7 +5,7 @@ import Foundation
 import UndoKit
 import XCTest
 
-private final class DomainBox {
+final class DomainBox {
     let value: Int
     init(_ value: Int) { self.value = value }
 }
@@ -16,7 +16,7 @@ private struct DomainCodecs {
     let state: HistoryCodec<DomainBox>
 }
 
-private func versionedCodec(_ version: Int) -> HistoryCodec<DomainBox> {
+func versionedCodec(_ version: Int) -> HistoryCodec<DomainBox> {
     HistoryCodec(identifier: "domain.integer.v\(version)",
                  configuration: Data("format-\(version)".utf8),
                  encode: { Data("\(version):\($0.value)".utf8) },
@@ -32,16 +32,7 @@ private func versionedCodec(_ version: Int) -> HistoryCodec<DomainBox> {
                  })
 }
 
-private func versionedIdentity(_ codec: HistoryCodec<DomainBox>, version: Int) -> HistorySchemaIdentity {
-    HistorySchemaIdentity(operation: "counter", commandCodec: codec.identifier,
-                          effectCodec: codec.identifier, stateCodec: codec.identifier,
-                          commandCodecConfiguration: codec.configuration,
-                          effectCodecConfiguration: codec.configuration,
-                          stateCodecConfiguration: codec.configuration,
-                          commandVersion: version, effectVersion: version, stateVersion: version)
-}
-
-private actor TypedCounter: HistoryOperationHandler {
+actor TypedCounter: HistoryOperationHandler {
     typealias Command = DomainBox
     typealias Effect = DomainBox
     typealias State = DomainBox
@@ -109,7 +100,9 @@ private actor TypedCounter: HistoryOperationHandler {
         try decodeState(payload, using: registration).value
     }
 
-    func apply(_ commands: [(UUID, DomainBox)], token: HistoryToken) async -> HistoryTypedOutcome<DomainBox> {
+    func apply(_ commands: [(UUID, DomainBox)],
+               context: HistoryOperationContext) async -> HistoryTypedOutcome<DomainBox> {
+        let token = context.token
         if let receipt = receipts[token.command] { return receipt }
         if pauseNextApply {
             pauseNextApply = false
@@ -138,7 +131,8 @@ private actor TypedCounter: HistoryOperationHandler {
         return result
     }
 
-    func undo(_ effects: [(UUID, DomainBox)], token: HistoryToken) async -> HistoryTypedOutcome<DomainBox> {
+    func undo(_ effects: [(UUID, DomainBox)],
+              context: HistoryOperationContext) async -> HistoryTypedOutcome<DomainBox> {
         let prior = value
         value = effects.first?.1.value ?? value
         return .accepted(effects.map {
@@ -146,7 +140,8 @@ private actor TypedCounter: HistoryOperationHandler {
         })
     }
 
-    func redo(_ effects: [(UUID, DomainBox)], token: HistoryToken) async -> HistoryTypedOutcome<DomainBox> {
+    func redo(_ effects: [(UUID, DomainBox)],
+              context: HistoryOperationContext) async -> HistoryTypedOutcome<DomainBox> {
         let prior = value
         value = effects.first?.1.value ?? value
         return .accepted(effects.map {
@@ -162,7 +157,7 @@ private actor TypedCounter: HistoryOperationHandler {
     var applicationCount: Int { applications }
 }
 
-@MainActor private final class MainActorTypedCounter: MainActorHistoryOperationHandler {
+@MainActor final class MainActorTypedCounter: MainActorHistoryOperationHandler {
     typealias Command = DomainBox
     typealias Effect = DomainBox
     typealias State = DomainBox
@@ -175,17 +170,19 @@ private actor TypedCounter: HistoryOperationHandler {
                      using: registration, to: engine)
     }
 
-    func apply(_ commands: [(UUID, DomainBox)], token: HistoryToken) async -> HistoryTypedOutcome<DomainBox> {
+    func apply(_ commands: [(UUID, DomainBox)],
+               context: HistoryOperationContext) async -> HistoryTypedOutcome<DomainBox> {
         let prior = value
         value = commands.last?.1.value ?? value
         let result = HistoryTypedOutcome<DomainBox>.accepted(commands.map {
             HistoryTypedEffect(memberID: $0.0, undo: DomainBox(prior), redo: DomainBox(value))
         })
-        receipts[token.command] = result
+        receipts[context.token.command] = result
         return result
     }
 
-    func undo(_ effects: [(UUID, DomainBox)], token: HistoryToken) async -> HistoryTypedOutcome<DomainBox> {
+    func undo(_ effects: [(UUID, DomainBox)],
+              context: HistoryOperationContext) async -> HistoryTypedOutcome<DomainBox> {
         let prior = value
         value = effects.first?.1.value ?? value
         return .accepted(effects.map {
@@ -193,7 +190,8 @@ private actor TypedCounter: HistoryOperationHandler {
         })
     }
 
-    func redo(_ effects: [(UUID, DomainBox)], token: HistoryToken) async -> HistoryTypedOutcome<DomainBox> {
+    func redo(_ effects: [(UUID, DomainBox)],
+              context: HistoryOperationContext) async -> HistoryTypedOutcome<DomainBox> {
         let prior = value
         value = effects.first?.1.value ?? value
         return .accepted(effects.map {
@@ -209,162 +207,6 @@ private actor TypedCounter: HistoryOperationHandler {
 }
 
 @MainActor final class HistoryTypedHostTests: XCTestCase {
-    func testActorReopenReadsOldHostVersionsWithoutRewritingPayloads() async throws {
-        let directory = try testDirectory()
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let store = directory.appendingPathComponent("History.sqlite")
-        let scope = UUID()
-        let workingID = UUID()
-        let oldCodec = versionedCodec(1)
-        let firstHandler = TypedCounter()
-        let firstRegistration = HistoryOperationRegistration(
-            identity: versionedIdentity(oldCodec, version: 1), commandCodec: oldCodec,
-            effectCodec: oldCodec, stateCodec: oldCodec, handler: firstHandler
-        )
-        let first = try await HistoryEngine.open(at: store, scope: scope, workingIdentity: workingID,
-                                                 mode: .create, host: HistoryRegisteredHost(firstRegistration))
-        guard case .accepted = await firstHandler.submitFour(to: first, registration: firstRegistration) else {
-            XCTFail("Version 1 command was not accepted")
-            return
-        }
-        let original = try await firstHandler.encodeStateValue(9, using: firstRegistration)
-        let checkpoint = try first.createCheckpoint(name: "Old state", state: original)
-        try await first.close()
-
-        let currentCodec = versionedCodec(2)
-        let incompatibleHandler = TypedCounter()
-        let incompatibleRegistration = HistoryOperationRegistration(
-            identity: versionedIdentity(currentCodec, version: 2), commandCodec: currentCodec,
-            effectCodec: currentCodec, stateCodec: currentCodec,
-            oldCommandCodecs: [1: oldCodec], oldStateCodecs: [1: oldCodec],
-            handler: incompatibleHandler
-        )
-        let incompatible = try await HistoryEngine.open(
-            at: store, scope: scope, workingIdentity: workingID, mode: .existing,
-            host: HistoryRegisteredHost(incompatibleRegistration)
-        )
-        guard case .failure(let missingDecoder) = await incompatible.undo() else {
-            XCTFail("Missing old effect decoder must refuse Undo")
-            return
-        }
-        XCTAssertEqual(missingDecoder.cause, .compatibility)
-        XCTAssertEqual(missingDecoder.disposition, .usable)
-        XCTAssertTrue(incompatible.snapshot.canUndo)
-        XCTAssertEqual(try incompatible.historyPage(limit: 10).count, 1)
-        let valueAfterRefusedUndo = await incompatibleHandler.currentValue
-        XCTAssertEqual(valueAfterRefusedUndo, 0)
-        try await incompatible.close()
-
-        let newHandler = TypedCounter()
-        let registration = HistoryOperationRegistration(
-            identity: versionedIdentity(currentCodec, version: 2), commandCodec: currentCodec,
-            effectCodec: currentCodec, stateCodec: currentCodec,
-            oldCommandCodecs: [1: oldCodec], oldEffectCodecs: [1: oldCodec],
-            oldStateCodecs: [1: oldCodec], handler: newHandler
-        )
-        let reopened = try await HistoryEngine.open(at: store, scope: scope, workingIdentity: workingID,
-                                                    mode: .existing, host: HistoryRegisteredHost(registration))
-        XCTAssertEqual(try reopened.checkpoint(id: checkpoint.id)?.state, original)
-        let decoded = try await newHandler.decodeStateValue(original, using: registration)
-        XCTAssertEqual(decoded, 9)
-        guard case .accepted = await reopened.undo() else {
-            XCTFail("Old effect did not decode for Undo")
-            return
-        }
-        let oldCommand = HistoryCommand(fingerprint: Data("old version nine".utf8), payload: original)
-        guard case .accepted = await reopened.submit(oldCommand) else {
-            XCTFail("Registered old Command version did not decode")
-            return
-        }
-        let countBeforeRefusal = await newHandler.applicationCount
-        let unknown = HistoryPayload(family: original.family, version: 99, data: original.data)
-        let failedCommand = HistoryCommand(fingerprint: Data("unsupported".utf8), payload: unknown)
-        guard case .failure(let failure) = await reopened.submit(
-            failedCommand
-        ) else {
-            XCTFail("Unregistered Command version was not refused")
-            return
-        }
-        XCTAssertEqual(failure.cause, .compatibility)
-        let countAfterRefusal = await newHandler.applicationCount
-        XCTAssertEqual(countAfterRefusal, countBeforeRefusal)
-        XCTAssertEqual(try reopened.checkpoint(id: checkpoint.id)?.state, original)
-        try await reopened.close()
-
-        let retried = try await HistoryEngine.open(at: store, scope: scope, workingIdentity: workingID,
-                                                  mode: .existing, host: HistoryRegisteredHost(registration))
-        let repeatedResult = await retried.submit(failedCommand)
-        XCTAssertEqual(repeatedResult, .failure(failure))
-        let countAfterRetry = await newHandler.applicationCount
-        XCTAssertEqual(countAfterRetry, countBeforeRefusal)
-        try await retried.close()
-    }
-
-    func testMainActorReopenReadsOldHostVersionsAndRefusesUnknown() async throws {
-        let directory = try testDirectory()
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let store = directory.appendingPathComponent("History.sqlite")
-        let scope = UUID()
-        let workingID = UUID()
-        let oldCodec = versionedCodec(1)
-        let firstHandler = MainActorTypedCounter()
-        let firstRegistration = HistoryOperationRegistration(
-            identity: versionedIdentity(oldCodec, version: 1), commandCodec: oldCodec,
-            effectCodec: oldCodec, stateCodec: oldCodec, handler: firstHandler
-        )
-        let first = try await HistoryEngine.open(at: store, scope: scope, workingIdentity: workingID,
-                                                 mode: .create, host: MainActorHistoryRegisteredHost(firstRegistration))
-        guard case .accepted = await firstHandler.submitFour(to: first, registration: firstRegistration) else {
-            XCTFail("Version 1 command was not accepted")
-            return
-        }
-        let original = try firstHandler.encodeState(DomainBox(9), using: firstRegistration)
-        let checkpoint = try first.createCheckpoint(name: "Old state", state: original)
-        try await first.close()
-
-        let currentCodec = versionedCodec(2)
-        let newHandler = MainActorTypedCounter()
-        let registration = HistoryOperationRegistration(
-            identity: versionedIdentity(currentCodec, version: 2), commandCodec: currentCodec,
-            effectCodec: currentCodec, stateCodec: currentCodec,
-            oldCommandCodecs: [1: oldCodec], oldEffectCodecs: [1: oldCodec],
-            oldStateCodecs: [1: oldCodec], handler: newHandler
-        )
-        let reopened = try await HistoryEngine.open(at: store, scope: scope, workingIdentity: workingID,
-                                                    mode: .existing, host: MainActorHistoryRegisteredHost(registration))
-        XCTAssertEqual(try reopened.checkpoint(id: checkpoint.id)?.state, original)
-        XCTAssertEqual(try newHandler.decodeState(original, using: registration).value, 9)
-        let currentState = try newHandler.encodeState(DomainBox(10), using: registration)
-        XCTAssertEqual(currentState.version, 2)
-        let mismatchedEnvelope = HistoryPayload(family: original.family, version: 1, data: currentState.data)
-        XCTAssertThrowsError(try newHandler.decodeState(mismatchedEnvelope, using: registration))
-        XCTAssertThrowsError(try newHandler.decodeState(
-            HistoryPayload(family: original.family, version: 99, data: original.data), using: registration
-        ))
-        guard case .accepted = await reopened.undo() else {
-            XCTFail("Old effect did not decode for Undo")
-            return
-        }
-        guard case .accepted = await reopened.submit(
-            HistoryCommand(fingerprint: Data("old version nine".utf8), payload: original)
-        ) else {
-            XCTFail("Registered old Command version did not decode")
-            return
-        }
-        let valueBeforeRefusal = newHandler.currentValue
-        let unknown = HistoryPayload(family: original.family, version: 99, data: original.data)
-        guard case .failure(let failure) = await reopened.submit(
-            HistoryCommand(fingerprint: Data("unsupported".utf8), payload: unknown)
-        ) else {
-            XCTFail("Unregistered Command version was not refused")
-            return
-        }
-        XCTAssertEqual(failure.cause, .compatibility)
-        XCTAssertEqual(newHandler.currentValue, valueBeforeRefusal)
-        XCTAssertEqual(try reopened.checkpoint(id: checkpoint.id)?.state, original)
-        try await reopened.close()
-    }
-
     func testActorOwnedNonSendableValuesRetryAndRoundTripState() async throws {
         let directory = try testDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -378,10 +220,8 @@ private actor TypedCounter: HistoryOperationHandler {
             return DomainBox(Int(Int64(bitPattern: bits)))
         })
         let codecs = DomainCodecs(command: codec, effect: codec, state: codec)
-        let identity = HistorySchemaIdentity(operation: "counter", commandCodec: codec.identifier,
-                                             effectCodec: codec.identifier, stateCodec: codec.identifier)
-        let registration = HistoryOperationRegistration(identity: identity, commandCodec: codec,
-                                                        effectCodec: codec, stateCodec: codec, handler: handler)
+        let registration = try HistoryOperationRegistration(operation: "counter", commandCodec: codec,
+                                                            effectCodec: codec, stateCodec: codec, handler: handler)
         let host = HistoryRegisteredHost(registration)
         let engine = try await HistoryEngine.open(at: directory.appendingPathComponent("History.sqlite"),
                                                    scope: UUID(), workingIdentity: UUID(), mode: .create,
@@ -395,7 +235,7 @@ private actor TypedCounter: HistoryOperationHandler {
         let stateValue = try await handler.stateRoundTrip(using: registration)
         XCTAssertEqual(currentValue, 4)
         XCTAssertEqual(stateValue, 9)
-        XCTAssertEqual(codecs.state.identifier, identity.stateCodec)
+        XCTAssertEqual(codecs.state.identifier, registration.identity.stateCodec)
         try await engine.close()
     }
 
@@ -411,10 +251,8 @@ private actor TypedCounter: HistoryOperationHandler {
             }
             return DomainBox(value)
         })
-        let identity = HistorySchemaIdentity(operation: "counter", commandCodec: codec.identifier,
-                                             effectCodec: codec.identifier, stateCodec: codec.identifier)
-        let registration = HistoryOperationRegistration(identity: identity, commandCodec: codec,
-                                                        effectCodec: codec, stateCodec: codec, handler: handler)
+        let registration = try HistoryOperationRegistration(operation: "counter", commandCodec: codec,
+                                                            effectCodec: codec, stateCodec: codec, handler: handler)
         let engine = try await HistoryEngine.open(at: directory.appendingPathComponent("History.sqlite"),
                                                    scope: UUID(), workingIdentity: UUID(), mode: .create,
                                                    host: HistoryRegisteredHost(registration))
@@ -440,10 +278,8 @@ private actor TypedCounter: HistoryOperationHandler {
             Data(String($0.value).utf8)
         }, decode: { DomainBox(Int(String(bytes: $0, encoding: .utf8) ?? "") ?? 0) })
         let handler = MainActorTypedCounter()
-        let identity = HistorySchemaIdentity(operation: "counter", commandCodec: codec.identifier,
-                                             effectCodec: codec.identifier, stateCodec: codec.identifier)
-        let registration = HistoryOperationRegistration(identity: identity, commandCodec: codec,
-                                                        effectCodec: codec, stateCodec: codec, handler: handler)
+        let registration = try HistoryOperationRegistration(operation: "counter", commandCodec: codec,
+                                                            effectCodec: codec, stateCodec: codec, handler: handler)
         let engine = try await HistoryEngine.open(at: directory.appendingPathComponent("History.sqlite"),
                                                    scope: UUID(), workingIdentity: UUID(), mode: .create,
                                                    host: MainActorHistoryRegisteredHost(registration))
@@ -462,10 +298,8 @@ private actor TypedCounter: HistoryOperationHandler {
             Data(String($0.value).utf8)
         }, decode: { DomainBox(Int(String(bytes: $0, encoding: .utf8) ?? "") ?? 0) })
         let handler = TypedCounter()
-        let identity = HistorySchemaIdentity(operation: "counter", commandCodec: codec.identifier,
-                                             effectCodec: codec.identifier, stateCodec: codec.identifier)
-        let registration = HistoryOperationRegistration(identity: identity, commandCodec: codec,
-                                                        effectCodec: codec, stateCodec: codec, handler: handler)
+        let registration = try HistoryOperationRegistration(operation: "counter", commandCodec: codec,
+                                                            effectCodec: codec, stateCodec: codec, handler: handler)
         let engine = try await HistoryEngine.open(at: directory.appendingPathComponent("History.sqlite"),
                                                    scope: UUID(), workingIdentity: UUID(), mode: .create,
                                                    host: HistoryRegisteredHost(registration))
@@ -488,6 +322,58 @@ private actor TypedCounter: HistoryOperationHandler {
         let applicationCount = await handler.applicationCount
         XCTAssertEqual(currentValue, 10)
         XCTAssertEqual(applicationCount, 1)
+        try await engine.close()
+    }
+
+    func testActorRegistrationRejectsSubmissionFromDifferentHandler() async throws {
+        let directory = try testDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let bound = TypedCounter()
+        let other = TypedCounter()
+        let codec = versionedCodec(1)
+        let registration = try HistoryOperationRegistration(
+            operation: "counter", commandCodec: codec, effectCodec: codec,
+            stateCodec: codec, handler: bound
+        )
+        let engine = try await HistoryEngine.open(at: directory.appendingPathComponent("History.sqlite"),
+                                                   scope: UUID(), workingIdentity: UUID(), mode: .create,
+                                                   host: HistoryRegisteredHost(registration))
+        guard case .failure(let failure) = await other.submitValue(4, to: engine, registration: registration) else {
+            XCTFail("An unregistered actor submitted through another handler's registration")
+            return
+        }
+        XCTAssertEqual(failure.cause, .compatibility)
+        XCTAssertEqual(failure.stage, .admission)
+        let boundApplications = await bound.applicationCount
+        let otherApplications = await other.applicationCount
+        XCTAssertEqual(boundApplications, 0)
+        XCTAssertEqual(otherApplications, 0)
+        XCTAssertTrue(try engine.historyPage(limit: 10).isEmpty)
+        try await engine.close()
+    }
+
+    func testMainActorRegistrationRejectsSubmissionFromDifferentHandler() async throws {
+        let directory = try testDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let bound = MainActorTypedCounter()
+        let other = MainActorTypedCounter()
+        let codec = versionedCodec(1)
+        let registration = try HistoryOperationRegistration(
+            operation: "counter", commandCodec: codec, effectCodec: codec,
+            stateCodec: codec, handler: bound
+        )
+        let engine = try await HistoryEngine.open(at: directory.appendingPathComponent("History.sqlite"),
+                                                   scope: UUID(), workingIdentity: UUID(), mode: .create,
+                                                   host: MainActorHistoryRegisteredHost(registration))
+        guard case .failure(let failure) = await other.submitFour(to: engine, registration: registration) else {
+            XCTFail("An unregistered main-actor instance submitted through another handler's registration")
+            return
+        }
+        XCTAssertEqual(failure.cause, .compatibility)
+        XCTAssertEqual(failure.stage, .admission)
+        XCTAssertEqual(bound.currentValue, 0)
+        XCTAssertEqual(other.currentValue, 0)
+        XCTAssertTrue(try engine.historyPage(limit: 10).isEmpty)
         try await engine.close()
     }
 }

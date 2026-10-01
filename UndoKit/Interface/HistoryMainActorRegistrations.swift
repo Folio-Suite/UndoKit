@@ -4,6 +4,8 @@
 import Foundation
 
 @MainActor public extension MainActorHistoryOperationHandler {
+    // MARK: - Typed submission and checkpoints
+
     /// Encodes and submits a Command on the main actor with the current host codec.
     /// - Parameters:
     ///   - command: Host value and stable canonical intent fingerprint.
@@ -14,24 +16,7 @@ import Foundation
     func submit(_ command: HistoryTypedCommand<Command>,
                 using registration: HistoryOperationRegistration<Self>,
                 to engine: any HistoryTransactions) async -> HistoryResult {
-        guard !registration.identity.operation.isEmpty,
-              registration.identity.commandVersion > 0,
-              registration.commandCodec.identifier == registration.identity.commandCodec,
-              registration.commandCodec.configuration == registration.identity.commandCodecConfiguration else {
-            return .failure(HistoryFailure(.compatibility, stage: .admission, disposition: .usable))
-        }
-        do {
-            return await engine.submit(HistoryCommand(
-                id: command.id, fingerprint: command.fingerprint,
-                payload: HistoryPayload(family: registration.identity.operation,
-                                        version: registration.identity.commandVersion,
-                                        data: try encodeEnvelope(command.value, using: registration.commandCodec)),
-                expectedGeneration: command.expectedGeneration
-            ))
-        } catch {
-            return .failure(HistoryFailure(.compatibility, stage: .admission, disposition: .usable,
-                                          underlyingDescription: String(describing: error)))
-        }
+        await submitRegistered(command, using: registration, to: engine)
     }
 
     /// Encodes a coherent host state on the main actor for checkpoint storage.
@@ -41,14 +26,7 @@ import Foundation
     /// - Returns: An opaque payload with the current state version and codec envelope.
     /// - Throws: A compatibility failure for invalid registration, or a codec error.
     func encodeState(_ state: State, using registration: HistoryOperationRegistration<Self>) throws -> HistoryPayload {
-        guard registration.stateCodec.identifier == registration.identity.stateCodec,
-              registration.stateCodec.configuration == registration.identity.stateCodecConfiguration,
-              registration.identity.stateVersion > 0 else {
-            throw HistoryFailure(.compatibility, stage: .admission, disposition: .usable)
-        }
-        return HistoryPayload(family: registration.identity.operation,
-                              version: registration.identity.stateVersion,
-                              data: try encodeEnvelope(state, using: registration.stateCodec))
+        try encodeRegisteredState(state, using: registration)
     }
 
     /// Decodes checkpoint state on the main actor using a registered host version.
@@ -60,61 +38,6 @@ import Foundation
     /// - Throws: A compatibility failure for an unknown version or mismatched envelope, or a codec error.
     func decodeState(_ payload: HistoryPayload,
                      using registration: HistoryOperationRegistration<Self>) throws -> State {
-        guard payload.family == registration.identity.operation,
-              let codec = registration.stateDecoder(for: payload.version) else {
-            throw HistoryFailure(.compatibility, stage: .reconciliation, disposition: .usable)
-        }
-        return try decodeEnvelope(payload.data, using: codec, stage: .reconciliation)
-    }
-
-    internal func deliver(
-        _ delivery: HistoryDelivery,
-        registration: HistoryOperationRegistration<Self>
-    ) async -> HistoryHostOutcome {
-        guard registration.identity.commandVersion > 0, registration.identity.effectVersion > 0,
-              registration.commandCodec.identifier == registration.identity.commandCodec,
-              registration.commandCodec.configuration == registration.identity.commandCodecConfiguration,
-              registration.effectCodec.identifier == registration.identity.effectCodec,
-              registration.effectCodec.configuration == registration.identity.effectCodecConfiguration,
-              delivery.members.allSatisfy({ $0.payload.family == registration.identity.operation }) else {
-            return .failure(HistoryFailure(.compatibility, stage: .delivery, disposition: .usable))
-        }
-        let typedOutcome: HistoryTypedOutcome<Effect>
-        do {
-            switch delivery.kind {
-            case .command:
-                typedOutcome = await apply(try registration.decodeCommands(delivery.members), token: delivery.token)
-            case .undo, .redo:
-                let effects = try registration.decodeEffects(delivery.members)
-                typedOutcome = delivery.kind == .undo
-                    ? await undo(effects, token: delivery.token)
-                    : await redo(effects, token: delivery.token)
-            }
-        } catch {
-            return .failure(HistoryFailure(.compatibility, stage: .delivery, disposition: .usable,
-                                          underlyingDescription: String(describing: error)))
-        }
-        switch typedOutcome {
-        case .rejected: return .rejected
-        case .unresolved: return .unresolved
-        case .accepted(let effects):
-            guard effects.count == delivery.members.count,
-                  effects.map(\.memberID) == delivery.members.map(\.id) else { return .unresolved }
-            do {
-                return .accepted(try registration.encodeEffects(effects))
-            } catch { return .unresolved }
-        }
-    }
-
-    internal func lookup(_ token: HistoryToken,
-                         registration: HistoryOperationRegistration<Self>) async -> HistoryHostOutcome {
-        do {
-            switch await outcome(for: token) {
-            case .rejected: return .rejected
-            case .unresolved: return .unresolved
-            case .accepted(let effects):
-                return .accepted(try registration.encodeEffects(effects))
-            }
-        } catch { return .unresolved }
+        try decodeRegisteredState(payload, using: registration)
     }
 }

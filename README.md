@@ -61,7 +61,12 @@ semantic effects and durable outcome receipts. See the public DocC catalog and
 Public declarations are grouped in `UndoKit/Interface/`; transaction coordination
 lives in `UndoKit/Modules/Transactions/`, retained-history behavior lives in
 `UndoKit/Modules/RetainedHistory/`, and persistence and scoped store activity
-live in `UndoKit/Modules/Storage/`.
+live in `UndoKit/Modules/Storage/`. Typed host adaptation lives in
+`UndoKit/Modules/HostAdaptation/`: it owns codecs, registration validation and
+version selection, typed delivery and outcome conversion, and opaque operation
+family routing. `Interface/` holds the public contracts and forwarding entry
+points; `// MARK:` divisions keep declarations discoverable without duplicating
+implementation.
 Start with `Interface/HistoryReading.swift` and `HistoryRetentionManaging.swift`
 for the retained-history capabilities. `HistoryReconstruction.swift` and
 `HistoryRetention.swift` contain their values; `HistorySessionLifecycle.swift`
@@ -77,10 +82,12 @@ history holds, and safe pruning under host-selected policy. Its representation
 candidates and scale scenarios have accepted bounded proof results.
 
 The accepted [typed-interface contract](docs/typed-interface-contract.md)
-defines thin host adapters, opaque versioned payloads, JSON and XML/binary
-property-list conveniences, asynchronous ordered submission and bounded reads.
-Its isolated Swift proof establishes adapter and codec feasibility, including
-fresh-process decoding; it does not implement the production history engine.
+defines typed host adapters, opaque versioned payloads, codec conveniences,
+asynchronous ordered submission and bounded reads. Its isolated Swift proof
+establishes adapter and codec feasibility, including fresh-process decoding;
+it does not implement the production history engine. The implementation's
+module ownership and typed callback context are recorded in
+[ADR 0003](docs/adr/0003-host-adaptation-module-ownership.md).
 
 The accepted [native-routing contract](docs/native-routing-contract.md) defines
 the reusable bridge, pending editing barriers, local text routing, coherent

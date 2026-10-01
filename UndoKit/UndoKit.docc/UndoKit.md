@@ -24,8 +24,10 @@ is required. Swift clients import `UndoKit`.
 - `Interface/HistoryRetentionManaging.swift` — checkpoint creation, durable holds and bounded consolidation.
 - `Interface/HistorySessionLifecycle.swift` — scope copy and closure.
 - `Interface/HistoryTypes.swift` — host contract, payloads, results, failures, snapshots and limits.
-- `Interface/HistoryCodecs.swift` — explicit payload codecs and host handler contracts.
-- `Interface/HistoryRegistrations.swift` — typed operation registrations and host families.
+- `Interface/HistoryTypedHosting.swift` — typed Commands/effects, callback context and actor handler contracts.
+- `Interface/HistoryCodecs.swift` — explicit payload codecs.
+- `Interface/HistoryRegistrations.swift` — typed operation registration and opaque bridges.
+- `Interface/HistoryHostRegistry.swift` — opaque operation-family router and atomic mixed-family callbacks.
 - `Interface/HistoryActorRegistrations.swift` — actor-isolated typed submission and dispatch.
 - `Interface/HistoryMainActorRegistrations.swift` — Cocoa main-actor typed submission and dispatch.
 - `Interface/HistoryReconstruction.swift` — plan, step, material and read identity types.
@@ -35,13 +37,17 @@ is required. Swift clients import `UndoKit`.
 - `Interface/HistoryGeneration.swift` — settled clear and quarantined unresolved reset.
 - `Interface/NativeHistoryRouter.swift` — native UndoManager routing and editing barriers.
 - `Resources/History.xcdatamodeld` — the framework-owned persistence schema.
+- `Modules/HostAdaptation/` — codecs, registration validation and version
+  selection, typed delivery and outcome conversion, and opaque family routing.
 
 FIFO admission, delivery, finalization, reconciliation, session inverses and
 availability are coordinated in `Modules/Transactions/`; interrupted outcomes
 are handled in `HistoryReconciliation.swift`. Checkpoints, Recovery Plans, holds,
 consolidation and the private plan registry live in `Modules/RetainedHistory/`.
-Persistence helpers and scoped store activity live in `Modules/Storage/`. The native manager helper
-stays with the router because it implements the public router's AppKit behavior.
+Persistence helpers and scoped store activity live in `Modules/Storage/`. Typed
+host adaptation is implemented in `Modules/HostAdaptation/`; public interface
+files state contracts and forward into it. The native manager helper stays with
+the router because it implements the public router's AppKit behavior.
 
 ## First supported operation
 
@@ -76,8 +82,12 @@ delivery.
 
 An opaque ``HistoryHost`` may be isolated to the main actor or another actor.
 Typed hosts use ``HistoryOperationRegistration`` with stable operation, schema,
-codec, configuration, and version identifiers. Register again from application
-code after opening; runtime closures and actors are never stored in the history.
+codec, configuration, and version identifiers. Construct the registration with
+the operation, command/effect/state versions, codecs, older-version codecs, and
+handler. Construction validates operation and codec identities and version
+configuration, and throws ``HistoryFailureCause/invalidInput`` when they are invalid.
+Register again from application code after opening; runtime closures and actors
+are never stored in the history.
 ``HistoryCodec`` provides explicitly selected JSON, XML property-list, and
 binary property-list conveniences, plus custom codecs. Codec identity and
 configuration are embedded with encoded values, so same-version bytes cannot be
@@ -87,12 +97,15 @@ defaults. Supply a host-defined canonical intent fingerprint rather than
 deriving it from an ordinary encoding.
 
 ``HistoryOperationHandler`` keeps non-Sendable values on its actor;
-``MainActorHistoryOperationHandler`` supports Cocoa document models. Each
+``MainActorHistoryOperationHandler`` supports Cocoa document models. Apply,
+undo, and redo callbacks receive ``HistoryOperationContext`` with the transaction
+token and optional restoration origin. Typed commands carry restoration origin
+and presentation metadata; effect resources travel with the typed effect. Each
 delivery contains the complete ordered group, and the handler must apply all
-members atomically or prove that none took effect. A mixed-family group needs an
-explicit atomic group executor in ``HistoryHostRegistry``. A callback failure
-after possible effect is unresolved. Reentry into the same engine is rejected
-before it can wait behind the active request.
+members atomically or prove that none took effect. A mixed-family group needs
+paired atomic execution and outcome-lookup callbacks in ``HistoryHostRegistry``.
+A callback failure after possible effect is unresolved. Reentry into the same
+engine is rejected before it can wait behind the active request.
 
 ``HistoryEngine/submit(_:)`` preserves queue admission order. Applications must
 establish their intended submission order. Completion follows history

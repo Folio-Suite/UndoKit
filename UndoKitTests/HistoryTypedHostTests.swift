@@ -56,14 +56,14 @@ private actor TypedCounter: HistoryOperationHandler {
     private var pauseWaiter: CheckedContinuation<Void, Never>?
     private var deliveryWaiter: CheckedContinuation<Void, Never>?
 
-    func submitFour(to engine: HistoryEngine,
+    func submitFour(to engine: any HistoryTransactions,
                     registration: HistoryOperationRegistration<TypedCounter>) async -> HistoryResult {
         await submit(HistoryTypedCommand(fingerprint: Data("set four".utf8), value: DomainBox(4)),
                      using: registration, to: engine)
     }
 
     func submitFourTwice(
-        to engine: HistoryEngine, registration: HistoryOperationRegistration<TypedCounter>
+        to engine: any HistoryTransactions, registration: HistoryOperationRegistration<TypedCounter>
     ) async -> (HistoryResult, HistoryResult) {
         let command = HistoryTypedCommand(id: UUID(), fingerprint: Data("set four".utf8), value: DomainBox(4))
         let first = await submit(command, using: registration, to: engine)
@@ -71,7 +71,7 @@ private actor TypedCounter: HistoryOperationHandler {
         return (first, retry)
     }
 
-    func submit(_ command: HistoryTypedCommand<DomainBox>, to engine: HistoryEngine,
+    func submit(_ command: HistoryTypedCommand<DomainBox>, to engine: any HistoryTransactions,
                 registration: HistoryOperationRegistration<TypedCounter>) async -> HistoryResult {
         await submit(command, using: registration, to: engine)
     }
@@ -87,7 +87,7 @@ private actor TypedCounter: HistoryOperationHandler {
         deliveryWaiter?.resume()
         deliveryWaiter = nil
     }
-    func submitValue(_ value: Int, to engine: HistoryEngine,
+    func submitValue(_ value: Int, to engine: any HistoryTransactions,
                      registration: HistoryOperationRegistration<TypedCounter>) async -> HistoryResult {
         let command = HistoryTypedCommand(fingerprint: Data("set \(value)".utf8), value: DomainBox(value))
         return await submit(command, using: registration, to: engine)
@@ -169,7 +169,7 @@ private actor TypedCounter: HistoryOperationHandler {
     private var value = 0
     private var receipts: [UUID: HistoryTypedOutcome<DomainBox>] = [:]
 
-    func submitFour(to engine: HistoryEngine,
+    func submitFour(to engine: any HistoryTransactions,
                     registration: HistoryOperationRegistration<MainActorTypedCounter>) async -> HistoryResult {
         await submit(HistoryTypedCommand(fingerprint: Data("set four".utf8), value: DomainBox(4)),
                      using: registration, to: engine)

@@ -6,6 +6,29 @@ SPDX-License-Identifier: MIT
 # UndoKit
 A managed persistent undo manager for modern Apple ecosystem apps
 
+## Ordinary transactions
+
+Pass `HistoryTransactions` to code that submits edits or performs ordinary
+Undo/Redo. `HistoryEngine` conforms to this narrow main-actor interface; the
+owner keeps the concrete engine for recording, generation changes, retained
+history operations and closure.
+
+```swift
+@MainActor
+func apply(_ command: HistoryCommand, using transactions: any HistoryTransactions) async -> HistoryResult {
+    return await transactions.submit(command)
+}
+```
+
+The interface also provides `HistoryTransactions/undo(expectedGeneration:)`,
+`HistoryTransactions/redo(expectedGeneration:)` and
+`HistoryTransactions/reconcile()`. It exposes one availability callback;
+await each operation for its result and use the snapshot for current capability.
+
+The accepted [transaction module ownership decision](docs/adr/0001-transaction-module-ownership.md)
+records why ordinary transaction coordination is behind this protocol while
+lifecycle and retained-history controls remain on `HistoryEngine`.
+
 ## Integration with Folio
 
 UndoKit is an independently buildable framework in the Folio monorepo. Its source,
@@ -20,14 +43,15 @@ stores protocol structure; host payloads remain opaque. The host owns atomic
 semantic effects and durable outcome receipts. See the public DocC catalog and
 [Work adapter description](../docs/architecture/work-history-first-operation.md).
 
-Public declarations are grouped in `UndoKit/Interface/`; persistence, transaction
-coordination and storage implementations live in `UndoKit/Modules/History/`.
+Public declarations are grouped in `UndoKit/Interface/`; transaction coordination
+lives in `UndoKit/Modules/Transactions/`, and persistence and scoped store activity
+live in `UndoKit/Modules/Storage/`.
 `Interface/HistoryReconstruction.swift`, `HistoryRecoveryPlanning.swift` and
 `HistoryPresentation.swift` describe reconstruction and presentation.
 `HistoryRetention.swift`, `HistoryRetentionHolds.swift`,
 `HistoryConsolidation.swift` and `HistoryRetentionResources.swift` expose
 holds, consolidation and cross-scope resource maintenance.
-Folio's translation layer lives in `Core/WriteKit/WorkAdapter/`; UndoKit imports
+Folio's translation layer lives in `Core/WriteKit/Modules/WorkAdapter/`; UndoKit imports
 no Folio domain framework. The Core Data model is bundled from
 `UndoKit/Resources/`.
 

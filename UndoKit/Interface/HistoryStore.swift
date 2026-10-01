@@ -63,7 +63,8 @@ public struct HistoryScopeInspection: Equatable, Sendable {
     var engines: [UUID: HistoryEngine] = [:]
     var closing = false
     var closed = false
-    var maintenance = false
+    let activity = HistoryStoreActivity()
+    var maintenance: Bool { activity.maintenance }
     var activeMaintenanceURL: URL?
     var writeFailed = false
     var context: NSManagedObjectContext { container.viewContext }
@@ -209,12 +210,8 @@ extension HistoryStore {
         }
         let engine = HistoryEngine(store: self, scope: scope, limits: limits, host: host)
         do {
-            try engine.register(mode: mode)
-            engine.sessionStartSequence = try engine.scopeRecord().int64("nextSequence")
             engines[scope] = engine
-            await engine.reconcileOnOpen()
-            try engine.refreshSnapshot()
-            try engine.releaseSessionReferences()
+            try await engine.transaction.open(mode: mode)
             return engine
         } catch {
             context.rollback()
@@ -287,9 +284,7 @@ extension HistoryStore {
         guard !writeFailed else { return }
         writeFailed = true
         for engine in engines.values {
-            engine.publishSnapshot(canUndo: false, canRedo: false, isSuspended: true,
-                                   hasPending: engine.draining || !engine.queue.isEmpty,
-                                   generation: engine.snapshot.generation)
+            engine.transaction.updateSnapshot()
         }
     }
 
@@ -308,23 +303,12 @@ extension HistoryStore {
         to destination: URL,
         capture: @MainActor (URL) async throws -> Void
     ) async throws {
-        guard access == .readWrite, !closed, !closing, !maintenance, !writeFailed,
-              !Self.deliveringStores.contains(ObjectIdentifier(self)) else {
-            throw HistoryFailure(.busy, stage: .admission, disposition: .usable)
+        try await activity.withMaintenance(in: self) {
+            try copyIdle(to: destination)
+            activeMaintenanceURL = destination
+            defer { activeMaintenanceURL = nil }
+            try await capture(destination)
         }
-        maintenance = true
-        defer { maintenance = false }
-        while engines.values.contains(where: { $0.draining || !$0.queue.isEmpty || $0.reconciling }) {
-            if Task.isCancelled {
-                throw HistoryFailure(.cancelled, stage: .admission, disposition: .usable)
-            }
-            await Task.yield()
-        }
-        if Task.isCancelled { throw HistoryFailure(.cancelled, stage: .admission, disposition: .usable) }
-        try copyIdle(to: destination)
-        activeMaintenanceURL = destination
-        defer { activeMaintenanceURL = nil }
-        try await capture(destination)
     }
 
     /// Convenience for a host that already holds its own matching capture fence.
@@ -335,15 +319,10 @@ extension HistoryStore {
     /// Stops all scope admission, waits for delivered work, then releases the owner.
     public func close() async throws {
         guard !closed else { return }
-        guard !maintenance else {
-            throw HistoryFailure(.busy, stage: .admission, disposition: .usable)
-        }
-        guard !Self.deliveringStores.contains(ObjectIdentifier(self)) else {
-            throw HistoryFailure(.busy, stage: .admission, disposition: .usable)
-        }
+        try activity.requireClosureAdmission(in: self)
         closing = true
         let activeEngines = Array(engines.values)
-        for engine in activeEngines { engine.beginClosing() }
+        for engine in activeEngines { engine.transaction.beginClosing() }
         for engine in activeEngines { try await engine.close() }
         do {
             if access == .readWrite { try context.save() }

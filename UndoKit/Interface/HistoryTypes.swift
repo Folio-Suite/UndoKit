@@ -3,10 +3,6 @@
 
 import Foundation
 
-enum HistoryHostCallbackContext {
-    @TaskLocal static var activeEngines: Set<ObjectIdentifier> = []
-}
-
 /// An opaque, versioned value supplied and interpreted by a history host.
 public struct HistoryPayload: Equatable, Sendable {
     public let family: String

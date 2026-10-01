@@ -1,8 +1,6 @@
 // SPDX-FileCopyrightText: 2026 the Folio Project
 // SPDX-License-Identifier: MIT
 
-import CoreData
-import Darwin
 import Foundation
 
 /// Whether a registered history file is new, reopened, or an independent working copy.
@@ -12,71 +10,29 @@ public enum HistoryOpenMode: Sendable {
     case independentCopy(sourceWorkingIdentity: UUID)
 }
 
-/// A serialized, durable history for one host-defined scope.
+/// An open History Scope and its lifecycle controls.
 ///
-/// The host records a token and its accepted domain effect atomically. Every
-/// callback is main-actor isolated; it must not submit another request to this
-/// engine before the callback returns.
-@MainActor public final class HistoryEngine {
-    /// Called after a coherent availability change, following durable finalization.
-    public var snapshotDidChange: (@MainActor (HistorySnapshot) -> Void)?
-    /// The latest availability projection, including scope and generation identity.
-    public internal(set) var snapshot = HistorySnapshot(
-        canUndo: false, canRedo: false, isSuspended: false, hasPending: false
-    )
+/// Pass this session as `any HistoryTransactions` to ordinary editing code.
+/// Keep the concrete session with its owner for recording, generation, retained
+/// history and closure. Host outcomes remain authoritative on the host's actor.
+@MainActor public final class HistoryEngine: HistoryTransactions {
+    let history: HistoryScopeStorage
+    let transaction: HistoryTransactionCoordinator
+    var ownsConvenienceStore = false
 
-    enum Request {
-        case command(HistoryCommand)
-        case undo(expectedGeneration: UUID?)
-        case redo(expectedGeneration: UUID?)
-    }
-
-    struct Waiting {
-        let id: UUID
-        let request: Request
-        let continuation: CheckedContinuation<HistoryResult, Never>
-    }
-
-    let store: HistoryStore
-    var url: URL { store.url }
-    let scope: UUID
-    let limits: HistoryLimits
-    let host: any HistoryHost
-    var container: NSPersistentContainer { store.container }
-    var context: NSManagedObjectContext { container.viewContext }
-    var queue: [Waiting] = []
-    var draining = false
-    var closing = false
-    var closed = false
-    var reconciling = false
-    var closeWaiters: [CheckedContinuation<Void, Never>] = []
-    /// Open-session recovery protection. The engine owns these handles and releases
-    /// them on deallocation even if a host forgets explicit release.
-    var recoveryPlans: [UUID: HistoryRecoveryPlan] = [:]
-    struct SessionGroup {
-        let id: UUID
-        let effects: [HistoryEffect]
-        var applied = true
-    }
-    var sessionGroups: [SessionGroup] = []
-    /// Prepared transactions below this sequence predate this engine session.
-    var sessionStartSequence: Int64 = 1
-    var sessionEffectBytes: Int64 {
-        sessionGroups.reduce(0) { total, group in
-            total + group.effects.reduce(0) { bytes, effect in
-                bytes + Int64(effect.undo.data.count + effect.redo.data.count)
-            }
-        }
+    /// Latest scope/generation availability; queued admission is not durable acceptance.
+    public var snapshot: HistorySnapshot { transaction.snapshot }
+    /// One host-owned observer for coherent availability changes on the main actor.
+    public var snapshotDidChange: (@MainActor (HistorySnapshot) -> Void)? {
+        get { transaction.snapshotDidChange }
+        set { transaction.snapshotDidChange = newValue }
     }
 
     init(store: HistoryStore, scope: UUID, limits: HistoryLimits, host: any HistoryHost) {
-        self.store = store
-        self.scope = scope
-        self.limits = limits
-        self.host = host
+        let history = HistoryScopeStorage(store: store, scope: scope, limits: limits)
+        self.history = history
+        transaction = HistoryTransactionCoordinator(history: history, host: host)
     }
-
-    var ownsConvenienceStore = false
 
     /// Opens only the requested store. Existing history is never replaced by a new empty store.
     /// A copied store requires an explicit source and new working identity. Opening reconciles
@@ -105,72 +61,21 @@ public enum HistoryOpenMode: Sendable {
     /// Admission order is FIFO within this scope. Cancellation before preparation removes a
     /// waiting request; after delivery begins, host outcome reconciliation continues.
     public func submit(_ command: HistoryCommand) async -> HistoryResult {
-        await enqueue(.command(command))
+        await transaction.enqueue(.command(command))
     }
 
     /// Reverses the latest eligible complete Undo Group through one host delivery.
     /// Rejection invalidates the affected group without creating an Action.
     public func undo(expectedGeneration: UUID? = nil) async -> HistoryResult {
-        await enqueue(.undo(expectedGeneration: expectedGeneration))
+        await transaction.enqueue(.undo(expectedGeneration: expectedGeneration))
     }
 
     /// Reapplies the next eligible complete Undo Group through one host delivery.
     public func redo(expectedGeneration: UUID? = nil) async -> HistoryResult {
-        await enqueue(.redo(expectedGeneration: expectedGeneration))
+        await transaction.enqueue(.redo(expectedGeneration: expectedGeneration))
     }
 
-    func enqueue(_ request: Request) async -> HistoryResult {
-        guard !HistoryHostCallbackContext.activeEngines.contains(ObjectIdentifier(self)) else {
-            return .failure(HistoryFailure(.busy, stage: .admission, disposition: .usable))
-        }
-        if Task.isCancelled {
-            return .failure(HistoryFailure(.cancelled, stage: .admission, disposition: .usable))
-        }
-        if store.writeFailed {
-            return .failure(HistoryFailure(.storage, stage: .admission, disposition: .suspended))
-        }
-        guard !closed, !closing, !reconciling, !store.closing, !store.closed,
-              !store.maintenance else {
-            return .failure(HistoryFailure(.busy, stage: .admission, disposition: .usable))
-        }
-        guard queue.count < limits.maxQueueDepth else {
-            return .failure(HistoryFailure(.capacity, stage: .admission, disposition: .usable))
-        }
-        let id = UUID()
-        return await withTaskCancellationHandler {
-            await withCheckedContinuation { continuation in
-                queue.append(Waiting(id: id, request: request, continuation: continuation))
-                updateSnapshot()
-                if !draining {
-                    draining = true
-                    Task { await drain() }
-                }
-            }
-        } onCancel: {
-            Task { @MainActor in self.cancelQueued(id) }
-        }
-    }
-
-    func cancelQueued(_ id: UUID) {
-        guard let index = queue.firstIndex(where: { $0.id == id }) else { return }
-        let waiting = queue.remove(at: index)
-        waiting.continuation.resume(returning: .failure(
-            HistoryFailure(.cancelled, stage: .admission, disposition: .usable)
-        ))
-        updateSnapshot()
-    }
-
-    func drain() async {
-        while !queue.isEmpty {
-            let waiting = queue.removeFirst()
-            let result = await execute(waiting.request)
-            waiting.continuation.resume(returning: result)
-            updateSnapshot()
-        }
-        draining = false
-        updateSnapshot()
-        let waiters = closeWaiters
-        closeWaiters.removeAll()
-        for waiter in waiters { waiter.resume() }
-    }
+    /// Consults host evidence without redelivering a possibly started operation.
+    /// Nil means no unresolved transaction remained to reconcile.
+    public func reconcile() async -> HistoryResult? { await transaction.reconcile() }
 }

@@ -5,7 +5,33 @@ import CoreData
 import CryptoKit
 import Foundation
 
-extension HistoryEngine {
+/// Scope-local persistence shared by transactions and retained-history operations.
+/// Managed objects never cross the framework's public interface.
+@MainActor final class HistoryScopeStorage {
+    let store: HistoryStore
+    let scope: UUID
+    let limits: HistoryLimits
+    var url: URL { store.url }
+    var context: NSManagedObjectContext { store.container.viewContext }
+    // Retained-history state remains here until that module is extracted.
+    var recoveryPlans: [UUID: HistoryRecoveryPlan] = [:]
+
+    init(store: HistoryStore, scope: UUID, limits: HistoryLimits) {
+        self.store = store
+        self.scope = scope
+        self.limits = limits
+    }
+
+    func invalidateRecoveryPlans() { recoveryPlans.removeAll() }
+
+    func saveRetention() throws {
+        do { try saveContext() } catch {
+            context.rollback()
+            throw HistoryFailure(.storage, stage: .finalization, disposition: .suspended,
+                                 underlyingDescription: String(describing: error))
+        }
+    }
+
     func saveContext() throws {
         do { try context.save() } catch {
             context.rollback()
@@ -37,66 +63,6 @@ extension HistoryEngine {
                 throw HistoryFailure(.identityConflict, stage: .admission, disposition: .usable)
             }
         }
-    }
-
-    func updateSnapshot() {
-        if store.writeFailed {
-            publishSnapshot(canUndo: false, canRedo: false, isSuspended: true,
-                            hasPending: draining || !queue.isEmpty,
-                            generation: snapshot.generation)
-            return
-        }
-        guard !closed else {
-            publishSnapshot(canUndo: false, canRedo: false,
-                            isSuspended: snapshot.isSuspended, hasPending: false,
-                            generation: snapshot.generation)
-            return
-        }
-        do { try refreshSnapshot() } catch { suspend() }
-    }
-
-    func refreshSnapshot() throws {
-        let row = try scopeRecord()
-        let suspended = row.bool("suspended")
-        let canUndo = try sessionGroups.contains(where: { $0.applied }) || eligibleGroup(for: .undo) != nil
-        let canRedo = try sessionGroups.contains(where: { !$0.applied }) || eligibleGroup(for: .redo) != nil
-        publishSnapshot(canUndo: !suspended && !store.writeFailed && canUndo,
-                        canRedo: !suspended && !store.writeFailed && canRedo,
-                        isSuspended: suspended || store.writeFailed,
-                        hasPending: draining || !queue.isEmpty,
-                        generation: try row.uuid("generationID"))
-    }
-
-    func suspend() {
-        context.rollback()
-        if let row = try? scopeRecord() {
-            row.setValue(true, forKey: "suspended")
-            try? saveContext()
-        }
-        publishSnapshot(canUndo: false, canRedo: false, isSuspended: true,
-                        hasPending: draining || !queue.isEmpty,
-                        generation: (try? scopeRecord().uuid("generationID")) ?? snapshot.generation)
-    }
-
-    func unsuspend() {
-        if let row = try? scopeRecord() {
-            row.setValue(false, forKey: "suspended")
-            try? saveContext()
-        }
-        updateSnapshot()
-    }
-
-    func publishSnapshot(canUndo: Bool, canRedo: Bool, isSuspended: Bool,
-                         hasPending: Bool, generation: UUID?) {
-        let candidate = HistorySnapshot(canUndo: canUndo, canRedo: canRedo,
-                                        isSuspended: isSuspended, hasPending: hasPending,
-                                        scope: scope, generation: generation, version: snapshot.version)
-        guard candidate != snapshot else { return }
-        let value = HistorySnapshot(canUndo: canUndo, canRedo: canRedo,
-                                    isSuspended: isSuspended, hasPending: hasPending,
-                                    scope: scope, generation: generation, version: snapshot.version + 1)
-        snapshot = value
-        snapshotDidChange?(value)
     }
 
     func eligibleGroup(for kind: HistoryDeliveryKind) throws -> NSManagedObject? {

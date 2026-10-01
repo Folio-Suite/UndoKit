@@ -18,9 +18,9 @@ is required. Swift clients import `UndoKit`.
 ## Public interface map
 
 - `Interface/HistoryStore.swift` — physical registration, placement, read-only inspection, copies, capacity and closure.
-- `Interface/HistoryEngine.swift` — scope command submission, Undo, Redo and availability.
+- `Interface/HistoryTransactions.swift` — narrow ordinary transaction protocol for submission, Undo, Redo, reconciliation and availability.
+- `Interface/HistoryEngine.swift` — scope opening and concrete transaction operations.
 - `Interface/HistoryQueries.swift` — checkpoints, bounded history pages and scope closure.
-- `Interface/HistoryRecovery.swift` — reconciliation of interrupted or suspended transactions.
 - `Interface/HistoryTypes.swift` — host contract, payloads, results, failures, snapshots and limits.
 - `Interface/HistoryCodecs.swift` — explicit payload codecs and host handler contracts.
 - `Interface/HistoryRegistrations.swift` — typed operation registrations and host families.
@@ -38,9 +38,11 @@ is required. Swift clients import `UndoKit`.
 - `Interface/NativeHistoryRouter.swift` — native UndoManager routing and editing barriers.
 - `Resources/History.xcdatamodeld` — the framework-owned persistence schema.
 
-Durable transaction and storage helpers are implemented in `Modules/History/`.
-The native manager helper stays with the router because it implements the public
-router's AppKit behavior.
+FIFO admission, delivery, finalization, reconciliation, session inverses and
+availability are coordinated in `Modules/Transactions/`; interrupted outcomes
+are handled in `HistoryReconciliation.swift`. Persistence helpers
+and scoped store activity live in `Modules/Storage/`. The native manager helper
+stays with the router because it implements the public router's AppKit behavior.
 
 ## First supported operation
 
@@ -217,6 +219,7 @@ publication remain deferred. Apps and Kits ship as a coordinated Suite version.
 
 ### Durable history
 
+- ``HistoryTransactions``
 - ``HistoryEngine``
 - ``HistoryStore``
 - ``HistoryHost``

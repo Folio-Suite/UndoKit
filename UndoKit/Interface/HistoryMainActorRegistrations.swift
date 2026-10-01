@@ -13,7 +13,7 @@ import Foundation
     ///   Cancellation after delivery may leave a suspended scope for reconciliation.
     func submit(_ command: HistoryTypedCommand<Command>,
                 using registration: HistoryOperationRegistration<Self>,
-                to engine: HistoryEngine) async -> HistoryResult {
+                to engine: any HistoryTransactions) async -> HistoryResult {
         guard !registration.identity.operation.isEmpty,
               registration.identity.commandVersion > 0,
               registration.commandCodec.identifier == registration.identity.commandCodec,

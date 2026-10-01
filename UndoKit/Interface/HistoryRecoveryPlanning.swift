@@ -18,16 +18,16 @@ extension HistoryEngine {
         to target: HistoryRecoveryTarget,
         using evidence: HistoryReconstructionEvidence
     ) throws -> HistoryRecoveryPlan {
-        guard !closed, !closing, !draining, queue.isEmpty, !reconciling,
+        guard !transaction.closed, !transaction.closing, !transaction.isActive,
               !snapshot.isSuspended else {
             throw HistoryFailure(.busy, stage: .admission, disposition: .usable)
         }
-        guard recoveryPlans.count < limits.maxRecoveryPlans else {
+        guard history.recoveryPlans.count < limits.maxRecoveryPlans else {
             throw HistoryFailure(.capacity, stage: .admission, disposition: .usable)
         }
         try checkRecoveryCancellation()
         _ = evidence // The explicit declaration is a host promise, never inferred from payload bytes.
-        let scopeRow = try scopeRecord()
+        let scopeRow = try history.scopeRecord()
         let generation = try scopeRow.uuid("generationID")
         let version = scopeRow.int64("committedVersion")
 
@@ -57,7 +57,7 @@ extension HistoryEngine {
             baselineSequence: baselineSequence, targetSequence: targetSequence,
             direction: direction, baselineAcceptedSequence: baselineAccepted,
             targetAcceptedSequence: targetAccepted)
-        recoveryPlans[plan.id] = plan
+        history.recoveryPlans[plan.id] = plan
         return plan
     }
 
@@ -135,7 +135,7 @@ extension HistoryEngine {
         }
         let prefix = plan.direction == .reverse ? "undo" : "redo"
         return HistoryRecoveryMaterial(memberID: try row.uuid("memberID"), ordinal: ordinal,
-                                       payload: try payload(on: row, prefix: prefix))
+                                       payload: try history.payload(on: row, prefix: prefix))
     }
 
     /// Returns a checkpoint baseline only if it belongs to this live plan.
@@ -151,17 +151,12 @@ extension HistoryEngine {
 
     /// Ends temporary retention protection. Releasing an already-ended handle is harmless.
     public func releaseRecoveryPlan(_ plan: HistoryRecoveryPlan) {
-        recoveryPlans.removeValue(forKey: plan.id)
+        history.recoveryPlans.removeValue(forKey: plan.id)
     }
 
     /// Stops further reads and relinquishes temporary protection immediately.
     public func cancelRecoveryPlan(_ plan: HistoryRecoveryPlan) {
         releaseRecoveryPlan(plan)
-    }
-
-    /// Called by store and scope closure; all handles from this session become invalid.
-    func invalidateRecoveryPlans() {
-        recoveryPlans.removeAll()
     }
 
     private func recoveryTargetSequence(_ target: HistoryRecoveryTarget) throws -> Int64 {
@@ -181,7 +176,7 @@ extension HistoryEngine {
         throws -> (Int64, HistoryRecoveryDirection) {
         switch source {
         case .current:
-            let sequence = try scopeRecord().int64("latestAcceptedSequence")
+            let sequence = try history.scopeRecord().int64("latestAcceptedSequence")
             guard sequence >= target else {
                 throw HistoryFailure(.invalidInput, stage: .admission, disposition: .usable)
             }
@@ -199,8 +194,8 @@ extension HistoryEngine {
     }
 
     private func requirePlan(_ plan: HistoryRecoveryPlan) throws {
-        guard !closed, !closing,
-              recoveryPlans[plan.id] == plan else {
+        guard !transaction.closed, !transaction.closing,
+              history.recoveryPlans[plan.id] == plan else {
             throw HistoryFailure(.busy, stage: .admission, disposition: .usable)
         }
     }
@@ -219,7 +214,7 @@ extension HistoryEngine {
     }
 
     private func scopedRow(_ name: String, id: UUID) throws -> NSManagedObject? {
-        try fetch(name, predicate: NSPredicate(format: "scopeKey == %@ AND key == %@",
+        try history.fetch(name, predicate: NSPredicate(format: "scopeKey == %@ AND key == %@",
             scope.uuidString, id.uuidString)).first
     }
 

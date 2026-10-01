@@ -4,12 +4,12 @@
 import CoreData
 import Foundation
 
-extension HistoryEngine {
+extension HistoryTransactionCoordinator {
     func reconcile(_ transaction: NSManagedObject) async -> HistoryResult {
         switch transaction.string("stage") ?? "" {
         case "accepted":
             do {
-                return .accepted(HistoryReceipt(token: try token(for: transaction),
+                return .accepted(HistoryReceipt(token: try history.token(for: transaction),
                                                 groupID: try transaction.uuid("groupID")))
             } catch { return .failure(HistoryFailure(.storage, stage: .reconciliation, disposition: .suspended)) }
         case "rejected":
@@ -25,7 +25,7 @@ extension HistoryEngine {
             return .failure(HistoryFailure(.busy, stage: .reconciliation, disposition: .usable))
         case "prepared":
             transaction.setValue("cancelled", forKey: "stage")
-            do { try saveContext() } catch { context.rollback() }
+            do { try history.saveContext() } catch { context.rollback() }
             return .failure(HistoryFailure(.busy, stage: .reconciliation, disposition: .usable))
         case "acceptancePending":
             return finalize(transaction, accepting: true)
@@ -50,11 +50,11 @@ extension HistoryEngine {
 
     private func reconcileDelivered(_ transaction: NSManagedObject) async -> HistoryResult {
         do {
-            let token = try token(for: transaction)
+            let token = try history.token(for: transaction)
             let activeStores = HistoryStore.deliveringStores.union([ObjectIdentifier(store)])
             let outcome = await HistoryStore.$deliveringStores.withValue(activeStores) {
-                let activeEngines = HistoryHostCallbackContext.activeEngines.union([ObjectIdentifier(self)])
-                return await HistoryHostCallbackContext.$activeEngines.withValue(activeEngines) {
+                let activeTransactions = HistoryHostCallbackContext.activeTransactions.union([ObjectIdentifier(self)])
+                return await HistoryHostCallbackContext.$activeTransactions.withValue(activeTransactions) {
                     await host.outcome(for: token)
                 }
             }
@@ -79,11 +79,11 @@ extension HistoryEngine {
 
     /// Rechecks a suspended transaction against authoritative host evidence.
     /// This never redelivers an operation whose delivery may have started.
-    public func reconcile() async -> HistoryResult? {
+    func reconcile() async -> HistoryResult? {
         if store.writeFailed {
             return .failure(HistoryFailure(.storage, stage: .reconciliation, disposition: .suspended))
         }
-        guard !draining, !closed, !closing, !reconciling, !store.closing,
+        guard !isExecuting, !closed, !closing, !reconciling, !store.closing,
               !store.closed, !store.maintenance else {
             return .failure(HistoryFailure(.busy, stage: .reconciliation,
                                            disposition: closing ? .suspended : .usable))

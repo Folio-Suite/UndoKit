@@ -82,36 +82,23 @@ extension HistoryStore {
         in retentionStore: UUID,
         cleanup: @MainActor (HistoryStore) async throws -> Void
     ) async throws {
-        guard access == .readWrite, !closed, !closing, !maintenance, !writeFailed,
-              !Self.deliveringStores.contains(ObjectIdentifier(self)) else {
-            throw HistoryFailure(.busy, stage: .admission, disposition: .usable)
-        }
-        maintenance = true
-        defer { maintenance = false }
-        while engines.values.contains(where: { $0.draining || !$0.queue.isEmpty || $0.reconciling }) {
-            if Task.isCancelled {
-                throw HistoryFailure(.cancelled, stage: .admission, disposition: .usable)
+        try await activity.withMaintenance(in: self) {
+            let pending = NSFetchRequest<NSManagedObject>(entityName: "HistoryTransactionRecord")
+            pending.predicate = NSPredicate(format: "stage != %@ AND stage != %@ AND stage != %@",
+                                            "accepted", "rejected", "cancelled")
+            pending.fetchLimit = 1
+            guard try context.fetch(pending).isEmpty else {
+                throw HistoryFailure(.unresolved, stage: .admission, disposition: .suspended)
             }
-            await Task.yield()
-        }
-        guard !Task.isCancelled else {
-            throw HistoryFailure(.cancelled, stage: .admission, disposition: .usable)
-        }
-        let pending = NSFetchRequest<NSManagedObject>(entityName: "HistoryTransactionRecord")
-        pending.predicate = NSPredicate(format: "stage != %@ AND stage != %@ AND stage != %@",
-                                        "accepted", "rejected", "cancelled")
-        pending.fetchLimit = 1
-        guard try context.fetch(pending).isEmpty else {
-            throw HistoryFailure(.unresolved, stage: .admission, disposition: .suspended)
-        }
-        try await cleanup(self)
-        let request = NSFetchRequest<NSManagedObject>(entityName: "HistoryCleanupRecord")
-        request.predicate = NSPredicate(format: "key == %@", retentionStore.uuidString)
-        for row in try context.fetch(request) { context.delete(row) }
-        do { try context.save() } catch {
-            context.rollback()
-            noteWriteFailure()
-            throw HistoryFailure(.storage, stage: .finalization, disposition: .suspended)
+            try await cleanup(self)
+            let request = NSFetchRequest<NSManagedObject>(entityName: "HistoryCleanupRecord")
+            request.predicate = NSPredicate(format: "key == %@", retentionStore.uuidString)
+            for row in try context.fetch(request) { context.delete(row) }
+            do { try context.save() } catch {
+                context.rollback()
+                noteWriteFailure()
+                throw HistoryFailure(.storage, stage: .finalization, disposition: .suspended)
+            }
         }
     }
 }

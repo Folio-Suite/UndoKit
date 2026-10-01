@@ -4,7 +4,7 @@
 import CoreData
 import Foundation
 
-extension HistoryEngine {
+extension HistoryScopeStorage {
     func valid(_ resources: [HistoryObjectReference]) -> Bool {
         resources.count <= 1_000 && Set(resources).count == resources.count &&
         resources.allSatisfy { reference in

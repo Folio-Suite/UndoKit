@@ -179,7 +179,7 @@ extension HistoryStore {
     func copyIdle(to destination: URL, allowingUnresolved: Bool = false) throws {
         guard access == .readWrite, !closed, !closing,
               engines.values.allSatisfy({ engine in
-                  !engine.draining && engine.queue.isEmpty && !engine.reconciling &&
+                  !engine.transaction.isActive &&
                   (allowingUnresolved || !engine.snapshot.isSuspended)
               }) else {
             throw HistoryFailure(.busy, stage: .admission, disposition: .usable)

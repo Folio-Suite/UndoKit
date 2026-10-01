@@ -4,7 +4,7 @@
 import CoreData
 import Foundation
 
-extension HistoryEngine {
+extension RetainedHistory {
     func checkKeptCheckpoints(_ ids: Set<UUID>) throws {
         for id in ids where try checkpoint(id: id) == nil {
             throw HistoryFailure(.invalidInput, stage: .admission, disposition: .usable)
@@ -27,7 +27,7 @@ extension HistoryEngine {
                     $0.int64("sequence") <= last }.compactMap { $0.string("key") })
             }
         }
-        for plan in history.recoveryPlans.values {
+        for plan in activeRecoveryPlans {
             let lower = min(plan.baselineSequence, plan.targetSequence)
             let upper = max(plan.baselineSequence, plan.targetSequence)
             kept.formUnion(groups.filter { $0.int64("sequence") > lower &&

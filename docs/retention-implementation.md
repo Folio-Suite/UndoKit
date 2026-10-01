@@ -5,10 +5,12 @@ SPDX-License-Identifier: MIT
 
 # Retention implementation and measured case
 
-The public retention types and methods are in `Interface/HistoryRetention.swift`,
-`HistoryRetentionHolds.swift`, `HistoryConsolidation.swift`, and
-`HistoryRetentionResources.swift`. Internal protection and mutation helpers live
-in `Modules/Retention/`.
+The public capabilities are in `Interface/HistoryReading.swift` and
+`Interface/HistoryRetentionManaging.swift`; their values are in
+`HistoryReconstruction.swift` and `HistoryRetention.swift`. Plan protection,
+checkpoint access, holds and consolidation live in `Modules/RetainedHistory/`.
+`HistoryRetentionResources.swift` exposes physical-store resource maintenance,
+whose implementation lives in `Modules/Storage/`.
 
 State holds preserve checkpoint snapshots and their resource references. Detail
 holds preserve their complete-group interval. Neither extends ordinary Undo depth.

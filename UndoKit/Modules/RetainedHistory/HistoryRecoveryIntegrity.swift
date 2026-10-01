@@ -4,7 +4,7 @@
 import CoreData
 import Foundation
 
-extension HistoryEngine {
+extension RetainedHistory {
     func recoveryAcceptedSequence(_ source: HistoryRecoverySource) throws -> Int64 {
         switch source {
         case .current:

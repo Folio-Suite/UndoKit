@@ -13,11 +13,13 @@ public enum HistoryOpenMode: Sendable {
 /// An open History Scope and its lifecycle controls.
 ///
 /// Pass this session as `any HistoryTransactions` to ordinary editing code.
-/// Keep the concrete session with its owner for recording, generation, retained
-/// history and closure. Host outcomes remain authoritative on the host's actor.
-@MainActor public final class HistoryEngine: HistoryTransactions {
+/// Pass `HistoryReading` to browsers and `HistoryRetentionManaging` to retention
+/// policy code. Keep the concrete session for recording, generation and closure.
+/// Host outcomes remain authoritative on the host's actor.
+@MainActor public final class HistoryEngine: HistoryTransactions, HistoryReading, HistoryRetentionManaging {
     let history: HistoryScopeStorage
     let transaction: HistoryTransactionCoordinator
+    let retained: RetainedHistory
     var ownsConvenienceStore = false
 
     /// Latest scope/generation availability; queued admission is not durable acceptance.
@@ -31,7 +33,9 @@ public enum HistoryOpenMode: Sendable {
     init(store: HistoryStore, scope: UUID, limits: HistoryLimits, host: any HistoryHost) {
         let history = HistoryScopeStorage(store: store, scope: scope, limits: limits)
         self.history = history
-        transaction = HistoryTransactionCoordinator(history: history, host: host)
+        let transaction = HistoryTransactionCoordinator(history: history, host: host)
+        self.transaction = transaction
+        retained = RetainedHistory(history: history, activity: transaction)
     }
 
     /// Opens only the requested store. Existing history is never replaced by a new empty store.

@@ -10,8 +10,7 @@ A managed persistent undo manager for modern Apple ecosystem apps
 
 Pass `HistoryTransactions` to code that submits edits or performs ordinary
 Undo/Redo. `HistoryEngine` conforms to this narrow main-actor interface; the
-owner keeps the concrete engine for recording, generation changes, retained
-history operations and closure.
+owner keeps the concrete engine for recording, generation changes and closure.
 
 ```swift
 @MainActor
@@ -27,7 +26,23 @@ await each operation for its result and use the snapshot for current capability.
 
 The accepted [transaction module ownership decision](docs/adr/0001-transaction-module-ownership.md)
 records why ordinary transaction coordination is behind this protocol while
-lifecycle and retained-history controls remain on `HistoryEngine`.
+lifecycle controls remain on `HistoryEngine`.
+
+## Retained history
+
+Pass `HistoryReading` to history browsers for bounded metadata, checkpoint
+retrieval, reconstruction and coherent native action names. Pass
+`HistoryRetentionManaging` to code that creates checkpoints, manages holds and
+requests consolidation. `HistoryEngine` implements both capabilities through one
+scope-local owner, so an active Recovery Plan protects its required material
+automatically. Release or cancel the plan when finished; closing the scope also
+ends its protection.
+
+Reading can establish temporary plan protection; it does not imply a read-only
+physical store. Hosts interpret the opaque material and reconstruct state.
+Physical-store resource cleanup remains on `HistoryStore`, where it covers all
+scopes. The [retained-history ownership decision](docs/adr/0002-retained-history-module-ownership.md)
+records this split and its lifecycle guarantees.
 
 ## Integration with Folio
 
@@ -44,13 +59,14 @@ semantic effects and durable outcome receipts. See the public DocC catalog and
 [Work adapter description](../docs/architecture/work-history-first-operation.md).
 
 Public declarations are grouped in `UndoKit/Interface/`; transaction coordination
-lives in `UndoKit/Modules/Transactions/`, and persistence and scoped store activity
+lives in `UndoKit/Modules/Transactions/`, retained-history behavior lives in
+`UndoKit/Modules/RetainedHistory/`, and persistence and scoped store activity
 live in `UndoKit/Modules/Storage/`.
-`Interface/HistoryReconstruction.swift`, `HistoryRecoveryPlanning.swift` and
-`HistoryPresentation.swift` describe reconstruction and presentation.
-`HistoryRetention.swift`, `HistoryRetentionHolds.swift`,
-`HistoryConsolidation.swift` and `HistoryRetentionResources.swift` expose
-holds, consolidation and cross-scope resource maintenance.
+Start with `Interface/HistoryReading.swift` and `HistoryRetentionManaging.swift`
+for the retained-history capabilities. `HistoryReconstruction.swift` and
+`HistoryRetention.swift` contain their values; `HistorySessionLifecycle.swift`
+contains concrete session copy and closure controls. `HistoryRetentionResources.swift`
+exposes cross-scope resource maintenance.
 Folio's translation layer lives in `Core/WriteKit/Modules/WorkAdapter/`; UndoKit imports
 no Folio domain framework. The Core Data model is bundled from
 `UndoKit/Resources/`.

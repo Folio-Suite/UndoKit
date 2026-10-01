@@ -10,7 +10,7 @@ enum HistoryHostCallbackContext {
 
 /// Owns one scope's ordered transaction lifecycle. Only this file mutates the
 /// waiting queue and closure state; persistence transitions live alongside it.
-@MainActor final class HistoryTransactionCoordinator {
+@MainActor final class HistoryTransactionCoordinator: HistoryRetainedActivity {
     var snapshotDidChange: (@MainActor (HistorySnapshot) -> Void)?
     var snapshot = HistorySnapshot(canUndo: false, canRedo: false,
                                    isSuspended: false, hasPending: false)
@@ -126,8 +126,8 @@ enum HistoryHostCallbackContext {
         for waiter in waiters { waiter.resume() }
     }
 
-    func beginClosing() {
-        history.invalidateRecoveryPlans()
+    func beginClosing(protection: any HistoryRecoveryProtection) {
+        protection.invalidateRecoveryPlans()
         guard !closing, !closed else { return }
         closing = true
         let unexecuted = queue
@@ -139,13 +139,13 @@ enum HistoryHostCallbackContext {
         }
     }
 
-    func close() async throws {
+    func close(protection: any HistoryRecoveryProtection) async throws {
         try store.activity.requireClosureAdmission(in: store)
         if closed { return }
         guard !reconciling else {
             throw HistoryFailure(.busy, stage: .reconciliation, disposition: .suspended)
         }
-        beginClosing()
+        beginClosing(protection: protection)
         if draining {
             await withCheckedContinuation { continuation in closeWaiters.append(continuation) }
         }

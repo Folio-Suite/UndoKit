@@ -4,23 +4,10 @@
 import CoreData
 import Foundation
 
-extension HistoryEngine {
-    /// Replaces eligible accepted detail before a host-confirmed checkpoint.
-    /// Each call removes at most maxReadPage groups and checkpoints in one store
-    /// transaction. The checkpoint carries the coherent state; no command replay
-    /// or synthetic state inference occurs here.
-    /// The scope must be idle and writable. Active plans, holds, current state
-    /// identity, and the configured ordinary Undo/Redo depth stay protected.
-    /// `targetUnmet` reports retained group count above the policy target;
-    /// `hasMore` means another bounded pass can remove eligible material.
-    /// Repeated calls may scan retained group metadata and can be expensive.
-    /// Cancellation before commit rolls back that pass. A save failure suspends
-    /// the physical store; inspect and reopen it before retrying. Removed
-    /// resource references leave durable host cleanup work for
-    /// `HistoryStore.withRequiredObjects(in:cleanup:)`.
-    public func consolidateHistory(through checkpointID: UUID,
-                                   policy: HistoryRetentionPolicy) throws -> HistoryConsolidationResult {
-        try transaction.requireIdle()
+extension RetainedHistory {
+    func consolidateHistory(through checkpointID: UUID,
+                            policy: HistoryRetentionPolicy) throws -> HistoryConsolidationResult {
+        try activity.requireIdle()
         guard policy.targetDetailedGroups >= 0,
               let boundary = try checkpoint(id: checkpointID) else {
             throw HistoryFailure(.invalidInput, stage: .admission, disposition: .usable)
@@ -44,7 +31,7 @@ extension HistoryEngine {
         for hold in holds {
             if case .state(let id) = hold.kind { keptCheckpoints.insert(id) }
         }
-        for plan in history.recoveryPlans.values {
+        for plan in activeRecoveryPlans {
             if case .checkpoint(let id) = plan.source { keptCheckpoints.insert(id) }
             if case .checkpoint(let id) = plan.target { keptCheckpoints.insert(id) }
         }

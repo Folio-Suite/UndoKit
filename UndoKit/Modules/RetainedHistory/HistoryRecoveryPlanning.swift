@@ -4,25 +4,17 @@
 import CoreData
 import Foundation
 
-extension HistoryEngine {
-    /// Plans protect their sequence interval until explicit release or session close.
-    /// The host captures the current domain baseline before requesting `.current`.
-    /// - Parameters:
-    ///   - source: Coherent current domain state or a stored checkpoint baseline.
-    ///   - target: Accepted group state or complete checkpoint to reconstruct.
-    ///   - evidence: Explicit host promise that accepted effects represent state transitions.
-    /// - Returns: A session-bound handle; release it on success, failure or abandonment.
-    /// - Throws: Busy/suspended scope, plan capacity, cancellation, missing target or retained gap.
-    public func beginRecoveryPlan(
+extension RetainedHistory {
+    func beginRecoveryPlan(
         from source: HistoryRecoverySource = .current,
         to target: HistoryRecoveryTarget,
         using evidence: HistoryReconstructionEvidence
     ) throws -> HistoryRecoveryPlan {
-        guard !transaction.closed, !transaction.closing, !transaction.isActive,
+        guard !activity.closed, !activity.closing, !activity.isActive,
               !snapshot.isSuspended else {
             throw HistoryFailure(.busy, stage: .admission, disposition: .usable)
         }
-        guard history.recoveryPlans.count < limits.maxRecoveryPlans else {
+        guard recoveryPlanCount < limits.maxRecoveryPlans else {
             throw HistoryFailure(.capacity, stage: .admission, disposition: .usable)
         }
         try checkRecoveryCancellation()
@@ -57,16 +49,12 @@ extension HistoryEngine {
             baselineSequence: baselineSequence, targetSequence: targetSequence,
             direction: direction, baselineAcceptedSequence: baselineAccepted,
             targetAcceptedSequence: targetAccepted)
-        history.recoveryPlans[plan.id] = plan
+        registerRecoveryPlan(plan)
         return plan
     }
 
-    /// Reads at most `limit` accepted transitions; no host payload is materialized.
-    /// Pass only the preceding page's cursor for this handle. Throws for an invalid
-    /// handle/cursor, limit, missing interval or cancellation. Cancellation releases
-    /// the handle. Nil `nextCursor` means this traversal is complete.
-    public func recoveryPage(_ plan: HistoryRecoveryPlan, after cursor: Int64? = nil,
-                             limit: Int) throws -> HistoryRecoveryPage {
+    func recoveryPage(_ plan: HistoryRecoveryPlan, after cursor: Int64? = nil,
+                      limit: Int) throws -> HistoryRecoveryPage {
         try requirePlan(plan)
         try checkRecoveryCancellation(plan)
         guard limit > 0, limit <= limits.maxReadPage else {
@@ -106,12 +94,8 @@ extension HistoryEngine {
             nextCursor: rows.count > limit ? steps.last?.sequence : nil)
     }
 
-    /// Fetches one intact opaque accepted-effect member from a plan step.
-    /// `groupID` and `ordinal` must identify a member in this plan's interval.
-    /// Throws on missing/corrupt material, invalid selection or cancellation;
-    /// it never invokes the host or mutates live state.
-    public func recoveryMaterial(_ plan: HistoryRecoveryPlan, groupID: UUID,
-                                 ordinal: Int) throws -> HistoryRecoveryMaterial {
+    func recoveryMaterial(_ plan: HistoryRecoveryPlan, groupID: UUID,
+                          ordinal: Int) throws -> HistoryRecoveryMaterial {
         try requirePlan(plan)
         try checkRecoveryCancellation(plan)
         guard let group = try scopedRow("HistoryGroupRecord", id: groupID),
@@ -138,8 +122,7 @@ extension HistoryEngine {
                                        payload: try history.payload(on: row, prefix: prefix))
     }
 
-    /// Returns a checkpoint baseline only if it belongs to this live plan.
-    public func recoveryCheckpoint(_ plan: HistoryRecoveryPlan) throws -> HistoryCheckpoint? {
+    func recoveryCheckpoint(_ plan: HistoryRecoveryPlan) throws -> HistoryCheckpoint? {
         try requirePlan(plan)
         try checkRecoveryCancellation(plan)
         guard case .checkpoint(let id) = plan.source else { return nil }
@@ -149,13 +132,7 @@ extension HistoryEngine {
         return value
     }
 
-    /// Ends temporary retention protection. Releasing an already-ended handle is harmless.
-    public func releaseRecoveryPlan(_ plan: HistoryRecoveryPlan) {
-        history.recoveryPlans.removeValue(forKey: plan.id)
-    }
-
-    /// Stops further reads and relinquishes temporary protection immediately.
-    public func cancelRecoveryPlan(_ plan: HistoryRecoveryPlan) {
+    func cancelRecoveryPlan(_ plan: HistoryRecoveryPlan) {
         releaseRecoveryPlan(plan)
     }
 
@@ -194,8 +171,8 @@ extension HistoryEngine {
     }
 
     private func requirePlan(_ plan: HistoryRecoveryPlan) throws {
-        guard !transaction.closed, !transaction.closing,
-              history.recoveryPlans[plan.id] == plan else {
+        guard !activity.closed, !activity.closing,
+              containsRecoveryPlan(plan) else {
             throw HistoryFailure(.busy, stage: .admission, disposition: .usable)
         }
     }

@@ -13,16 +13,12 @@ import Foundation
     let limits: HistoryLimits
     var url: URL { store.url }
     var context: NSManagedObjectContext { store.container.viewContext }
-    // Retained-history state remains here until that module is extracted.
-    var recoveryPlans: [UUID: HistoryRecoveryPlan] = [:]
 
     init(store: HistoryStore, scope: UUID, limits: HistoryLimits) {
         self.store = store
         self.scope = scope
         self.limits = limits
     }
-
-    func invalidateRecoveryPlans() { recoveryPlans.removeAll() }
 
     func saveRetention() throws {
         do { try saveContext() } catch {

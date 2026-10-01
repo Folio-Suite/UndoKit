@@ -4,22 +4,18 @@
 import CoreData
 import Foundation
 
-extension HistoryEngine {
-    /// Holds one host-authored coherent checkpoint state until this hold is released.
-    @discardableResult public func holdState(_ checkpointID: UUID, id: UUID = UUID()) throws -> HistoryRetentionHold {
-        try transaction.requireIdle()
+extension RetainedHistory {
+    @discardableResult func holdState(_ checkpointID: UUID, id: UUID = UUID()) throws -> HistoryRetentionHold {
+        try activity.requireIdle()
         guard try checkpoint(id: checkpointID) != nil else {
             throw HistoryFailure(.invalidInput, stage: .admission, disposition: .usable)
         }
         return try insertHold(id: id, kind: .state(checkpointID: checkpointID))
     }
 
-    /// Holds accepted groups between two structural endpoints, inclusive.
-    /// Sequence holes from checkpoints and rejected commands are harmless;
-    /// an existing removed-acceptance gap makes the hold impossible.
-    @discardableResult public func holdDetail(from firstGroupID: UUID, through lastGroupID: UUID,
-                                              id: UUID = UUID()) throws -> HistoryRetentionHold {
-        try transaction.requireIdle()
+    @discardableResult func holdDetail(from firstGroupID: UUID, through lastGroupID: UUID,
+                                       id: UUID = UUID()) throws -> HistoryRetentionHold {
+        try activity.requireIdle()
         guard let first = try history.groupRecord(key: firstGroupID.uuidString),
               let last = try history.groupRecord(key: lastGroupID.uuidString),
               first.string("scopeKey") == scope.uuidString,
@@ -38,9 +34,8 @@ extension HistoryEngine {
         return try insertHold(id: id, kind: .detail(firstSequence: lower, lastSequence: upper))
     }
 
-    /// Releases only the named hold. Other holds and ordinary Undo protection remain.
-    public func releaseHold(_ id: UUID) throws {
-        try transaction.requireIdle()
+    func releaseHold(_ id: UUID) throws {
+        try activity.requireIdle()
         guard let row = try history.fetchOne("HistoryHoldRecord", key: id.uuidString),
               row.string("scopeKey") == scope.uuidString else {
             throw HistoryFailure(.invalidInput, stage: .admission, disposition: .usable)
@@ -49,9 +44,8 @@ extension HistoryEngine {
         try history.saveRetention()
     }
 
-    /// Lists durable holds for the current History Generation.
-    public func retentionHolds() throws -> [HistoryRetentionHold] {
-        guard !transaction.closed else { throw HistoryFailure(.busy, stage: .admission, disposition: .usable) }
+    func retentionHolds() throws -> [HistoryRetentionHold] {
+        guard !activity.closed else { throw HistoryFailure(.busy, stage: .admission, disposition: .usable) }
         let generation = try history.scopeRecord().uuid("generationID")
         return try history.fetch("HistoryHoldRecord", predicate: NSPredicate(
             format: "scopeKey == %@ AND generationID == %@", scope.uuidString, generation.uuidString))

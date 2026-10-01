@@ -4,18 +4,16 @@
 import CoreData
 import Foundation
 
-extension HistoryEngine {
+extension RetainedHistory {
 
-    /// Records host-confirmed coherent state. The host secures its required resources first.
-    /// Checkpoint creation is synchronous and requires an idle, usable scope.
-    public func createCheckpoint(
+    func createCheckpoint(
         id: UUID = UUID(), name: String?, state: HistoryPayload,
         resources: [HistoryObjectReference] = []
     ) throws -> HistoryCheckpointInfo {
         if store.writeFailed {
             throw HistoryFailure(.storage, stage: .admission, disposition: .suspended)
         }
-        guard !transaction.isExecuting, !transaction.closed, !store.closing, !store.closed, !store.maintenance,
+        guard !activity.isExecuting, !activity.closed, !store.closing, !store.closed, !store.maintenance,
               !snapshot.isSuspended else {
             throw HistoryFailure(.busy, stage: .admission, disposition: .usable)
         }
@@ -55,8 +53,8 @@ extension HistoryEngine {
         return HistoryCheckpointInfo(id: id, name: name, sequence: sequence, recordedAt: date)
     }
 
-    public func checkpoint(id: UUID) throws -> HistoryCheckpoint? {
-        guard !transaction.closed else { throw HistoryFailure(.busy, stage: .admission, disposition: .usable) }
+    func checkpoint(id: UUID) throws -> HistoryCheckpoint? {
+        guard !activity.closed else { throw HistoryFailure(.busy, stage: .admission, disposition: .usable) }
         guard let row = try history.fetch("HistoryCheckpointRecord", predicate: NSPredicate(
             format: "scopeKey == %@ AND key == %@", scope.uuidString, id.uuidString
         )).first else { return nil }
@@ -68,10 +66,8 @@ extension HistoryEngine {
         return HistoryCheckpoint(info: try history.checkpointInfo(row), state: state)
     }
 
-    /// Returns only metadata; state bytes require a separate checkpoint lookup.
-    /// The page size cannot exceed the configured maximum.
-    public func checkpoints(after sequence: Int64? = nil, limit: Int) throws -> [HistoryCheckpointInfo] {
-        guard !transaction.closed else { throw HistoryFailure(.busy, stage: .admission, disposition: .usable) }
+    func checkpoints(after sequence: Int64? = nil, limit: Int) throws -> [HistoryCheckpointInfo] {
+        guard !activity.closed else { throw HistoryFailure(.busy, stage: .admission, disposition: .usable) }
         guard limit > 0, limit <= limits.maxReadPage else {
             throw HistoryFailure(.capacity, stage: .admission, disposition: .usable)
         }
@@ -83,9 +79,8 @@ extension HistoryEngine {
         return try context.fetch(request).map(history.checkpointInfo)
     }
 
-    /// Returns committed structural history in bounded pages without decoding host payloads.
-    public func historyPage(after sequence: Int64? = nil, limit: Int) throws -> [HistoryEntry] {
-        guard !transaction.closed else { throw HistoryFailure(.busy, stage: .admission, disposition: .usable) }
+    func historyPage(after sequence: Int64? = nil, limit: Int) throws -> [HistoryEntry] {
+        guard !activity.closed else { throw HistoryFailure(.busy, stage: .admission, disposition: .usable) }
         guard limit > 0, limit <= limits.maxReadPage else {
             throw HistoryFailure(.capacity, stage: .admission, disposition: .usable)
         }
@@ -102,26 +97,6 @@ extension HistoryEngine {
                          restorationOrigin: row.string("restorationOrigin").flatMap(UUID.init(uuidString:)),
                          memberCount: Int(row.int64("memberCount")),
                          recordedAt: row.value(forKey: "recordedAt") as? Date ?? .distantPast)
-        }
-    }
-
-    /// Copies one idle and reconciled history store to a separate closed SQLite file.
-    /// The host captures matching domain state and resources and registers the copy independently.
-    public func copyStore(to destination: URL) throws {
-        guard store.engines.count == 1 else {
-            throw HistoryFailure(.busy, stage: .admission, disposition: .usable)
-        }
-        try store.copyIdle(to: destination)
-    }
-
-    /// Stops admission, rejects queued requests and waits for active delivery.
-    /// A convenience-opened session also closes its physical store.
-    public func close() async throws {
-        let wasClosed = transaction.closed
-        try await transaction.close()
-        if !wasClosed { store.engines.removeValue(forKey: scope) }
-        if ownsConvenienceStore && !store.closed && (wasClosed || !store.closing) {
-            try await store.close()
         }
     }
 }

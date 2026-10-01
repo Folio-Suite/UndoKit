@@ -28,10 +28,10 @@ extension HistoryTransactionCoordinator {
     /// checkpoint ID; Off returns nil. A failed transition leaves the mode intact.
     @discardableResult func setRecording(
         _ mode: HistoryRecordingMode, baseline: HistoryPayload? = nil,
-        resources: [HistoryObjectReference] = []
+        resources: [HistoryObjectReference] = [], protection: any HistoryRecoveryProtection
     ) throws -> UUID? {
         try requireIdle()
-        guard history.recoveryPlans.isEmpty else {
+        guard !protection.hasRecoveryPlans else {
             throw HistoryFailure(.busy, stage: .admission, disposition: .usable)
         }
         let row = try history.scopeRecord()

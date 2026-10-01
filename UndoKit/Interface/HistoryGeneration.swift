@@ -17,7 +17,7 @@ extension HistoryEngine {
     @discardableResult public func clearHistory(
         adopting baseline: HistoryPayload, resources: [HistoryObjectReference] = []
     ) throws -> UUID {
-        try transaction.clearHistory(adopting: baseline, resources: resources)
+        try transaction.clearHistory(adopting: baseline, resources: resources, protection: retained)
     }
 
     /// Acknowledge lost continuity from an irrecoverable unresolved outcome.
@@ -35,7 +35,8 @@ extension HistoryEngine {
         adopting baseline: HistoryPayload, resources: [HistoryObjectReference] = [],
         quarantineAt destination: URL
     ) throws -> UUID {
-        try transaction.resetUnresolvedHistory(adopting: baseline, resources: resources, quarantineAt: destination)
+        try transaction.resetUnresolvedHistory(adopting: baseline, resources: resources,
+                                              quarantineAt: destination, protection: retained)
     }
 
 }

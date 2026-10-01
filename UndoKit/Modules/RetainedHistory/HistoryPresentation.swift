@@ -4,10 +4,9 @@
 import CoreData
 import Foundation
 
-extension HistoryEngine {
-    /// Identity and accepted position observed together on this scope's actor.
-    public func readIdentity() throws -> HistoryReadIdentity {
-        guard !transaction.closed else { throw HistoryFailure(.busy, stage: .admission, disposition: .usable) }
+extension RetainedHistory {
+    func readIdentity() throws -> HistoryReadIdentity {
+        guard !activity.closed else { throw HistoryFailure(.busy, stage: .admission, disposition: .usable) }
         let scopeRow = try history.scopeRecord()
         let floor = scopeRow.int64("undoFloorSequence")
         let request = NSFetchRequest<NSManagedObject>(entityName: "HistoryGroupRecord")
@@ -27,9 +26,8 @@ extension HistoryEngine {
             latestGroupID: try latest?.uuid("key"))
     }
 
-    /// Retrieves only a small encoded display value; absent data uses a generic label.
-    public func presentation(forGroup id: UUID) throws -> HistoryPayload? {
-        guard !transaction.closed else { throw HistoryFailure(.busy, stage: .admission, disposition: .usable) }
+    func presentation(forGroup id: UUID) throws -> HistoryPayload? {
+        guard !activity.closed else { throw HistoryFailure(.busy, stage: .admission, disposition: .usable) }
         let rows = try history.fetch("HistoryGroupRecord", predicate: NSPredicate(
             format: "scopeKey == %@ AND key == %@", scope.uuidString, id.uuidString))
         guard let row = rows.first else { return nil }
@@ -41,12 +39,10 @@ extension HistoryEngine {
         return value
     }
 
-    /// Resolve native menu names through the host's metadata codec. The returned
-    /// snapshot and names are read in one actor turn for `NativeHistoryRouter.update`.
-    public func nativeActionNames(
+    func nativeActionNames(
         resolve: (HistoryPayload) throws -> String?
     ) throws -> (snapshot: HistorySnapshot, names: HistoryNativeActionNames) {
-        guard !transaction.closed else { throw HistoryFailure(.busy, stage: .admission, disposition: .usable) }
+        guard !activity.closed else { throw HistoryFailure(.busy, stage: .admission, disposition: .usable) }
         let undoRow = try history.eligibleGroup(for: .undo)
         let redoRow = try history.eligibleGroup(for: .redo)
         func name(_ row: NSManagedObject?) throws -> String {

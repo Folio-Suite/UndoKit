@@ -22,6 +22,6 @@ extension HistoryEngine {
         _ mode: HistoryRecordingMode, baseline: HistoryPayload? = nil,
         resources: [HistoryObjectReference] = []
     ) throws -> UUID? {
-        try transaction.setRecording(mode, baseline: baseline, resources: resources)
+        try transaction.setRecording(mode, baseline: baseline, resources: resources, protection: retained)
     }
 }

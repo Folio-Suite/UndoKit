@@ -20,18 +20,16 @@ is required. Swift clients import `UndoKit`.
 - `Interface/HistoryStore.swift` — physical registration, placement, read-only inspection, copies, capacity and closure.
 - `Interface/HistoryTransactions.swift` — narrow ordinary transaction protocol for submission, Undo, Redo, reconciliation and availability.
 - `Interface/HistoryEngine.swift` — scope opening and concrete transaction operations.
-- `Interface/HistoryQueries.swift` — checkpoints, bounded history pages and scope closure.
+- `Interface/HistoryReading.swift` — historical metadata, checkpoint reads, reconstruction and coherent native names.
+- `Interface/HistoryRetentionManaging.swift` — checkpoint creation, durable holds and bounded consolidation.
+- `Interface/HistorySessionLifecycle.swift` — scope copy and closure.
 - `Interface/HistoryTypes.swift` — host contract, payloads, results, failures, snapshots and limits.
 - `Interface/HistoryCodecs.swift` — explicit payload codecs and host handler contracts.
 - `Interface/HistoryRegistrations.swift` — typed operation registrations and host families.
 - `Interface/HistoryActorRegistrations.swift` — actor-isolated typed submission and dispatch.
 - `Interface/HistoryMainActorRegistrations.swift` — Cocoa main-actor typed submission and dispatch.
 - `Interface/HistoryReconstruction.swift` — plan, step, material and read identity types.
-- `Interface/HistoryRecoveryPlanning.swift` — bounded reads and temporary protection.
-- `Interface/HistoryPresentation.swift` — opaque metadata and coherent native names.
 - `Interface/HistoryRetention.swift` — holds, policy, consolidation results and object references.
-- `Interface/HistoryRetentionHolds.swift` — durable state and detail holds.
-- `Interface/HistoryConsolidation.swift` — bounded safe pruning against a host checkpoint.
 - `Interface/HistoryRetentionResources.swift` — cross-scope object reads and fenced cleanup.
 - `Interface/HistoryRecording.swift` — host-selected recording mode and open-session Undo.
 - `Interface/HistoryGeneration.swift` — settled clear and quarantined unresolved reset.
@@ -40,8 +38,9 @@ is required. Swift clients import `UndoKit`.
 
 FIFO admission, delivery, finalization, reconciliation, session inverses and
 availability are coordinated in `Modules/Transactions/`; interrupted outcomes
-are handled in `HistoryReconciliation.swift`. Persistence helpers
-and scoped store activity live in `Modules/Storage/`. The native manager helper
+are handled in `HistoryReconciliation.swift`. Checkpoints, Recovery Plans, holds,
+consolidation and the private plan registry live in `Modules/RetainedHistory/`.
+Persistence helpers and scoped store activity live in `Modules/Storage/`. The native manager helper
 stays with the router because it implements the public router's AppKit behavior.
 
 ## First supported operation
@@ -116,6 +115,12 @@ an individual engine leaves other scopes open. The host keeps
 its own data store and does not use UndoKit as its document write-ahead log.
 
 ## Checkpoints and bounded reading
+
+``HistoryEngine`` implements ``HistoryReading`` for browsing and reconstruction,
+and ``HistoryRetentionManaging`` for checkpoint creation, holds and consolidation.
+Both capabilities share one retained-history owner per scope. Give browsers the
+reading capability and retention policy code the management capability.
+Reading may create temporary plan protection; it does not imply a read-only store.
 
 Checkpoint state is an opaque ``HistoryPayload`` supplied by the host. Secure
 its dependencies first. The host owns document saving and confirms that saving
@@ -220,6 +225,8 @@ publication remain deferred. Apps and Kits ship as a coordinated Suite version.
 ### Durable history
 
 - ``HistoryTransactions``
+- ``HistoryReading``
+- ``HistoryRetentionManaging``
 - ``HistoryEngine``
 - ``HistoryStore``
 - ``HistoryHost``

@@ -322,7 +322,7 @@ extension HistoryStore {
         try activity.requireClosureAdmission(in: self)
         closing = true
         let activeEngines = Array(engines.values)
-        for engine in activeEngines { engine.transaction.beginClosing() }
+        for engine in activeEngines { engine.beginClosing() }
         for engine in activeEngines { try await engine.close() }
         do {
             if access == .readWrite { try context.save() }

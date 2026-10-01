@@ -16,13 +16,14 @@ extension HistoryTransactionCoordinator {
     /// - Throws: Admission, storage or capacity failure. No generation is
     ///   retired when admission fails.
     @discardableResult func clearHistory(
-        adopting baseline: HistoryPayload, resources: [HistoryObjectReference] = []
+        adopting baseline: HistoryPayload, resources: [HistoryObjectReference] = [],
+        protection: any HistoryRecoveryProtection
     ) throws -> UUID {
         try requireIdle()
-        guard history.recoveryPlans.isEmpty else {
+        guard !protection.hasRecoveryPlans else {
             throw HistoryFailure(.busy, stage: .admission, disposition: .usable)
         }
-        return try retireGeneration(adopting: baseline, resources: resources)
+        return try retireGeneration(adopting: baseline, resources: resources, protection: protection)
     }
 
     /// Acknowledge lost continuity from an irrecoverable unresolved outcome.
@@ -38,11 +39,11 @@ extension HistoryTransactionCoordinator {
     ///   invalid input, capacity or storage failure.
     @discardableResult func resetUnresolvedHistory(
         adopting baseline: HistoryPayload, resources: [HistoryObjectReference] = [],
-        quarantineAt destination: URL
+        quarantineAt destination: URL, protection: any HistoryRecoveryProtection
     ) throws -> UUID {
         guard store.access == .readWrite, !store.writeFailed, !closed, !closing,
               !store.closed, !store.closing, !store.maintenance,
-              !isActive, history.recoveryPlans.isEmpty,
+              !isActive, !protection.hasRecoveryPlans,
               snapshot.isSuspended,
               !HistoryStore.deliveringStores.contains(ObjectIdentifier(store)) else {
             throw HistoryFailure(.busy, stage: .admission, disposition: .usable)
@@ -54,11 +55,12 @@ extension HistoryTransactionCoordinator {
             throw HistoryFailure(.invalidInput, stage: .admission, disposition: .usable)
         }
         try store.copyIdle(to: destination, allowingUnresolved: true)
-        return try retireGeneration(adopting: baseline, resources: resources)
+        return try retireGeneration(adopting: baseline, resources: resources, protection: protection)
     }
 
     private func retireGeneration(adopting baseline: HistoryPayload,
-                                  resources: [HistoryObjectReference]) throws -> UUID {
+                                  resources: [HistoryObjectReference],
+                                  protection: any HistoryRecoveryProtection) throws -> UUID {
         guard history.valid(baseline), history.valid(resources), history.hasCapacity(bytes: baseline.data.count) else {
             throw HistoryFailure(.capacity, stage: .admission, disposition: .usable)
         }
@@ -105,7 +107,7 @@ extension HistoryTransactionCoordinator {
                                       ownerKey: history.transactionKey(checkpointID))
             try history.saveContext()
             sessionGroups.removeAll()
-            history.invalidateRecoveryPlans()
+            protection.invalidateRecoveryPlans()
             updateSnapshot()
             return generation
         } catch {

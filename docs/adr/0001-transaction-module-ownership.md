@@ -21,4 +21,5 @@ callback, while the owner retains lifecycle and policy controls.
   scoped store activity.
 - **behavior:** preserve current transaction behavior and actor isolation;
   this boundary does not redesign actors or migrate stored data.
-- **deferred scope:** restructuring retained-history operations is deferred.
+- **follow-up:** retained-history restructuring is recorded in
+  [ADR 0002](0002-retained-history-module-ownership.md).

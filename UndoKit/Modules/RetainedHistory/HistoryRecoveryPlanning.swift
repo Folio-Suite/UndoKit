@@ -68,7 +68,7 @@ extension RetainedHistory {
             throw HistoryFailure(.invalidInput, stage: .admission, disposition: .usable)
         }
         let forward = plan.direction == .forward
-        let request = NSFetchRequest<HistoryGroupRecord>(entityName: "HistoryGroupRecord")
+        let request = HistoryGroupRecord.fetchRequest()
         if forward {
             request.predicate = NSPredicate(format: "\(#keyPath(HistoryGroupRecord.scopeKey)) == %@ AND " +
                 "\(#keyPath(HistoryGroupRecord.sequence)) > %@ AND " +
@@ -116,7 +116,7 @@ extension RetainedHistory {
             throw HistoryFailure(.invalidInput, stage: .admission, disposition: .usable)
         }
         try rejectGap(lowerExclusive: lower, upperInclusive: upper)
-        let request = NSFetchRequest<HistoryActionRecord>(entityName: "HistoryActionRecord")
+        let request = HistoryActionRecord.fetchRequest()
         request.predicate = NSPredicate(format: "\(#keyPath(HistoryActionRecord.group)) == %@ AND \(#keyPath(HistoryActionRecord.ordinal)) == %@",
                                         group, NSNumber(value: ordinal))
         request.fetchLimit = 1
@@ -198,7 +198,7 @@ extension RetainedHistory {
         }
     }
 
-    private func scopedRow<Record: NSManagedObject>(
+    private func scopedRow<Record: HistoryManagedRecord>(
         _ type: Record.Type, scopePath: KeyPath<Record, String?>,
         keyPath: KeyPath<Record, String?>, id: UUID
     ) throws -> Record? {
@@ -209,7 +209,7 @@ extension RetainedHistory {
 
     private func rejectGap(lowerExclusive lower: Int64, upperInclusive upper: Int64) throws {
         guard upper > lower else { return }
-        let request = NSFetchRequest<HistoryGapRecord>(entityName: "HistoryGapRecord")
+        let request = HistoryGapRecord.fetchRequest()
         request.predicate = NSPredicate(
             format: "\(#keyPath(HistoryGapRecord.scopeKey)) == %@ AND " +
                 "\(#keyPath(HistoryGapRecord.lowerExclusiveSequence)) < %@ AND " +

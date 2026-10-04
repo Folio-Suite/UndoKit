@@ -230,7 +230,7 @@ extension HistoryStore {
             throw HistoryFailure(.capacity, stage: .admission, disposition: .usable)
         }
         _ = try inspectScope(scope)
-        let request = NSFetchRequest<HistoryGroupRecord>(entityName: "HistoryGroupRecord")
+        let request = HistoryGroupRecord.fetchRequest()
         request.predicate = NSPredicate(format: "\(#keyPath(HistoryGroupRecord.scopeKey)) == %@ AND \(#keyPath(HistoryGroupRecord.sequence)) > %@",
                                         scope.uuidString, NSNumber(value: sequence ?? 0))
         request.sortDescriptors = [NSSortDescriptor(key: #keyPath(HistoryGroupRecord.sequence), ascending: true)]
@@ -250,13 +250,13 @@ extension HistoryStore {
     public func inspectScope(_ scope: UUID) throws -> HistoryScopeInspection {
         guard !closed else { throw HistoryFailure(.busy, stage: .admission, disposition: .usable) }
         if access == .readOnly { context.refreshAllObjects() }
-        let scopeRequest = NSFetchRequest<HistoryScopeRecord>(entityName: "HistoryScopeRecord")
+        let scopeRequest = HistoryScopeRecord.fetchRequest()
         scopeRequest.predicate = NSPredicate(format: "\(#keyPath(HistoryScopeRecord.key)) == %@", scope.uuidString)
         scopeRequest.fetchLimit = 1
         guard let row = try context.fetch(scopeRequest).first else {
             throw HistoryFailure(.missingHistory, stage: .admission, disposition: .usable)
         }
-        let pending = NSFetchRequest<HistoryTransactionRecord>(entityName: "HistoryTransactionRecord")
+        let pending = HistoryTransactionRecord.fetchRequest()
         pending.predicate = NSPredicate(format: "\(#keyPath(HistoryTransactionRecord.scopeKey)) == %@ AND " +
             "\(#keyPath(HistoryTransactionRecord.stage)) != %@ AND " +
             "\(#keyPath(HistoryTransactionRecord.stage)) != %@ AND " +

@@ -163,7 +163,7 @@ extension HistoryTransactionCoordinator {
         group.state = kind == .command ? "applied" : "historical"
         group.sourceGroupID = transaction.targetGroupID
         if kind == .redo, let original = transaction.targetGroupID {
-            let request = NSFetchRequest<HistoryGroupRecord>(entityName: "HistoryGroupRecord")
+            let request = HistoryGroupRecord.fetchRequest()
             request.predicate = NSPredicate(format: "\(#keyPath(HistoryGroupRecord.scopeKey)) == %@ AND " +
                 "\(#keyPath(HistoryGroupRecord.kind)) == %@ AND " +
                 "\(#keyPath(HistoryGroupRecord.sourceGroupID)) == %@",

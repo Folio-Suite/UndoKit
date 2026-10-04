@@ -71,7 +71,7 @@ extension RetainedHistory {
         guard limit > 0, limit <= limits.maxReadPage else {
             throw HistoryFailure(.capacity, stage: .admission, disposition: .usable)
         }
-        let request = NSFetchRequest<HistoryCheckpointRecord>(entityName: "HistoryCheckpointRecord")
+        let request = HistoryCheckpointRecord.fetchRequest()
         request.predicate = NSPredicate(format: "\(#keyPath(HistoryCheckpointRecord.scopeKey)) == %@ AND \(#keyPath(HistoryCheckpointRecord.sequence)) > %@",
                                         scope.uuidString, NSNumber(value: sequence ?? 0))
         request.sortDescriptors = [NSSortDescriptor(key: #keyPath(HistoryCheckpointRecord.sequence), ascending: true)]
@@ -84,7 +84,7 @@ extension RetainedHistory {
         guard limit > 0, limit <= limits.maxReadPage else {
             throw HistoryFailure(.capacity, stage: .admission, disposition: .usable)
         }
-        let request = NSFetchRequest<HistoryGroupRecord>(entityName: "HistoryGroupRecord")
+        let request = HistoryGroupRecord.fetchRequest()
         request.predicate = NSPredicate(format: "\(#keyPath(HistoryGroupRecord.scopeKey)) == %@ AND \(#keyPath(HistoryGroupRecord.sequence)) > %@",
                                         scope.uuidString, NSNumber(value: sequence ?? 0))
         request.sortDescriptors = [NSSortDescriptor(key: #keyPath(HistoryGroupRecord.sequence), ascending: true)]

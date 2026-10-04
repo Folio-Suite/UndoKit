@@ -56,8 +56,15 @@ extension RetainedHistory {
                 if row.kind == "state" {
                     kind = .state(checkpointID: try row.uuid(row.checkpointID))
                 } else {
-                    kind = .detail(firstSequence: row.lowerSequence?.int64Value ?? 0,
-                                   lastSequence: row.upperSequence?.int64Value ?? 0)
+                    guard row.kind == "detail", let lower = row.lowerSequence,
+                          let upper = row.upperSequence,
+                          lower.compare(NSNumber(value: lower.int64Value)) == .orderedSame,
+                          upper.compare(NSNumber(value: upper.int64Value)) == .orderedSame,
+                          lower.int64Value > 0, upper.int64Value >= lower.int64Value else {
+                        throw HistoryFailure(.storage, stage: .reconciliation, disposition: .suspended)
+                    }
+                    kind = .detail(firstSequence: lower.int64Value,
+                                   lastSequence: upper.int64Value)
                 }
                 return HistoryRetentionHold(id: try row.uuid(row.key), scope: scope,
                                             generation: generation, kind: kind)

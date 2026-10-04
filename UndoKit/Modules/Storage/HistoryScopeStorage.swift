@@ -62,7 +62,7 @@ import Foundation
     }
 
     func eligibleGroup(for kind: HistoryDeliveryKind) throws -> HistoryGroupRecord? {
-        let request = NSFetchRequest<HistoryGroupRecord>(entityName: "HistoryGroupRecord")
+        let request = HistoryGroupRecord.fetchRequest()
         let floor = try scopeRecord().undoFloorSequence
         let groupFilter = "\(#keyPath(HistoryGroupRecord.scopeKey)) == %@ AND " +
             "\(#keyPath(HistoryGroupRecord.kind)) == %@ AND " +
@@ -254,14 +254,15 @@ import Foundation
 
     func transactionKey(_ id: UUID) -> String { scope.uuidString + ":" + id.uuidString }
 
-    func insert<Record: NSManagedObject>(_ type: Record.Type) -> Record {
-        guard let entity = NSEntityDescription.entity(forEntityName: String(describing: type), in: context) else {
+    func insert<Record: HistoryManagedRecord>(_ type: Record.Type) -> Record {
+        guard let name = type.fetchRequest().entityName,
+              let entity = NSEntityDescription.entity(forEntityName: name, in: context) else {
             preconditionFailure("Missing UndoKit entity for \(type)")
         }
         return Record(entity: entity, insertInto: context)
     }
 
-    func fetchOne<Record: NSManagedObject>(
+    func fetchOne<Record: HistoryManagedRecord>(
         _ type: Record.Type, keyPath: KeyPath<Record, String?>, key: String
     ) throws -> Record? {
         try fetch(type, predicate: NSPredicate(
@@ -269,12 +270,12 @@ import Foundation
         )).first
     }
 
-    func fetch<Record: NSManagedObject>(
+    func fetch<Record: HistoryManagedRecord>(
         _ type: Record.Type,
         predicate: NSPredicate? = nil,
         sort: [NSSortDescriptor] = []
     ) throws -> [Record] {
-        let request = NSFetchRequest<Record>(entityName: String(describing: type))
+        let request = type.fetchRequest()
         request.fetchBatchSize = 256
         request.predicate = predicate
         request.sortDescriptors = sort

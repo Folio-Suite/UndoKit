@@ -67,7 +67,7 @@ extension HistoryTransactionCoordinator {
 
     func reconcileOnOpen() async {
         do {
-            let request = NSFetchRequest<HistoryTransactionRecord>(entityName: "HistoryTransactionRecord")
+            let request = HistoryTransactionRecord.fetchRequest()
             request.predicate = NSPredicate(format: "\(#keyPath(HistoryTransactionRecord.scopeKey)) == %@ AND " +
                 "\(#keyPath(HistoryTransactionRecord.stage)) != %@ AND " +
                 "\(#keyPath(HistoryTransactionRecord.stage)) != %@ AND " +
@@ -94,7 +94,7 @@ extension HistoryTransactionCoordinator {
         reconciling = true
         defer { reconciling = false }
         do {
-            let request = NSFetchRequest<HistoryTransactionRecord>(entityName: "HistoryTransactionRecord")
+            let request = HistoryTransactionRecord.fetchRequest()
             request.predicate = NSPredicate(format: "\(#keyPath(HistoryTransactionRecord.scopeKey)) == %@ AND " +
                 "\(#keyPath(HistoryTransactionRecord.stage)) != %@ AND " +
                 "\(#keyPath(HistoryTransactionRecord.stage)) != %@ AND " +

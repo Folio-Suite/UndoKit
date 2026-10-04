@@ -69,20 +69,12 @@ extension HistoryTransactionCoordinator {
         }
         let generation = UUID()
         do {
-            let scopedTypes: [(NSManagedObject.Type, String)] = [
-                (HistoryTransactionRecord.self, #keyPath(HistoryTransactionRecord.scopeKey)),
-                (HistoryGroupRecord.self, #keyPath(HistoryGroupRecord.scopeKey)),
-                (HistoryCheckpointRecord.self, #keyPath(HistoryCheckpointRecord.scopeKey)),
-                (HistoryGapRecord.self, #keyPath(HistoryGapRecord.scopeKey)),
-                (HistoryHoldRecord.self, #keyPath(HistoryHoldRecord.scopeKey)),
-                (HistoryRetiredCommandRecord.self, #keyPath(HistoryRetiredCommandRecord.scopeKey)),
-            ]
-            for (type, scopeKeyPath) in scopedTypes {
-                for row in try history.fetch(type, predicate: NSPredicate(
-                    format: "%K == %@", scopeKeyPath, scope.uuidString)) {
-                    context.delete(row)
-                }
-            }
+            try deleteScopedRecords(HistoryTransactionRecord.self, scopePath: \.scopeKey)
+            try deleteScopedRecords(HistoryGroupRecord.self, scopePath: \.scopeKey)
+            try deleteScopedRecords(HistoryCheckpointRecord.self, scopePath: \.scopeKey)
+            try deleteScopedRecords(HistoryGapRecord.self, scopePath: \.scopeKey)
+            try deleteScopedRecords(HistoryHoldRecord.self, scopePath: \.scopeKey)
+            try deleteScopedRecords(HistoryRetiredCommandRecord.self, scopePath: \.scopeKey)
             let references = try history.fetch(HistoryResourceRecord.self, predicate: NSPredicate(
                 format: "\(#keyPath(HistoryResourceRecord.ownerKey)) BEGINSWITH %@", scope.uuidString + ":"))
             for row in references {
@@ -121,6 +113,17 @@ extension HistoryTransactionCoordinator {
         } catch {
             context.rollback()
             throw error
+        }
+    }
+
+    private func deleteScopedRecords<Record: HistoryManagedRecord>(
+        _ type: Record.Type, scopePath: KeyPath<Record, String?>
+    ) throws {
+        let field = NSExpression(forKeyPath: scopePath).keyPath
+        for row in try history.fetch(type, predicate: NSPredicate(
+            format: "%K == %@", field, scope.uuidString
+        )) {
+            context.delete(row)
         }
     }
 }

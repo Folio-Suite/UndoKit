@@ -13,7 +13,10 @@ extension HistoryStore {
               cursor == nil || cursor?.storeID == retentionStore else {
             throw HistoryFailure(.invalidInput, stage: .admission, disposition: .usable)
         }
-        let request = NSFetchRequest<NSDictionary>(entityName: "HistoryResourceRecord")
+        guard let resourceEntityName = HistoryResourceRecord.fetchRequest().entityName else {
+            throw HistoryFailure(.compatibility, stage: .admission, disposition: .usable)
+        }
+        let request = NSFetchRequest<NSDictionary>(entityName: resourceEntityName)
         var clauses = ["\(#keyPath(HistoryResourceRecord.storeID)) == %@"]
         var values: [Any] = [retentionStore.uuidString]
         if let cursor {
@@ -42,7 +45,7 @@ extension HistoryStore {
             let objectKey = row[#keyPath(HistoryResourceRecord.objectKey)] as? String ?? ""
             let versionKey = row[#keyPath(HistoryResourceRecord.versionKey)] as? String ?? ""
             let count = try context.count(for: {
-                let countRequest = NSFetchRequest<NSFetchRequestResult>(entityName: "HistoryResourceRecord")
+                let countRequest = NSFetchRequest<NSFetchRequestResult>(entityName: resourceEntityName)
                 countRequest.predicate = NSPredicate(
                     format: "\(#keyPath(HistoryResourceRecord.storeID)) == %@ AND " +
                         "\(#keyPath(HistoryResourceRecord.objectKey)) == %@ AND " +
@@ -59,7 +62,7 @@ extension HistoryStore {
     }
 
     func isRetentionCleanupPending(for retentionStore: UUID) throws -> Bool {
-        let request = NSFetchRequest<HistoryCleanupRecord>(entityName: "HistoryCleanupRecord")
+        let request = HistoryCleanupRecord.fetchRequest()
         request.predicate = NSPredicate(format: "\(#keyPath(HistoryCleanupRecord.key)) == %@", retentionStore.uuidString)
         request.fetchLimit = 1
         return try !context.fetch(request).isEmpty
@@ -70,7 +73,7 @@ extension HistoryStore {
         cleanup: @MainActor (HistoryStore) async throws -> Void
     ) async throws {
         try await activity.withMaintenance(in: self) {
-            let pending = NSFetchRequest<HistoryTransactionRecord>(entityName: "HistoryTransactionRecord")
+            let pending = HistoryTransactionRecord.fetchRequest()
             pending.predicate = NSPredicate(format: "\(#keyPath(HistoryTransactionRecord.stage)) != %@ AND " +
                 "\(#keyPath(HistoryTransactionRecord.stage)) != %@ AND " +
                 "\(#keyPath(HistoryTransactionRecord.stage)) != %@",
@@ -80,7 +83,7 @@ extension HistoryStore {
                 throw HistoryFailure(.unresolved, stage: .admission, disposition: .suspended)
             }
             try await cleanup(self)
-            let request = NSFetchRequest<HistoryCleanupRecord>(entityName: "HistoryCleanupRecord")
+            let request = HistoryCleanupRecord.fetchRequest()
             request.predicate = NSPredicate(format: "\(#keyPath(HistoryCleanupRecord.key)) == %@", retentionStore.uuidString)
             for row in try context.fetch(request) { context.delete(row) }
             do { try context.save() } catch {

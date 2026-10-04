@@ -126,7 +126,7 @@ extension HistoryStore {
     }
 
     func register(mode: HistoryOpenMode) throws {
-        let request = NSFetchRequest<HistoryStoreRecord>(entityName: "HistoryStoreRecord")
+        let request = HistoryStoreRecord.fetchRequest()
         request.predicate = NSPredicate(format: "\(#keyPath(HistoryStoreRecord.key)) == %@", "primary")
         request.fetchLimit = 1
         let record = try context.fetch(request).first
@@ -135,8 +135,9 @@ extension HistoryStore {
             guard record == nil else {
                 throw HistoryFailure(.identityConflict, stage: .admission, disposition: .usable)
             }
-            guard let created = NSEntityDescription.insertNewObject(
-                forEntityName: "HistoryStoreRecord", into: context
+            guard let name = HistoryStoreRecord.fetchRequest().entityName,
+                  let created = NSEntityDescription.insertNewObject(
+                forEntityName: name, into: context
             ) as? HistoryStoreRecord else {
                 throw HistoryFailure(.compatibility, stage: .admission, disposition: .usable)
             }
@@ -169,7 +170,7 @@ extension HistoryStore {
                   sourceWorkingIdentity != workingIdentity else {
                 throw HistoryFailure(.identityConflict, stage: .admission, disposition: .usable)
             }
-            let scopes = try context.fetch(NSFetchRequest<HistoryScopeRecord>(entityName: "HistoryScopeRecord"))
+            let scopes = try context.fetch(HistoryScopeRecord.fetchRequest())
             guard scopes.allSatisfy({ $0.workingID == sourceWorkingIdentity.uuidString }) else {
                 throw HistoryFailure(.identityConflict, stage: .admission, disposition: .usable)
             }
@@ -191,7 +192,7 @@ extension HistoryStore {
         guard !FileManager.default.fileExists(atPath: destination.path) else {
             throw HistoryFailure(.identityConflict, stage: .admission, disposition: .usable)
         }
-        let pending = NSFetchRequest<HistoryTransactionRecord>(entityName: "HistoryTransactionRecord")
+        let pending = HistoryTransactionRecord.fetchRequest()
         pending.predicate = NSPredicate(format: "\(#keyPath(HistoryTransactionRecord.stage)) != %@ AND " +
             "\(#keyPath(HistoryTransactionRecord.stage)) != %@ AND " +
             "\(#keyPath(HistoryTransactionRecord.stage)) != %@",

@@ -10,7 +10,7 @@ extension RetainedHistory {
         case .current:
             return try history.scopeRecord().latestAcceptedSequence
         case .checkpoint(let id):
-            let request = NSFetchRequest<HistoryCheckpointRecord>(entityName: "HistoryCheckpointRecord")
+            let request = HistoryCheckpointRecord.fetchRequest()
             request.predicate = NSPredicate(format: "\(#keyPath(HistoryCheckpointRecord.scopeKey)) == %@ AND " +
                 "\(#keyPath(HistoryCheckpointRecord.key)) == %@", scope.uuidString, id.uuidString)
             request.fetchLimit = 1
@@ -28,7 +28,7 @@ extension RetainedHistory {
         let forward = plan.direction == .forward
         var expected = plan.baselineAcceptedSequence
         if let cursor {
-            let request = NSFetchRequest<HistoryGroupRecord>(entityName: "HistoryGroupRecord")
+            let request = HistoryGroupRecord.fetchRequest()
             request.predicate = NSPredicate(format: "\(#keyPath(HistoryGroupRecord.scopeKey)) == %@ AND \(#keyPath(HistoryGroupRecord.sequence)) == %@",
                 scope.uuidString, NSNumber(value: cursor))
             request.fetchLimit = 1

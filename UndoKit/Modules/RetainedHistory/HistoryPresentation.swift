@@ -9,7 +9,7 @@ extension RetainedHistory {
         guard !activity.closed else { throw HistoryFailure(.busy, stage: .admission, disposition: .usable) }
         let scopeRow = try history.scopeRecord()
         let floor = scopeRow.undoFloorSequence
-        let request = NSFetchRequest<HistoryGroupRecord>(entityName: "HistoryGroupRecord")
+        let request = HistoryGroupRecord.fetchRequest()
         request.predicate = NSPredicate(format: "\(#keyPath(HistoryGroupRecord.scopeKey)) == %@ AND \(#keyPath(HistoryGroupRecord.sequence)) >= %@",
                                         scope.uuidString, NSNumber(value: floor))
         request.sortDescriptors = [NSSortDescriptor(key: #keyPath(HistoryGroupRecord.sequence), ascending: false)]

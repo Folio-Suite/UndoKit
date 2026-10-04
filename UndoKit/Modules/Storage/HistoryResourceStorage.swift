@@ -19,36 +19,36 @@ extension HistoryScopeStorage {
     func addResourceReferences(_ resources: [HistoryObjectReference],
                                ownerType: String, ownerKey: String) throws {
         for reference in resources {
-            let row = insert("HistoryResourceRecord")
-            row.setValue(UUID().uuidString, forKey: "key")
-            row.setValue(reference.storeID.uuidString, forKey: "storeID")
-            row.setValue(reference.objectKey, forKey: "objectKey")
-            row.setValue(reference.versionKey ?? "", forKey: "versionKey")
-            row.setValue(ownerType, forKey: "ownerType")
-            row.setValue(ownerKey, forKey: "ownerKey")
+            let row = insert(HistoryResourceRecord.self)
+            row.key = UUID().uuidString
+            row.storeID = reference.storeID.uuidString
+            row.objectKey = reference.objectKey
+            row.versionKey = reference.versionKey ?? ""
+            row.ownerType = ownerType
+            row.ownerKey = ownerKey
         }
     }
 
     func removeResourceReferences(ownerType: String, ownerKey: String) throws {
-        let rows = try fetch("HistoryResourceRecord", predicate: NSPredicate(
-            format: "ownerType == %@ AND ownerKey == %@", ownerType, ownerKey))
+        let rows = try fetch(HistoryResourceRecord.self, predicate: NSPredicate(
+            format: "\(#keyPath(HistoryResourceRecord.ownerType)) == %@ AND \(#keyPath(HistoryResourceRecord.ownerKey)) == %@", ownerType, ownerKey))
         for row in rows {
-            if let storeID = row.string("storeID"),
-               try fetchOne("HistoryCleanupRecord", key: storeID) == nil {
-                let pending = insert("HistoryCleanupRecord")
-                pending.setValue(storeID, forKey: "key")
+            if let storeID = row.storeID,
+               try fetchOne(HistoryCleanupRecord.self, keyPath: \.key, key: storeID) == nil {
+                let pending = insert(HistoryCleanupRecord.self)
+                pending.key = storeID
             }
             context.delete(row)
         }
     }
 
     func retiredCommandReceipt(key: String, fingerprint: Data) throws -> HistoryReceipt? {
-        guard let row = try fetchOne("HistoryRetiredCommandRecord", key: key) else { return nil }
-        guard row.data("fingerprint") == fingerprint else {
+        guard let row = try fetchOne(HistoryRetiredCommandRecord.self, keyPath: \.key, key: key) else { return nil }
+        guard row.fingerprint == fingerprint else {
             throw HistoryFailure(.identityConflict, stage: .admission, disposition: .usable)
         }
         return HistoryReceipt(token: HistoryToken(scope: scope,
-            generation: try row.uuid("generationID"), sequence: row.int64("sequence"),
-            command: try row.uuid("commandID")), groupID: try row.uuid("groupID"))
+            generation: try row.uuid(row.generationID), sequence: row.sequence,
+            command: try row.uuid(row.commandID)), groupID: try row.uuid(row.groupID))
     }
 }

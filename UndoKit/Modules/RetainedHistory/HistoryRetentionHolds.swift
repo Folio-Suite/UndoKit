@@ -18,15 +18,17 @@ extension RetainedHistory {
         try activity.requireIdle()
         guard let first = try history.groupRecord(key: firstGroupID.uuidString),
               let last = try history.groupRecord(key: lastGroupID.uuidString),
-              first.string("scopeKey") == scope.uuidString,
-              last.string("scopeKey") == scope.uuidString,
-              first.int64("sequence") <= last.int64("sequence") else {
+              first.scopeKey == scope.uuidString,
+              last.scopeKey == scope.uuidString,
+              first.sequence <= last.sequence else {
             throw HistoryFailure(.invalidInput, stage: .admission, disposition: .usable)
         }
-        let lower = first.int64("sequence")
-        let upper = last.int64("sequence")
-        let gaps = try history.fetch("HistoryGapRecord", predicate: NSPredicate(
-            format: "scopeKey == %@ AND upperInclusiveSequence >= %@ AND lowerExclusiveSequence < %@",
+        let lower = first.sequence
+        let upper = last.sequence
+        let gaps = try history.fetch(HistoryGapRecord.self, predicate: NSPredicate(
+            format: "\(#keyPath(HistoryGapRecord.scopeKey)) == %@ AND " +
+                "\(#keyPath(HistoryGapRecord.upperInclusiveSequence)) >= %@ AND " +
+                "\(#keyPath(HistoryGapRecord.lowerExclusiveSequence)) < %@",
             scope.uuidString, NSNumber(value: lower), NSNumber(value: upper)))
         guard gaps.isEmpty else {
             throw HistoryFailure(.compatibility, stage: .admission, disposition: .usable)
@@ -36,8 +38,8 @@ extension RetainedHistory {
 
     func releaseHold(_ id: UUID) throws {
         try activity.requireIdle()
-        guard let row = try history.fetchOne("HistoryHoldRecord", key: id.uuidString),
-              row.string("scopeKey") == scope.uuidString else {
+        guard let row = try history.fetchOne(HistoryHoldRecord.self, keyPath: \.key, key: id.uuidString),
+              row.scopeKey == scope.uuidString else {
             throw HistoryFailure(.invalidInput, stage: .admission, disposition: .usable)
         }
         context.delete(row)
@@ -46,39 +48,39 @@ extension RetainedHistory {
 
     func retentionHolds() throws -> [HistoryRetentionHold] {
         guard !activity.closed else { throw HistoryFailure(.busy, stage: .admission, disposition: .usable) }
-        let generation = try history.scopeRecord().uuid("generationID")
-        return try history.fetch("HistoryHoldRecord", predicate: NSPredicate(
-            format: "scopeKey == %@ AND generationID == %@", scope.uuidString, generation.uuidString))
+        let generation = try history.scopeRecord().generationUUID()
+        return try history.fetch(HistoryHoldRecord.self, predicate: NSPredicate(
+            format: "\(#keyPath(HistoryHoldRecord.scopeKey)) == %@ AND \(#keyPath(HistoryHoldRecord.generationID)) == %@", scope.uuidString, generation.uuidString))
             .map { row in
                 let kind: HistoryRetentionHold.Kind
-                if row.string("kind") == "state" {
-                    kind = .state(checkpointID: try row.uuid("checkpointID"))
+                if row.kind == "state" {
+                    kind = .state(checkpointID: try row.uuid(row.checkpointID))
                 } else {
-                    kind = .detail(firstSequence: row.int64("lowerSequence"),
-                                   lastSequence: row.int64("upperSequence"))
+                    kind = .detail(firstSequence: row.lowerSequence?.int64Value ?? 0,
+                                   lastSequence: row.upperSequence?.int64Value ?? 0)
                 }
-                return HistoryRetentionHold(id: try row.uuid("key"), scope: scope,
+                return HistoryRetentionHold(id: try row.uuid(row.key), scope: scope,
                                             generation: generation, kind: kind)
             }
     }
 
     private func insertHold(id: UUID, kind: HistoryRetentionHold.Kind) throws -> HistoryRetentionHold {
-        guard try history.fetchOne("HistoryHoldRecord", key: id.uuidString) == nil else {
+        guard try history.fetchOne(HistoryHoldRecord.self, keyPath: \.key, key: id.uuidString) == nil else {
             throw HistoryFailure(.identityConflict, stage: .admission, disposition: .usable)
         }
-        let generation = try history.scopeRecord().uuid("generationID")
-        let row = history.insert("HistoryHoldRecord")
-        row.setValue(id.uuidString, forKey: "key")
-        row.setValue(scope.uuidString, forKey: "scopeKey")
-        row.setValue(generation.uuidString, forKey: "generationID")
+        let generation = try history.scopeRecord().generationUUID()
+        let row = history.insert(HistoryHoldRecord.self)
+        row.key = id.uuidString
+        row.scopeKey = scope.uuidString
+        row.generationID = generation.uuidString
         switch kind {
         case .state(let checkpointID):
-            row.setValue("state", forKey: "kind")
-            row.setValue(checkpointID.uuidString, forKey: "checkpointID")
+            row.kind = "state"
+            row.checkpointID = checkpointID.uuidString
         case .detail(let first, let last):
-            row.setValue("detail", forKey: "kind")
-            row.setValue(first, forKey: "lowerSequence")
-            row.setValue(last, forKey: "upperSequence")
+            row.kind = "detail"
+            row.lowerSequence = NSNumber(value: first)
+            row.upperSequence = NSNumber(value: last)
         }
         try history.saveRetention()
         return HistoryRetentionHold(id: id, scope: scope, generation: generation, kind: kind)

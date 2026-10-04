@@ -9,17 +9,17 @@ extension HistoryTransactionCoordinator {
     /// safe close or a settled reopening. Unresolved outcomes keep evidence.
     func releaseSessionReferences(save: Bool = true) throws {
         guard !snapshot.isSuspended else { return }
-        let rows = try history.fetch("HistoryResourceRecord", predicate: NSPredicate(
-            format: "ownerType == %@ AND ownerKey BEGINSWITH %@", "session", scope.uuidString + ":"))
+        let rows = try history.fetch(HistoryResourceRecord.self, predicate: NSPredicate(
+            format: "\(#keyPath(HistoryResourceRecord.ownerType)) == %@ AND \(#keyPath(HistoryResourceRecord.ownerKey)) BEGINSWITH %@", "session", scope.uuidString + ":"))
         for row in rows {
-            try history.removeResourceReferences(ownerType: "session", ownerKey: row.string("ownerKey") ?? "")
+            try history.removeResourceReferences(ownerType: "session", ownerKey: row.ownerKey ?? "")
         }
         if save && context.hasChanges { try history.saveContext() }
     }
 
     /// Read the persisted mode; storage failures are returned to the host.
     func recordingMode() throws -> HistoryRecordingMode {
-        try history.scopeRecord().bool("recordingEnabled") ? .on : .off
+        try history.scopeRecord().recordingEnabled ? .on : .off
     }
 
     /// Change recording only at a settled boundary. Existing retained history
@@ -36,9 +36,9 @@ extension HistoryTransactionCoordinator {
         }
         let row = try history.scopeRecord()
         let enabled = mode == .on
-        guard row.bool("recordingEnabled") != enabled else { return nil }
-        let hadOffAction = row.int64("offStartSequence") > 0 &&
-            row.int64("undoFloorSequence") >= row.int64("offStartSequence")
+        guard row.recordingEnabled != enabled else { return nil }
+        let hadOffAction = row.offStartSequence > 0 &&
+            row.undoFloorSequence >= row.offStartSequence
         var baselineID: UUID?
         if enabled {
             guard let baseline, history.valid(baseline), history.valid(resources),
@@ -46,32 +46,32 @@ extension HistoryTransactionCoordinator {
                 throw HistoryFailure(.invalidInput, stage: .admission, disposition: .usable)
             }
             let id = UUID()
-            let sequence = row.int64("nextSequence")
-            let checkpoint = history.insert("HistoryCheckpointRecord")
-            checkpoint.setValue(id.uuidString, forKey: "key")
-            checkpoint.setValue(scope.uuidString, forKey: "scopeKey")
-            checkpoint.setValue(nil, forKey: "name")
-            checkpoint.setValue(sequence, forKey: "sequence")
-            checkpoint.setValue(row.int64("latestAcceptedSequence"), forKey: "latestAcceptedSequence")
-            checkpoint.setValue(Date(), forKey: "recordedAt")
-            checkpoint.setValue(baseline.family, forKey: "family")
-            checkpoint.setValue(Int64(baseline.version), forKey: "version")
-            checkpoint.setValue(baseline.data, forKey: "state")
-            checkpoint.setValue(history.digest(baseline), forKey: "stateDigest")
+            let sequence = row.nextSequence
+            let checkpoint = history.insert(HistoryCheckpointRecord.self)
+            checkpoint.key = id.uuidString
+            checkpoint.scopeKey = scope.uuidString
+            checkpoint.name = nil
+            checkpoint.sequence = sequence
+            checkpoint.latestAcceptedSequence = row.latestAcceptedSequence
+            checkpoint.recordedAt = Date()
+            checkpoint.family = baseline.family
+            checkpoint.version = Int64(baseline.version)
+            checkpoint.state = baseline.data
+            checkpoint.stateDigest = history.digest(baseline)
             try history.addResourceReferences(resources, ownerType: "checkpoint", ownerKey: history.transactionKey(id))
-            row.setValue(sequence + 1, forKey: "nextSequence")
-            if hadOffAction { row.setValue(sequence, forKey: "currentBaselineSequence") }
+            row.nextSequence = sequence + 1
+            if hadOffAction { row.currentBaselineSequence = sequence }
             baselineID = id
         }
-        row.setValue(enabled, forKey: "recordingEnabled")
+        row.recordingEnabled = enabled
         if enabled {
             try releaseSessionReferences(save: false)
-            if hadOffAction { row.setValue(row.int64("nextSequence"), forKey: "undoFloorSequence") }
-            row.setValue(Int64(0), forKey: "offStartSequence")
+            if hadOffAction { row.undoFloorSequence = row.nextSequence }
+            row.offStartSequence = Int64(0)
         } else {
-            row.setValue(row.int64("nextSequence"), forKey: "offStartSequence")
+            row.offStartSequence = row.nextSequence
         }
-        row.setValue(row.int64("committedVersion") + 1, forKey: "committedVersion")
+        row.committedVersion += 1
         try history.saveRetention()
         if enabled { sessionGroups.removeAll() }
         updateSnapshot()

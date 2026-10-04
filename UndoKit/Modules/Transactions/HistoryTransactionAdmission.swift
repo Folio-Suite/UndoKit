@@ -15,8 +15,11 @@ extension HistoryTransactionCoordinator {
               !HistoryStore.deliveringStores.contains(ObjectIdentifier(store)) else {
             throw HistoryFailure(.busy, stage: .admission, disposition: .usable)
         }
-        let pending = try history.fetch("HistoryTransactionRecord", predicate: NSPredicate(
-            format: "scopeKey == %@ AND stage != %@ AND stage != %@ AND stage != %@",
+        let pending = try history.fetch(HistoryTransactionRecord.self, predicate: NSPredicate(
+            format: "\(#keyPath(HistoryTransactionRecord.scopeKey)) == %@ AND " +
+                "\(#keyPath(HistoryTransactionRecord.stage)) != %@ AND " +
+                "\(#keyPath(HistoryTransactionRecord.stage)) != %@ AND " +
+                "\(#keyPath(HistoryTransactionRecord.stage)) != %@",
             scope.uuidString, "accepted", "rejected", "cancelled"))
         guard pending.isEmpty else {
             throw HistoryFailure(.unresolved, stage: .admission, disposition: .suspended)

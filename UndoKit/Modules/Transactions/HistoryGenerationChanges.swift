@@ -48,8 +48,11 @@ extension HistoryTransactionCoordinator {
               !HistoryStore.deliveringStores.contains(ObjectIdentifier(store)) else {
             throw HistoryFailure(.busy, stage: .admission, disposition: .usable)
         }
-        let pending = try history.fetch("HistoryTransactionRecord", predicate: NSPredicate(
-            format: "scopeKey == %@ AND stage != %@ AND stage != %@ AND stage != %@",
+        let pending = try history.fetch(HistoryTransactionRecord.self, predicate: NSPredicate(
+            format: "\(#keyPath(HistoryTransactionRecord.scopeKey)) == %@ AND " +
+                "\(#keyPath(HistoryTransactionRecord.stage)) != %@ AND " +
+                "\(#keyPath(HistoryTransactionRecord.stage)) != %@ AND " +
+                "\(#keyPath(HistoryTransactionRecord.stage)) != %@",
             scope.uuidString, "accepted", "rejected", "cancelled"))
         guard !pending.isEmpty else {
             throw HistoryFailure(.invalidInput, stage: .admission, disposition: .usable)
@@ -66,43 +69,48 @@ extension HistoryTransactionCoordinator {
         }
         let generation = UUID()
         do {
-            for name in ["HistoryTransactionRecord", "HistoryGroupRecord",
-                         "HistoryCheckpointRecord", "HistoryGapRecord", "HistoryHoldRecord",
-                         "HistoryRetiredCommandRecord",
-                        ] {
-                for row in try history.fetch(name, predicate: NSPredicate(
-                    format: "scopeKey == %@", scope.uuidString)) {
+            let scopedTypes: [(NSManagedObject.Type, String)] = [
+                (HistoryTransactionRecord.self, #keyPath(HistoryTransactionRecord.scopeKey)),
+                (HistoryGroupRecord.self, #keyPath(HistoryGroupRecord.scopeKey)),
+                (HistoryCheckpointRecord.self, #keyPath(HistoryCheckpointRecord.scopeKey)),
+                (HistoryGapRecord.self, #keyPath(HistoryGapRecord.scopeKey)),
+                (HistoryHoldRecord.self, #keyPath(HistoryHoldRecord.scopeKey)),
+                (HistoryRetiredCommandRecord.self, #keyPath(HistoryRetiredCommandRecord.scopeKey)),
+            ]
+            for (type, scopeKeyPath) in scopedTypes {
+                for row in try history.fetch(type, predicate: NSPredicate(
+                    format: "%K == %@", scopeKeyPath, scope.uuidString)) {
                     context.delete(row)
                 }
             }
-            let references = try history.fetch("HistoryResourceRecord", predicate: NSPredicate(
-                format: "ownerKey BEGINSWITH %@", scope.uuidString + ":"))
+            let references = try history.fetch(HistoryResourceRecord.self, predicate: NSPredicate(
+                format: "\(#keyPath(HistoryResourceRecord.ownerKey)) BEGINSWITH %@", scope.uuidString + ":"))
             for row in references {
-                try history.removeResourceReferences(ownerType: row.string("ownerType") ?? "",
-                                             ownerKey: row.string("ownerKey") ?? "")
+                try history.removeResourceReferences(ownerType: row.ownerType ?? "",
+                                             ownerKey: row.ownerKey ?? "")
             }
             let row = try history.scopeRecord()
-            row.setValue(generation.uuidString, forKey: "generationID")
-            row.setValue(Int64(2), forKey: "nextSequence")
-            row.setValue(Int64(0), forKey: "latestAcceptedSequence")
-            row.setValue(Int64(2), forKey: "undoFloorSequence")
-            row.setValue(Int64(1), forKey: "currentBaselineSequence")
-            row.setValue(true, forKey: "requiresGenerationBinding")
-            row.setValue(Int64(0), forKey: "offStartSequence")
-            row.setValue(false, forKey: "suspended")
-            row.setValue(row.int64("committedVersion") + 1, forKey: "committedVersion")
+            row.generationID = generation.uuidString
+            row.nextSequence = Int64(2)
+            row.latestAcceptedSequence = Int64(0)
+            row.undoFloorSequence = Int64(2)
+            row.currentBaselineSequence = Int64(1)
+            row.requiresGenerationBinding = true
+            row.offStartSequence = Int64(0)
+            row.suspended = false
+            row.committedVersion += 1
             let checkpointID = UUID()
-            let checkpoint = history.insert("HistoryCheckpointRecord")
-            checkpoint.setValue(checkpointID.uuidString, forKey: "key")
-            checkpoint.setValue(scope.uuidString, forKey: "scopeKey")
-            checkpoint.setValue(nil, forKey: "name")
-            checkpoint.setValue(Int64(1), forKey: "sequence")
-            checkpoint.setValue(Int64(0), forKey: "latestAcceptedSequence")
-            checkpoint.setValue(Date(), forKey: "recordedAt")
-            checkpoint.setValue(baseline.family, forKey: "family")
-            checkpoint.setValue(Int64(baseline.version), forKey: "version")
-            checkpoint.setValue(baseline.data, forKey: "state")
-            checkpoint.setValue(history.digest(baseline), forKey: "stateDigest")
+            let checkpoint = history.insert(HistoryCheckpointRecord.self)
+            checkpoint.key = checkpointID.uuidString
+            checkpoint.scopeKey = scope.uuidString
+            checkpoint.name = nil
+            checkpoint.sequence = Int64(1)
+            checkpoint.latestAcceptedSequence = Int64(0)
+            checkpoint.recordedAt = Date()
+            checkpoint.family = baseline.family
+            checkpoint.version = Int64(baseline.version)
+            checkpoint.state = baseline.data
+            checkpoint.stateDigest = history.digest(baseline)
             try history.addResourceReferences(resources, ownerType: "checkpoint",
                                       ownerKey: history.transactionKey(checkpointID))
             try history.saveContext()

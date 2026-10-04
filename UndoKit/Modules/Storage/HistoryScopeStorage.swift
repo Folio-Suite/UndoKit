@@ -38,50 +38,57 @@ import Foundation
 
     func register(mode: HistoryScopeOpenMode) throws {
         let key = scope.uuidString
-        let row = try fetchOne("HistoryScopeRecord", key: key)
+        let row = try fetchOne(HistoryScopeRecord.self, keyPath: \.key, key: key)
         switch mode {
         case .create:
             guard row == nil else { throw HistoryFailure(.identityConflict, stage: .admission, disposition: .usable) }
-            let new = insert("HistoryScopeRecord")
-            new.setValue(key, forKey: "key")
-            new.setValue(store.workingIdentity.uuidString, forKey: "workingID")
-            new.setValue(UUID().uuidString, forKey: "generationID")
-            new.setValue(Int64(1), forKey: "nextSequence")
-            new.setValue(false, forKey: "suspended")
-            new.setValue(true, forKey: "recordingEnabled")
-            new.setValue(Int64(0), forKey: "undoFloorSequence")
-            new.setValue(Int64(0), forKey: "currentBaselineSequence")
-            new.setValue(false, forKey: "requiresGenerationBinding")
-            new.setValue(Int64(0), forKey: "offStartSequence")
+            let new = insert(HistoryScopeRecord.self)
+            new.key = key
+            new.workingID = store.workingIdentity.uuidString
+            new.generationID = UUID().uuidString
+            new.nextSequence = Int64(1)
+            new.suspended = false
+            new.recordingEnabled = true
+            new.undoFloorSequence = Int64(0)
+            new.currentBaselineSequence = Int64(0)
+            new.requiresGenerationBinding = false
+            new.offStartSequence = Int64(0)
             try saveContext()
         case .existing:
-            guard row?.string("workingID") == store.workingIdentity.uuidString else {
+            guard row?.workingID == store.workingIdentity.uuidString else {
                 throw HistoryFailure(.identityConflict, stage: .admission, disposition: .usable)
             }
         }
     }
 
-    func eligibleGroup(for kind: HistoryDeliveryKind) throws -> NSManagedObject? {
-        let request = NSFetchRequest<NSManagedObject>(entityName: "HistoryGroupRecord")
-        let floor = try scopeRecord().int64("undoFloorSequence")
+    func eligibleGroup(for kind: HistoryDeliveryKind) throws -> HistoryGroupRecord? {
+        let request = NSFetchRequest<HistoryGroupRecord>(entityName: "HistoryGroupRecord")
+        let floor = try scopeRecord().undoFloorSequence
+        let groupFilter = "\(#keyPath(HistoryGroupRecord.scopeKey)) == %@ AND " +
+            "\(#keyPath(HistoryGroupRecord.kind)) == %@ AND " +
+            "\(#keyPath(HistoryGroupRecord.state)) != %@ AND " +
+            "\(#keyPath(HistoryGroupRecord.sequence)) >= %@"
         request.predicate = NSPredicate(
-            format: "scopeKey == %@ AND kind == %@ AND state != %@ AND sequence >= %@",
+            format: groupFilter,
             scope.uuidString, HistoryDeliveryKind.command.rawValue, "branched", NSNumber(value: floor))
-        request.sortDescriptors = [NSSortDescriptor(key: "sequence", ascending: false)]
+        request.sortDescriptors = [NSSortDescriptor(key: #keyPath(HistoryGroupRecord.sequence), ascending: false)]
         request.fetchLimit = limits.maxUndoGroups
         let groups = try context.fetch(request)
         // An invalidated group blocks traversal until the host can prove a
         // narrower independent dependency scope. This first slice has no such proof.
-        guard !groups.contains(where: { $0.string("state") == "invalid" }) else { return nil }
-        if kind == .undo { return groups.first(where: { $0.string("state") == "applied" }) }
-        return groups.reversed().first(where: { $0.string("state") == "undone" })
+        guard !groups.contains(where: { $0.state == "invalid" }) else { return nil }
+        if kind == .undo { return groups.first(where: { $0.state == "applied" }) }
+        return groups.reversed().first(where: { $0.state == "undone" })
     }
 
-    func ordinaryGroups(state: String) throws -> [NSManagedObject] {
-        try fetch("HistoryGroupRecord",
-                  predicate: NSPredicate(format: "scopeKey == %@ AND kind == %@ AND state == %@",
-                                         scope.uuidString, HistoryDeliveryKind.command.rawValue, state),
-                  sort: [NSSortDescriptor(key: "sequence", ascending: true)])
+    func ordinaryGroups(state: String) throws -> [HistoryGroupRecord] {
+        try fetch(HistoryGroupRecord.self,
+                  predicate: NSPredicate(
+                    format: "%K == %@ AND %K == %@ AND %K == %@",
+                    #keyPath(HistoryGroupRecord.scopeKey), scope.uuidString,
+                    #keyPath(HistoryGroupRecord.kind), HistoryDeliveryKind.command.rawValue,
+                    #keyPath(HistoryGroupRecord.state), state),
+                  sort: [NSSortDescriptor(key: #keyPath(HistoryGroupRecord.sequence), ascending: true)])
     }
 
     func valid(_ payload: HistoryPayload) -> Bool {
@@ -113,26 +120,26 @@ import Foundation
         return size <= limits.maxStoreBytes && estimate <= limits.maxStoreBytes - size
     }
 
-    func checkpointInfo(_ row: NSManagedObject) throws -> HistoryCheckpointInfo {
-        HistoryCheckpointInfo(id: try row.uuid("key"), name: row.string("name"),
-                              sequence: row.int64("sequence"),
-                              recordedAt: row.value(forKey: "recordedAt") as? Date ?? .distantPast)
+    func checkpointInfo(_ row: HistoryCheckpointRecord) throws -> HistoryCheckpointInfo {
+        HistoryCheckpointInfo(id: try row.uuid(row.key), name: row.name,
+                              sequence: row.sequence,
+                              recordedAt: row.recordedAt ?? .distantPast)
     }
 
-    func token(for transaction: NSManagedObject) throws -> HistoryToken {
-        HistoryToken(scope: scope, generation: try transaction.uuid("generationID"),
-                     sequence: transaction.int64("sequence"), command: try transaction.uuid("commandID"))
+    func token(for transaction: HistoryTransactionRecord) throws -> HistoryToken {
+        HistoryToken(scope: scope, generation: try transaction.uuid(transaction.generationID),
+                     sequence: transaction.sequence, command: try transaction.uuid(transaction.commandID))
     }
 
-    func transactionMembers(_ transaction: NSManagedObject) throws -> [NSManagedObject] {
-        let members = try fetch("HistoryMemberRecord",
-                                predicate: NSPredicate(format: "transaction == %@", transaction),
-                                sort: [NSSortDescriptor(key: "ordinal", ascending: true)])
+    func transactionMembers(_ transaction: HistoryTransactionRecord) throws -> [HistoryMemberRecord] {
+        let members = try fetch(HistoryMemberRecord.self,
+                                predicate: NSPredicate(format: "\(#keyPath(HistoryMemberRecord.transaction)) == %@", transaction),
+                                sort: [NSSortDescriptor(key: #keyPath(HistoryMemberRecord.ordinal), ascending: true)])
         for row in members {
-            guard let family = row.string("family"),
-                  let data = row.value(forKey: "payload") as? Data,
-                  row.data("payloadDigest") == digest(HistoryPayload(
-                    family: family, version: Int(row.int64("version")), data: data
+            guard let family = row.family,
+                  let data = row.payload,
+                  row.payloadDigest == digest(HistoryPayload(
+                    family: family, version: Int(row.version), data: data
                   )) else {
                 throw HistoryFailure(.storage, stage: .reconciliation, disposition: .suspended)
             }
@@ -140,23 +147,85 @@ import Foundation
         return members
     }
 
-    func payload(on row: NSManagedObject, prefix: String) throws -> HistoryPayload {
-        guard let family = row.string(prefix + "Family"),
-              let data = row.value(forKey: prefix + "Payload") as? Data else {
+    enum CompensationPayloadRole { case undo, redo }
+
+    private func validatedPayload(family: String?, version: Int64, data: Data?,
+                                  storedDigest: Data?) throws -> HistoryPayload {
+        guard let family, let data else {
             throw HistoryFailure(.storage, stage: .reconciliation, disposition: .suspended)
         }
-        let payload = HistoryPayload(family: family, version: Int(row.int64(prefix + "Version")), data: data)
-        guard row.data(prefix + "Digest") == digest(payload) else {
+        let payload = HistoryPayload(family: family, version: Int(version), data: data)
+        guard storedDigest == digest(payload) else {
             throw HistoryFailure(.storage, stage: .reconciliation, disposition: .suspended)
         }
         return payload
     }
 
-    func put(_ payload: HistoryPayload, on row: NSManagedObject, prefix: String) {
-        row.setValue(payload.family, forKey: prefix + "Family")
-        row.setValue(Int64(payload.version), forKey: prefix + "Version")
-        row.setValue(payload.data, forKey: prefix + "Payload")
-        row.setValue(digest(payload), forKey: prefix + "Digest")
+    func payload(on row: HistoryMemberRecord, role: CompensationPayloadRole) throws -> HistoryPayload {
+        switch role {
+        case .undo:
+            return try validatedPayload(family: row.undoFamily,
+                version: row.undoVersion?.int64Value ?? 0, data: row.undoPayload,
+                storedDigest: row.undoDigest)
+        case .redo:
+            return try validatedPayload(family: row.redoFamily,
+                version: row.redoVersion?.int64Value ?? 0, data: row.redoPayload,
+                storedDigest: row.redoDigest)
+        }
+    }
+
+    func payload(on row: HistoryActionRecord, role: CompensationPayloadRole) throws -> HistoryPayload {
+        switch role {
+        case .undo:
+            return try validatedPayload(family: row.undoFamily,
+                version: row.undoVersion, data: row.undoPayload, storedDigest: row.undoDigest)
+        case .redo:
+            return try validatedPayload(family: row.redoFamily,
+                version: row.redoVersion, data: row.redoPayload, storedDigest: row.redoDigest)
+        }
+    }
+
+    func presentationPayload(on row: HistoryGroupRecord) throws -> HistoryPayload {
+        return try validatedPayload(family: row.presentationFamily,
+            version: row.presentationVersion?.int64Value ?? 0, data: row.presentationPayload,
+            storedDigest: row.presentationDigest)
+    }
+
+    func putPresentation(_ payload: HistoryPayload, on row: HistoryTransactionRecord) {
+        row.presentationFamily = payload.family
+        row.presentationVersion = NSNumber(value: payload.version)
+        row.presentationPayload = payload.data
+        row.presentationDigest = digest(payload)
+    }
+
+    func put(_ payload: HistoryPayload, on row: HistoryMemberRecord, role: CompensationPayloadRole) {
+        switch role {
+        case .undo:
+            row.undoFamily = payload.family
+            row.undoVersion = NSNumber(value: payload.version)
+            row.undoPayload = payload.data
+            row.undoDigest = digest(payload)
+        case .redo:
+            row.redoFamily = payload.family
+            row.redoVersion = NSNumber(value: payload.version)
+            row.redoPayload = payload.data
+            row.redoDigest = digest(payload)
+        }
+    }
+
+    func put(_ payload: HistoryPayload, on row: HistoryActionRecord, role: CompensationPayloadRole) {
+        switch role {
+        case .undo:
+            row.undoFamily = payload.family
+            row.undoVersion = Int64(payload.version)
+            row.undoPayload = payload.data
+            row.undoDigest = digest(payload)
+        case .redo:
+            row.redoFamily = payload.family
+            row.redoVersion = Int64(payload.version)
+            row.redoPayload = payload.data
+            row.redoDigest = digest(payload)
+        }
     }
 
     func digest(_ payload: HistoryPayload) -> Data {
@@ -168,51 +237,47 @@ import Foundation
         return Data(SHA256.hash(data: input))
     }
 
-    func scopeRecord() throws -> NSManagedObject {
-        guard let row = try fetchOne("HistoryScopeRecord", key: scope.uuidString) else {
+    func scopeRecord() throws -> HistoryScopeRecord {
+        guard let row = try fetchOne(HistoryScopeRecord.self, keyPath: \.key, key: scope.uuidString) else {
             throw HistoryFailure(.compatibility, stage: .admission, disposition: .resetRequired)
         }
         return row
     }
 
-    func groupRecord(key: String) throws -> NSManagedObject? {
-        try fetch("HistoryGroupRecord", predicate: NSPredicate(
-            format: "scopeKey == %@ AND key == %@", scope.uuidString, key
+    func groupRecord(key: String) throws -> HistoryGroupRecord? {
+        try fetch(HistoryGroupRecord.self, predicate: NSPredicate(
+            format: "%K == %@ AND %K == %@",
+            #keyPath(HistoryGroupRecord.scopeKey), scope.uuidString,
+            #keyPath(HistoryGroupRecord.key), key
         )).first
     }
 
     func transactionKey(_ id: UUID) -> String { scope.uuidString + ":" + id.uuidString }
 
-    func insert(_ name: String) -> NSManagedObject {
-        NSEntityDescription.insertNewObject(forEntityName: name, into: context)
+    func insert<Record: NSManagedObject>(_ type: Record.Type) -> Record {
+        guard let entity = NSEntityDescription.entity(forEntityName: String(describing: type), in: context) else {
+            preconditionFailure("Missing UndoKit entity for \(type)")
+        }
+        return Record(entity: entity, insertInto: context)
     }
 
-    func fetchOne(_ name: String, key: String) throws -> NSManagedObject? {
-        try fetch(name, predicate: NSPredicate(format: "key == %@", key)).first
+    func fetchOne<Record: NSManagedObject>(
+        _ type: Record.Type, keyPath: KeyPath<Record, String?>, key: String
+    ) throws -> Record? {
+        try fetch(type, predicate: NSPredicate(
+            format: "%K == %@", NSExpression(forKeyPath: keyPath).keyPath, key
+        )).first
     }
 
-    func fetch(
-        _ name: String,
+    func fetch<Record: NSManagedObject>(
+        _ type: Record.Type,
         predicate: NSPredicate? = nil,
         sort: [NSSortDescriptor] = []
-    ) throws -> [NSManagedObject] {
-        let request = NSFetchRequest<NSManagedObject>(entityName: name)
+    ) throws -> [Record] {
+        let request = NSFetchRequest<Record>(entityName: String(describing: type))
         request.fetchBatchSize = 256
         request.predicate = predicate
         request.sortDescriptors = sort
         return try context.fetch(request)
-    }
-}
-
-extension NSManagedObject {
-    func string(_ key: String) -> String? { value(forKey: key) as? String }
-    func data(_ key: String) -> Data { value(forKey: key) as? Data ?? Data() }
-    func int64(_ key: String) -> Int64 { (value(forKey: key) as? NSNumber)?.int64Value ?? 0 }
-    func bool(_ key: String) -> Bool { (value(forKey: key) as? NSNumber)?.boolValue ?? false }
-    func uuid(_ key: String) throws -> UUID {
-        guard let raw = string(key), let value = UUID(uuidString: raw) else {
-            throw HistoryFailure(.storage, stage: .reconciliation, disposition: .suspended)
-        }
-        return value
     }
 }

@@ -65,7 +65,7 @@ enum HistoryHostCallbackContext {
 
     func open(mode: HistoryScopeOpenMode) async throws {
         try history.register(mode: mode)
-        sessionStartSequence = try history.scopeRecord().int64("nextSequence")
+        sessionStartSequence = try history.scopeRecord().nextSequence
         await reconcileOnOpen()
         try refreshSnapshot()
         try releaseSessionReferences()

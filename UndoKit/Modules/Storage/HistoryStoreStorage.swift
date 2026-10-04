@@ -126,8 +126,8 @@ extension HistoryStore {
     }
 
     func register(mode: HistoryOpenMode) throws {
-        let request = NSFetchRequest<NSManagedObject>(entityName: "HistoryStoreRecord")
-        request.predicate = NSPredicate(format: "key == %@", "primary")
+        let request = NSFetchRequest<HistoryStoreRecord>(entityName: "HistoryStoreRecord")
+        request.predicate = NSPredicate(format: "\(#keyPath(HistoryStoreRecord.key)) == %@", "primary")
         request.fetchLimit = 1
         let record = try context.fetch(request).first
         switch mode {
@@ -135,10 +135,14 @@ extension HistoryStore {
             guard record == nil else {
                 throw HistoryFailure(.identityConflict, stage: .admission, disposition: .usable)
             }
-            let created = NSEntityDescription.insertNewObject(forEntityName: "HistoryStoreRecord", into: context)
-            created.setValue("primary", forKey: "key")
-            created.setValue(workingIdentity.uuidString, forKey: "workingID")
-            created.setValue(storeIdentity.uuidString, forKey: "storeID")
+            guard let created = NSEntityDescription.insertNewObject(
+                forEntityName: "HistoryStoreRecord", into: context
+            ) as? HistoryStoreRecord else {
+                throw HistoryFailure(.compatibility, stage: .admission, disposition: .usable)
+            }
+            created.key = "primary"
+            created.workingID = workingIdentity.uuidString
+            created.storeID = storeIdentity.uuidString
             do {
                 #if DEBUG
                 if Self.failInitialRegistrationSave {
@@ -155,23 +159,23 @@ extension HistoryStore {
             guard let record else {
                 throw HistoryFailure(.compatibility, stage: .admission, disposition: .usable)
             }
-            guard record.string("workingID") == workingIdentity.uuidString,
-                  let storeID = record.string("storeID").flatMap(UUID.init(uuidString:)) else {
+            guard record.workingID == workingIdentity.uuidString,
+                  let storeID = record.storeID.flatMap(UUID.init(uuidString:)) else {
                 throw HistoryFailure(.identityConflict, stage: .admission, disposition: .usable)
             }
             storeIdentity = storeID
         case .independentCopy(let sourceWorkingIdentity):
-            guard let record, record.string("workingID") == sourceWorkingIdentity.uuidString,
+            guard let record, record.workingID == sourceWorkingIdentity.uuidString,
                   sourceWorkingIdentity != workingIdentity else {
                 throw HistoryFailure(.identityConflict, stage: .admission, disposition: .usable)
             }
-            let scopes = try context.fetch(NSFetchRequest<NSManagedObject>(entityName: "HistoryScopeRecord"))
-            guard scopes.allSatisfy({ $0.string("workingID") == sourceWorkingIdentity.uuidString }) else {
+            let scopes = try context.fetch(NSFetchRequest<HistoryScopeRecord>(entityName: "HistoryScopeRecord"))
+            guard scopes.allSatisfy({ $0.workingID == sourceWorkingIdentity.uuidString }) else {
                 throw HistoryFailure(.identityConflict, stage: .admission, disposition: .usable)
             }
-            record.setValue(workingIdentity.uuidString, forKey: "workingID")
-            record.setValue(storeIdentity.uuidString, forKey: "storeID")
-            for scope in scopes { scope.setValue(workingIdentity.uuidString, forKey: "workingID") }
+            record.workingID = workingIdentity.uuidString
+            record.storeID = storeIdentity.uuidString
+            for scope in scopes { scope.workingID = workingIdentity.uuidString }
             do { try context.save() } catch { context.rollback(); throw error }
         }
     }
@@ -187,8 +191,10 @@ extension HistoryStore {
         guard !FileManager.default.fileExists(atPath: destination.path) else {
             throw HistoryFailure(.identityConflict, stage: .admission, disposition: .usable)
         }
-        let pending = NSFetchRequest<NSManagedObject>(entityName: "HistoryTransactionRecord")
-        pending.predicate = NSPredicate(format: "stage != %@ AND stage != %@ AND stage != %@",
+        let pending = NSFetchRequest<HistoryTransactionRecord>(entityName: "HistoryTransactionRecord")
+        pending.predicate = NSPredicate(format: "\(#keyPath(HistoryTransactionRecord.stage)) != %@ AND " +
+            "\(#keyPath(HistoryTransactionRecord.stage)) != %@ AND " +
+            "\(#keyPath(HistoryTransactionRecord.stage)) != %@",
                                         "accepted", "rejected", "cancelled")
         pending.fetchLimit = 1
         guard try allowingUnresolved || context.fetch(pending).isEmpty else {

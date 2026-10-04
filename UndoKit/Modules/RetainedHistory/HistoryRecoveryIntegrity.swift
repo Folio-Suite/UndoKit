@@ -8,35 +8,36 @@ extension RetainedHistory {
     func recoveryAcceptedSequence(_ source: HistoryRecoverySource) throws -> Int64 {
         switch source {
         case .current:
-            return try history.scopeRecord().int64("latestAcceptedSequence")
+            return try history.scopeRecord().latestAcceptedSequence
         case .checkpoint(let id):
-            let request = NSFetchRequest<NSManagedObject>(entityName: "HistoryCheckpointRecord")
-            request.predicate = NSPredicate(format: "scopeKey == %@ AND key == %@", scope.uuidString, id.uuidString)
+            let request = NSFetchRequest<HistoryCheckpointRecord>(entityName: "HistoryCheckpointRecord")
+            request.predicate = NSPredicate(format: "\(#keyPath(HistoryCheckpointRecord.scopeKey)) == %@ AND " +
+                "\(#keyPath(HistoryCheckpointRecord.key)) == %@", scope.uuidString, id.uuidString)
             request.fetchLimit = 1
             guard let row = try context.fetch(request).first else {
                 throw HistoryFailure(.missingHistory, stage: .admission, disposition: .usable)
             }
-            return row.int64("latestAcceptedSequence")
+            return row.latestAcceptedSequence
         }
     }
 
     /// Validate the persisted transition chain rather than assuming every sequence
     /// is an accepted group: checkpoints and rejected requests legitimately consume numbers.
-    func validateRecoveryChain(_ plan: HistoryRecoveryPlan, rows: [NSManagedObject],
+    func validateRecoveryChain(_ plan: HistoryRecoveryPlan, rows: [HistoryGroupRecord],
                                after cursor: Int64?, exhausted: Bool) throws {
         let forward = plan.direction == .forward
         var expected = plan.baselineAcceptedSequence
         if let cursor {
-            let request = NSFetchRequest<NSManagedObject>(entityName: "HistoryGroupRecord")
-            request.predicate = NSPredicate(format: "scopeKey == %@ AND sequence == %@",
+            let request = NSFetchRequest<HistoryGroupRecord>(entityName: "HistoryGroupRecord")
+            request.predicate = NSPredicate(format: "\(#keyPath(HistoryGroupRecord.scopeKey)) == %@ AND \(#keyPath(HistoryGroupRecord.sequence)) == %@",
                 scope.uuidString, NSNumber(value: cursor))
             request.fetchLimit = 1
             guard let row = try context.fetch(request).first else { throw brokenRecoveryChain() }
-            expected = forward ? cursor : row.int64("previousAcceptedSequence")
+            expected = forward ? cursor : row.previousAcceptedSequence
         }
         for row in rows {
-            let sequence = row.int64("sequence")
-            let previous = row.int64("previousAcceptedSequence")
+            let sequence = row.sequence
+            let previous = row.previousAcceptedSequence
             guard previous >= 0, previous < sequence,
                   (forward ? previous : sequence) == expected else { throw brokenRecoveryChain() }
             expected = forward ? sequence : previous

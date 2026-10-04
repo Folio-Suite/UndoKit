@@ -21,29 +21,29 @@ extension RetainedHistory {
               history.valid(resources), history.hasCapacity(bytes: state.data.count) else {
             throw HistoryFailure(.capacity, stage: .admission, disposition: .usable)
         }
-        guard try history.fetch("HistoryCheckpointRecord", predicate: NSPredicate(
-            format: "scopeKey == %@ AND key == %@", scope.uuidString, id.uuidString
+        guard try history.fetch(HistoryCheckpointRecord.self, predicate: NSPredicate(
+            format: "\(#keyPath(HistoryCheckpointRecord.scopeKey)) == %@ AND \(#keyPath(HistoryCheckpointRecord.key)) == %@", scope.uuidString, id.uuidString
         )).isEmpty else {
             throw HistoryFailure(.identityConflict, stage: .admission, disposition: .usable)
         }
         let scopeRow = try history.scopeRecord()
         let date = Date()
-        let sequence = scopeRow.int64("nextSequence")
-        let row = history.insert("HistoryCheckpointRecord")
-        row.setValue(id.uuidString, forKey: "key")
-        row.setValue(scope.uuidString, forKey: "scopeKey")
-        row.setValue(name, forKey: "name")
-        row.setValue(sequence, forKey: "sequence")
-        row.setValue(scopeRow.int64("latestAcceptedSequence"), forKey: "latestAcceptedSequence")
-        row.setValue(date, forKey: "recordedAt")
-        row.setValue(state.family, forKey: "family")
-        row.setValue(Int64(state.version), forKey: "version")
-        row.setValue(state.data, forKey: "state")
-        row.setValue(history.digest(state), forKey: "stateDigest")
+        let sequence = scopeRow.nextSequence
+        let row = history.insert(HistoryCheckpointRecord.self)
+        row.key = id.uuidString
+        row.scopeKey = scope.uuidString
+        row.name = name
+        row.sequence = sequence
+        row.latestAcceptedSequence = scopeRow.latestAcceptedSequence
+        row.recordedAt = date
+        row.family = state.family
+        row.version = Int64(state.version)
+        row.state = state.data
+        row.stateDigest = history.digest(state)
         try history.addResourceReferences(resources, ownerType: "checkpoint",
                                   ownerKey: history.transactionKey(id))
-        scopeRow.setValue(sequence + 1, forKey: "nextSequence")
-        scopeRow.setValue(scopeRow.int64("committedVersion") + 1, forKey: "committedVersion")
+        scopeRow.nextSequence = sequence + 1
+        scopeRow.committedVersion += 1
         do {
             try history.saveContext()
         } catch {
@@ -55,12 +55,12 @@ extension RetainedHistory {
 
     func checkpoint(id: UUID) throws -> HistoryCheckpoint? {
         guard !activity.closed else { throw HistoryFailure(.busy, stage: .admission, disposition: .usable) }
-        guard let row = try history.fetch("HistoryCheckpointRecord", predicate: NSPredicate(
-            format: "scopeKey == %@ AND key == %@", scope.uuidString, id.uuidString
+        guard let row = try history.fetch(HistoryCheckpointRecord.self, predicate: NSPredicate(
+            format: "\(#keyPath(HistoryCheckpointRecord.scopeKey)) == %@ AND \(#keyPath(HistoryCheckpointRecord.key)) == %@", scope.uuidString, id.uuidString
         )).first else { return nil }
-        let state = HistoryPayload(family: row.string("family") ?? "",
-                                   version: Int(row.int64("version")), data: row.data("state"))
-        guard row.data("stateDigest") == history.digest(state) else {
+        let state = HistoryPayload(family: row.family ?? "",
+                                   version: Int(row.version), data: row.state ?? Data())
+        guard row.stateDigest == history.digest(state) else {
             throw HistoryFailure(.storage, stage: .reconciliation, disposition: .suspended)
         }
         return HistoryCheckpoint(info: try history.checkpointInfo(row), state: state)
@@ -71,10 +71,10 @@ extension RetainedHistory {
         guard limit > 0, limit <= limits.maxReadPage else {
             throw HistoryFailure(.capacity, stage: .admission, disposition: .usable)
         }
-        let request = NSFetchRequest<NSManagedObject>(entityName: "HistoryCheckpointRecord")
-        request.predicate = NSPredicate(format: "scopeKey == %@ AND sequence > %@",
+        let request = NSFetchRequest<HistoryCheckpointRecord>(entityName: "HistoryCheckpointRecord")
+        request.predicate = NSPredicate(format: "\(#keyPath(HistoryCheckpointRecord.scopeKey)) == %@ AND \(#keyPath(HistoryCheckpointRecord.sequence)) > %@",
                                         scope.uuidString, NSNumber(value: sequence ?? 0))
-        request.sortDescriptors = [NSSortDescriptor(key: "sequence", ascending: true)]
+        request.sortDescriptors = [NSSortDescriptor(key: #keyPath(HistoryCheckpointRecord.sequence), ascending: true)]
         request.fetchLimit = limit
         return try context.fetch(request).map(history.checkpointInfo)
     }
@@ -84,19 +84,19 @@ extension RetainedHistory {
         guard limit > 0, limit <= limits.maxReadPage else {
             throw HistoryFailure(.capacity, stage: .admission, disposition: .usable)
         }
-        let request = NSFetchRequest<NSManagedObject>(entityName: "HistoryGroupRecord")
-        request.predicate = NSPredicate(format: "scopeKey == %@ AND sequence > %@",
+        let request = NSFetchRequest<HistoryGroupRecord>(entityName: "HistoryGroupRecord")
+        request.predicate = NSPredicate(format: "\(#keyPath(HistoryGroupRecord.scopeKey)) == %@ AND \(#keyPath(HistoryGroupRecord.sequence)) > %@",
                                         scope.uuidString, NSNumber(value: sequence ?? 0))
-        request.sortDescriptors = [NSSortDescriptor(key: "sequence", ascending: true)]
+        request.sortDescriptors = [NSSortDescriptor(key: #keyPath(HistoryGroupRecord.sequence), ascending: true)]
         request.fetchLimit = limit
         return try context.fetch(request).map { row in
-            HistoryEntry(groupID: try row.uuid("key"), sequence: row.int64("sequence"),
-                         kind: HistoryEntryKind(rawValue: row.string("kind") ?? "") ?? .command,
-                         sourceGroupID: row.string("sourceGroupID").flatMap(UUID.init(uuidString:)),
-                         compensationGroupID: row.string("compensationGroupID").flatMap(UUID.init(uuidString:)),
-                         restorationOrigin: row.string("restorationOrigin").flatMap(UUID.init(uuidString:)),
-                         memberCount: Int(row.int64("memberCount")),
-                         recordedAt: row.value(forKey: "recordedAt") as? Date ?? .distantPast)
+            HistoryEntry(groupID: try row.uuid(row.key), sequence: row.sequence,
+                         kind: HistoryEntryKind(rawValue: row.kind ?? "") ?? .command,
+                         sourceGroupID: row.sourceGroupID.flatMap(UUID.init(uuidString:)),
+                         compensationGroupID: row.compensationGroupID.flatMap(UUID.init(uuidString:)),
+                         restorationOrigin: row.restorationOrigin.flatMap(UUID.init(uuidString:)),
+                         memberCount: Int(row.memberCount),
+                         recordedAt: row.recordedAt ?? .distantPast)
         }
     }
 }

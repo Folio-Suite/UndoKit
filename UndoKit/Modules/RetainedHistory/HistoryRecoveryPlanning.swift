@@ -20,15 +20,15 @@ extension RetainedHistory {
         try checkRecoveryCancellation()
         _ = evidence // The explicit declaration is a host promise, never inferred from payload bytes.
         let scopeRow = try history.scopeRecord()
-        let generation = try scopeRow.uuid("generationID")
-        let version = scopeRow.int64("committedVersion")
+        let generation = try scopeRow.uuid(scopeRow.generationID)
+        let version = scopeRow.committedVersion
 
         let targetSequence = try recoveryTargetSequence(target)
 
         if source == .current, case .group = target,
-           !scopeRow.bool("recordingEnabled") ||
-           (scopeRow.int64("currentBaselineSequence") > 0 &&
-            targetSequence < scopeRow.int64("currentBaselineSequence")) {
+           !scopeRow.recordingEnabled ||
+           (scopeRow.currentBaselineSequence > 0 &&
+            targetSequence < scopeRow.currentBaselineSequence) {
             throw HistoryFailure(.compatibility, stage: .admission, disposition: .usable)
         }
 
@@ -68,27 +68,33 @@ extension RetainedHistory {
             throw HistoryFailure(.invalidInput, stage: .admission, disposition: .usable)
         }
         let forward = plan.direction == .forward
-        let request = NSFetchRequest<NSManagedObject>(entityName: "HistoryGroupRecord")
+        let request = NSFetchRequest<HistoryGroupRecord>(entityName: "HistoryGroupRecord")
         if forward {
-            request.predicate = NSPredicate(format: "scopeKey == %@ AND sequence > %@ AND sequence <= %@",
+            request.predicate = NSPredicate(format: "\(#keyPath(HistoryGroupRecord.scopeKey)) == %@ AND " +
+                "\(#keyPath(HistoryGroupRecord.sequence)) > %@ AND " +
+                "\(#keyPath(HistoryGroupRecord.sequence)) <= %@",
                 scope.uuidString, NSNumber(value: start), NSNumber(value: upper))
         } else if cursor == nil {
-            request.predicate = NSPredicate(format: "scopeKey == %@ AND sequence <= %@ AND sequence > %@",
+            request.predicate = NSPredicate(format: "\(#keyPath(HistoryGroupRecord.scopeKey)) == %@ AND " +
+                "\(#keyPath(HistoryGroupRecord.sequence)) <= %@ AND " +
+                "\(#keyPath(HistoryGroupRecord.sequence)) > %@",
                 scope.uuidString, NSNumber(value: upper), NSNumber(value: lower))
         } else {
-            request.predicate = NSPredicate(format: "scopeKey == %@ AND sequence < %@ AND sequence > %@",
+            request.predicate = NSPredicate(format: "\(#keyPath(HistoryGroupRecord.scopeKey)) == %@ AND " +
+                "\(#keyPath(HistoryGroupRecord.sequence)) < %@ AND " +
+                "\(#keyPath(HistoryGroupRecord.sequence)) > %@",
                 scope.uuidString, NSNumber(value: start), NSNumber(value: lower))
         }
-        request.sortDescriptors = [NSSortDescriptor(key: "sequence", ascending: forward)]
+        request.sortDescriptors = [NSSortDescriptor(key: #keyPath(HistoryGroupRecord.sequence), ascending: forward)]
         request.fetchLimit = limit + 1
         let rows = try context.fetch(request)
         let pageRows = Array(rows.prefix(limit))
         try validateRecoveryChain(plan, rows: pageRows, after: cursor, exhausted: rows.count <= limit)
         let steps = try pageRows.map { row in
-            HistoryRecoveryStep(groupID: try row.uuid("key"), sequence: row.int64("sequence"),
-                memberCount: Int(row.int64("memberCount")),
-                kind: HistoryEntryKind(rawValue: row.string("kind") ?? "") ?? .command,
-                restorationOrigin: row.string("restorationOrigin").flatMap(UUID.init(uuidString:)))
+            HistoryRecoveryStep(groupID: try row.uuid(row.key), sequence: row.sequence,
+                memberCount: Int(row.memberCount),
+                kind: HistoryEntryKind(rawValue: row.kind ?? "") ?? .command,
+                restorationOrigin: row.restorationOrigin.flatMap(UUID.init(uuidString:)))
         }
         return HistoryRecoveryPage(steps: steps,
             nextCursor: rows.count > limit ? steps.last?.sequence : nil)
@@ -98,28 +104,28 @@ extension RetainedHistory {
                           ordinal: Int) throws -> HistoryRecoveryMaterial {
         try requirePlan(plan)
         try checkRecoveryCancellation(plan)
-        guard let group = try scopedRow("HistoryGroupRecord", id: groupID),
-              group.string("scopeKey") == scope.uuidString,
-              ordinal >= 0, Int64(ordinal) < group.int64("memberCount") else {
+        guard let group = try scopedRow(HistoryGroupRecord.self, scopePath: \.scopeKey, keyPath: \.key, id: groupID),
+              group.scopeKey == scope.uuidString,
+              ordinal >= 0, Int64(ordinal) < group.memberCount else {
             throw HistoryFailure(.invalidInput, stage: .admission, disposition: .usable)
         }
-        let sequence = group.int64("sequence")
+        let sequence = group.sequence
         let lower = min(plan.baselineSequence, plan.targetSequence)
         let upper = max(plan.baselineSequence, plan.targetSequence)
         guard sequence > lower, sequence <= upper else {
             throw HistoryFailure(.invalidInput, stage: .admission, disposition: .usable)
         }
         try rejectGap(lowerExclusive: lower, upperInclusive: upper)
-        let request = NSFetchRequest<NSManagedObject>(entityName: "HistoryActionRecord")
-        request.predicate = NSPredicate(format: "group == %@ AND ordinal == %@",
+        let request = NSFetchRequest<HistoryActionRecord>(entityName: "HistoryActionRecord")
+        request.predicate = NSPredicate(format: "\(#keyPath(HistoryActionRecord.group)) == %@ AND \(#keyPath(HistoryActionRecord.ordinal)) == %@",
                                         group, NSNumber(value: ordinal))
         request.fetchLimit = 1
         guard let row = try context.fetch(request).first else {
             throw HistoryFailure(.storage, stage: .reconciliation, disposition: .suspended)
         }
-        let prefix = plan.direction == .reverse ? "undo" : "redo"
-        return HistoryRecoveryMaterial(memberID: try row.uuid("memberID"), ordinal: ordinal,
-                                       payload: try history.payload(on: row, prefix: prefix))
+        let role: HistoryScopeStorage.CompensationPayloadRole = plan.direction == .reverse ? .undo : .redo
+        return HistoryRecoveryMaterial(memberID: try row.uuid(row.memberID), ordinal: ordinal,
+                                       payload: try history.payload(on: row, role: role))
     }
 
     func recoveryCheckpoint(_ plan: HistoryRecoveryPlan) throws -> HistoryCheckpoint? {
@@ -137,32 +143,34 @@ extension RetainedHistory {
     }
 
     private func recoveryTargetSequence(_ target: HistoryRecoveryTarget) throws -> Int64 {
-        let entity: String
-        let id: UUID
         switch target {
-        case .group(let value): entity = "HistoryGroupRecord"; id = value
-        case .checkpoint(let value): entity = "HistoryCheckpointRecord"; id = value
+        case .group(let id):
+            guard let row = try scopedRow(HistoryGroupRecord.self, scopePath: \.scopeKey, keyPath: \.key, id: id) else {
+                throw HistoryFailure(.compatibility, stage: .admission, disposition: .usable)
+            }
+            return row.sequence
+        case .checkpoint(let id):
+            guard let row = try scopedRow(HistoryCheckpointRecord.self, scopePath: \.scopeKey, keyPath: \.key, id: id) else {
+                throw HistoryFailure(.compatibility, stage: .admission, disposition: .usable)
+            }
+            return row.sequence
         }
-        guard let row = try scopedRow(entity, id: id) else {
-            throw HistoryFailure(.compatibility, stage: .admission, disposition: .usable)
-        }
-        return row.int64("sequence")
     }
 
     private func recoveryBaseline(_ source: HistoryRecoverySource, target: Int64)
         throws -> (Int64, HistoryRecoveryDirection) {
         switch source {
         case .current:
-            let sequence = try history.scopeRecord().int64("latestAcceptedSequence")
+            let sequence = try history.scopeRecord().latestAcceptedSequence
             guard sequence >= target else {
                 throw HistoryFailure(.invalidInput, stage: .admission, disposition: .usable)
             }
             return (sequence, .reverse)
         case .checkpoint(let id):
-            guard let row = try scopedRow("HistoryCheckpointRecord", id: id) else {
+            guard let row = try scopedRow(HistoryCheckpointRecord.self, scopePath: \.scopeKey, keyPath: \.key, id: id) else {
                 throw HistoryFailure(.compatibility, stage: .admission, disposition: .usable)
             }
-            let sequence = row.int64("sequence")
+            let sequence = row.sequence
             guard sequence <= target else {
                 throw HistoryFailure(.invalidInput, stage: .admission, disposition: .usable)
             }
@@ -190,16 +198,22 @@ extension RetainedHistory {
         }
     }
 
-    private func scopedRow(_ name: String, id: UUID) throws -> NSManagedObject? {
-        try history.fetch(name, predicate: NSPredicate(format: "scopeKey == %@ AND key == %@",
-            scope.uuidString, id.uuidString)).first
+    private func scopedRow<Record: NSManagedObject>(
+        _ type: Record.Type, scopePath: KeyPath<Record, String?>,
+        keyPath: KeyPath<Record, String?>, id: UUID
+    ) throws -> Record? {
+        try history.fetch(type, predicate: NSPredicate(format: "%K == %@ AND %K == %@",
+            NSExpression(forKeyPath: scopePath).keyPath, scope.uuidString,
+            NSExpression(forKeyPath: keyPath).keyPath, id.uuidString)).first
     }
 
     private func rejectGap(lowerExclusive lower: Int64, upperInclusive upper: Int64) throws {
         guard upper > lower else { return }
-        let request = NSFetchRequest<NSManagedObject>(entityName: "HistoryGapRecord")
+        let request = NSFetchRequest<HistoryGapRecord>(entityName: "HistoryGapRecord")
         request.predicate = NSPredicate(
-            format: "scopeKey == %@ AND lowerExclusiveSequence < %@ AND upperInclusiveSequence > %@",
+            format: "\(#keyPath(HistoryGapRecord.scopeKey)) == %@ AND " +
+                "\(#keyPath(HistoryGapRecord.lowerExclusiveSequence)) < %@ AND " +
+                "\(#keyPath(HistoryGapRecord.upperInclusiveSequence)) > %@",
             scope.uuidString, NSNumber(value: upper), NSNumber(value: lower))
         request.fetchLimit = 1
         if try !context.fetch(request).isEmpty {

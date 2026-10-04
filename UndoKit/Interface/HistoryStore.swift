@@ -230,19 +230,19 @@ extension HistoryStore {
             throw HistoryFailure(.capacity, stage: .admission, disposition: .usable)
         }
         _ = try inspectScope(scope)
-        let request = NSFetchRequest<NSManagedObject>(entityName: "HistoryGroupRecord")
-        request.predicate = NSPredicate(format: "scopeKey == %@ AND sequence > %@",
+        let request = NSFetchRequest<HistoryGroupRecord>(entityName: "HistoryGroupRecord")
+        request.predicate = NSPredicate(format: "\(#keyPath(HistoryGroupRecord.scopeKey)) == %@ AND \(#keyPath(HistoryGroupRecord.sequence)) > %@",
                                         scope.uuidString, NSNumber(value: sequence ?? 0))
-        request.sortDescriptors = [NSSortDescriptor(key: "sequence", ascending: true)]
+        request.sortDescriptors = [NSSortDescriptor(key: #keyPath(HistoryGroupRecord.sequence), ascending: true)]
         request.fetchLimit = limit
         return try context.fetch(request).map { row in
-            HistoryEntry(groupID: try row.uuid("key"), sequence: row.int64("sequence"),
-                         kind: HistoryEntryKind(rawValue: row.string("kind") ?? "") ?? .command,
-                         sourceGroupID: row.string("sourceGroupID").flatMap(UUID.init(uuidString:)),
-                         compensationGroupID: row.string("compensationGroupID").flatMap(UUID.init(uuidString:)),
-                         restorationOrigin: row.string("restorationOrigin").flatMap(UUID.init(uuidString:)),
-                         memberCount: Int(row.int64("memberCount")),
-                         recordedAt: row.value(forKey: "recordedAt") as? Date ?? .distantPast)
+            HistoryEntry(groupID: try row.uuid(row.key), sequence: row.sequence,
+                         kind: HistoryEntryKind(rawValue: row.kind ?? "") ?? .command,
+                         sourceGroupID: row.sourceGroupID.flatMap(UUID.init(uuidString:)),
+                         compensationGroupID: row.compensationGroupID.flatMap(UUID.init(uuidString:)),
+                         restorationOrigin: row.restorationOrigin.flatMap(UUID.init(uuidString:)),
+                         memberCount: Int(row.memberCount),
+                         recordedAt: row.recordedAt ?? .distantPast)
         }
     }
 
@@ -250,18 +250,21 @@ extension HistoryStore {
     public func inspectScope(_ scope: UUID) throws -> HistoryScopeInspection {
         guard !closed else { throw HistoryFailure(.busy, stage: .admission, disposition: .usable) }
         if access == .readOnly { context.refreshAllObjects() }
-        let scopeRequest = NSFetchRequest<NSManagedObject>(entityName: "HistoryScopeRecord")
-        scopeRequest.predicate = NSPredicate(format: "key == %@", scope.uuidString)
+        let scopeRequest = NSFetchRequest<HistoryScopeRecord>(entityName: "HistoryScopeRecord")
+        scopeRequest.predicate = NSPredicate(format: "\(#keyPath(HistoryScopeRecord.key)) == %@", scope.uuidString)
         scopeRequest.fetchLimit = 1
         guard let row = try context.fetch(scopeRequest).first else {
             throw HistoryFailure(.missingHistory, stage: .admission, disposition: .usable)
         }
-        let pending = NSFetchRequest<NSManagedObject>(entityName: "HistoryTransactionRecord")
-        pending.predicate = NSPredicate(format: "scopeKey == %@ AND stage != %@ AND stage != %@ AND stage != %@",
+        let pending = NSFetchRequest<HistoryTransactionRecord>(entityName: "HistoryTransactionRecord")
+        pending.predicate = NSPredicate(format: "\(#keyPath(HistoryTransactionRecord.scopeKey)) == %@ AND " +
+            "\(#keyPath(HistoryTransactionRecord.stage)) != %@ AND " +
+            "\(#keyPath(HistoryTransactionRecord.stage)) != %@ AND " +
+            "\(#keyPath(HistoryTransactionRecord.stage)) != %@",
             scope.uuidString, "accepted", "rejected", "cancelled")
-        let generation = try row.uuid("generationID")
+        let generation = try row.uuid(row.generationID)
         return HistoryScopeInspection(scope: scope, generation: generation,
-                                      isSuspended: row.bool("suspended"),
+                                      isSuspended: row.suspended,
                                       pendingRecoveryCount: try context.count(for: pending))
     }
 

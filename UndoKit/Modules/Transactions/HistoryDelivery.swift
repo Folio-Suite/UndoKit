@@ -11,7 +11,7 @@ extension HistoryTransactionCoordinator {
                 return .failure(HistoryFailure(.storage, stage: .admission, disposition: .suspended))
             }
             let scopeRow = try history.scopeRecord()
-            guard !scopeRow.bool("suspended") else {
+            guard !scopeRow.suspended else {
                 return .failure(HistoryFailure(.unresolved, stage: .reconciliation, disposition: .suspended))
             }
             let boundGeneration: UUID?
@@ -19,8 +19,8 @@ extension HistoryTransactionCoordinator {
             case .command(let command): boundGeneration = command.expectedGeneration
             case .undo(let generation), .redo(let generation): boundGeneration = generation
             }
-            if try scopeRow.bool("requiresGenerationBinding") &&
-               boundGeneration != scopeRow.uuid("generationID") {
+            if try scopeRow.requiresGenerationBinding &&
+               boundGeneration != scopeRow.uuid(scopeRow.generationID) {
                 return .failure(HistoryFailure(.identityConflict, stage: .admission, disposition: .usable))
             }
             switch request {
@@ -60,16 +60,16 @@ extension HistoryTransactionCoordinator {
         return await execute(command: command, kind: kind, targetGroup: group.id)
     }
 
-    func executeInverse(target: NSManagedObject, kind: HistoryDeliveryKind) async -> HistoryResult {
+    func executeInverse(target: HistoryGroupRecord, kind: HistoryDeliveryKind) async -> HistoryResult {
         do {
-            let groupID = try target.uuid("key")
-            let actions = try history.fetch("HistoryActionRecord",
-                                    predicate: NSPredicate(format: "group == %@", target),
-                                    sort: [NSSortDescriptor(key: "ordinal", ascending: kind == .redo)])
+            let groupID = try target.uuid(target.key)
+            let actions = try history.fetch(HistoryActionRecord.self,
+                                    predicate: NSPredicate(format: "\(#keyPath(HistoryActionRecord.group)) == %@", target),
+                                    sort: [NSSortDescriptor(key: #keyPath(HistoryActionRecord.ordinal), ascending: kind == .redo)])
             let members = try actions.map { action -> HistoryMember in
-                let prefix = kind == .undo ? "undo" : "redo"
-                return HistoryMember(id: try action.uuid("memberID"),
-                                     payload: try history.payload(on: action, prefix: prefix))
+                let role: HistoryScopeStorage.CompensationPayloadRole = kind == .undo ? .undo : .redo
+                return HistoryMember(id: try action.uuid(action.memberID),
+                                     payload: try history.payload(on: action, role: role))
             }
             let commandID = UUID()
             let fingerprint = Data("\(kind.rawValue):\(groupID.uuidString):\(commandID.uuidString)".utf8)
@@ -84,8 +84,8 @@ extension HistoryTransactionCoordinator {
                  targetGroup: UUID?) async -> HistoryResult {
         let key = history.transactionKey(command.id)
         do {
-            if let prior = try history.fetchOne("HistoryTransactionRecord", key: key) {
-                guard prior.data("fingerprint") == command.fingerprint else {
+            if let prior = try history.fetchOne(HistoryTransactionRecord.self, keyPath: \.key, key: key) {
+                guard prior.fingerprint == command.fingerprint else {
                     return .failure(HistoryFailure(.identityConflict, stage: .admission, disposition: .usable))
                 }
                 return await reconcile(prior)
@@ -97,7 +97,7 @@ extension HistoryTransactionCoordinator {
                 return .failure(failure)
             }
             let scopeRow = try history.scopeRecord()
-            if !scopeRow.bool("recordingEnabled") &&
+            if !scopeRow.recordingEnabled &&
                (kind == .command || sessionGroups.first(where: { $0.id == targetGroup }) == nil) {
                 // Reserve the largest bounded inverse pair before delivery: a
                 // host effect may be larger than its submitted opaque intent.
@@ -108,8 +108,8 @@ extension HistoryTransactionCoordinator {
                     return .failure(HistoryFailure(.capacity, stage: .admission, disposition: .usable))
                 }
             }
-            let generation = try scopeRow.uuid("generationID")
-            let sequence = scopeRow.int64("nextSequence")
+            let generation = try scopeRow.uuid(scopeRow.generationID)
+            let sequence = scopeRow.nextSequence
             let token = HistoryToken(scope: scope, generation: generation,
                                      sequence: sequence, command: command.id)
             let delivery = try prepare(command, kind: kind, targetGroup: targetGroup,
@@ -123,7 +123,7 @@ extension HistoryTransactionCoordinator {
             return .failure(failure)
         } catch {
             context.rollback()
-            let durableStage = (try? history.fetchOne("HistoryTransactionRecord", key: key))?.string("stage")
+            let durableStage = (try? history.fetchOne(HistoryTransactionRecord.self, keyPath: \.key, key: key))?.stage
             if store.writeFailed {
                 let stage: HistoryFailureStage = durableStage == nil ? .preparation : .finalization
                 return .failure(HistoryFailure(.storage, stage: stage, disposition: .suspended,
@@ -131,8 +131,8 @@ extension HistoryTransactionCoordinator {
             }
             if durableStage == "prepared" {
                 do {
-                    let prepared = try history.fetchOne("HistoryTransactionRecord", key: key)
-                    prepared?.setValue("cancelled", forKey: "stage")
+                    let prepared = try history.fetchOne(HistoryTransactionRecord.self, keyPath: \.key, key: key)
+                    prepared?.stage = "cancelled"
                     try history.saveContext()
                     return .failure(HistoryFailure(.storage, stage: .preparation,
                                                    disposition: .usable,
@@ -183,42 +183,42 @@ extension HistoryTransactionCoordinator {
         kind: HistoryDeliveryKind,
         targetGroup: UUID?,
         token: HistoryToken,
-        scopeRow: NSManagedObject
+        scopeRow: HistoryScopeRecord
     ) throws -> HistoryDelivery {
         let key = history.transactionKey(command.id)
         let sequence = token.sequence
-        let transaction = history.insert("HistoryTransactionRecord")
-        transaction.setValue(key, forKey: "key")
-        transaction.setValue(scope.uuidString, forKey: "scopeKey")
-        transaction.setValue(command.id.uuidString, forKey: "commandID")
-        transaction.setValue(command.fingerprint, forKey: "fingerprint")
-        transaction.setValue(token.generation.uuidString, forKey: "generationID")
-        transaction.setValue(sequence, forKey: "sequence")
-        transaction.setValue("prepared", forKey: "stage")
-        transaction.setValue(kind.rawValue, forKey: "kind")
-        transaction.setValue(command.id.uuidString, forKey: "groupID")
-        transaction.setValue(targetGroup?.uuidString, forKey: "targetGroupID")
-        transaction.setValue(command.restorationOrigin?.uuidString, forKey: "restorationOrigin")
-        transaction.setValue(Int64(command.members.count), forKey: "memberCount")
-        transaction.setValue(Date(), forKey: "recordedAt")
-        transaction.setValue(scopeRow.bool("recordingEnabled"), forKey: "recordsAction")
+        let transaction = history.insert(HistoryTransactionRecord.self)
+        transaction.key = key
+        transaction.scopeKey = scope.uuidString
+        transaction.commandID = command.id.uuidString
+        transaction.fingerprint = command.fingerprint
+        transaction.generationID = token.generation.uuidString
+        transaction.sequence = sequence
+        transaction.stage = "prepared"
+        transaction.kind = kind.rawValue
+        transaction.groupID = command.id.uuidString
+        transaction.targetGroupID = targetGroup?.uuidString
+        transaction.restorationOrigin = command.restorationOrigin?.uuidString
+        transaction.memberCount = Int64(command.members.count)
+        transaction.recordedAt = Date()
+        transaction.recordsAction = scopeRow.recordingEnabled
         if let presentation = command.presentation {
-            history.put(presentation, on: transaction, prefix: "presentation")
+            history.putPresentation(presentation, on: transaction)
         }
         for (ordinal, member) in command.members.enumerated() {
-            let row = history.insert("HistoryMemberRecord")
-            row.setValue("\(key):\(ordinal)", forKey: "key")
-            row.setValue(Int64(ordinal), forKey: "ordinal")
-            row.setValue(member.id.uuidString, forKey: "memberID")
-            row.setValue(member.payload.family, forKey: "family")
-            row.setValue(Int64(member.payload.version), forKey: "version")
-            row.setValue(member.payload.data, forKey: "payload")
-            row.setValue(history.digest(member.payload), forKey: "payloadDigest")
-            row.setValue(transaction, forKey: "transaction")
+            let row = history.insert(HistoryMemberRecord.self)
+            row.key = "\(key):\(ordinal)"
+            row.ordinal = Int64(ordinal)
+            row.memberID = member.id.uuidString
+            row.family = member.payload.family
+            row.version = Int64(member.payload.version)
+            row.payload = member.payload.data
+            row.payloadDigest = history.digest(member.payload)
+            row.transaction = transaction
         }
-        scopeRow.setValue(sequence + 1, forKey: "nextSequence")
+        scopeRow.nextSequence = sequence + 1
         try history.saveContext()
-        transaction.setValue("deliveryStarted", forKey: "stage")
+        transaction.stage = "deliveryStarted"
         try history.saveContext()
         return HistoryDelivery(token: token, kind: kind, members: command.members,
                                restorationOrigin: command.restorationOrigin)

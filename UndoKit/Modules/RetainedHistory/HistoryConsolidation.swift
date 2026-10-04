@@ -16,14 +16,14 @@ extension RetainedHistory {
         guard !Task.isCancelled else {
             throw HistoryFailure(.cancelled, stage: .admission, disposition: .usable)
         }
-        let groups = try history.fetch("HistoryGroupRecord", predicate: NSPredicate(
-            format: "scopeKey == %@", scope.uuidString),
-            sort: [NSSortDescriptor(key: "sequence", ascending: false)])
+        let groups = try history.fetch(HistoryGroupRecord.self, predicate: NSPredicate(
+            format: "\(#keyPath(HistoryGroupRecord.scopeKey)) == %@", scope.uuidString),
+            sort: [NSSortDescriptor(key: #keyPath(HistoryGroupRecord.sequence), ascending: false)])
         let protected = try protectedGroupKeys(groups: groups,
             targetDetailedGroups: policy.targetDetailedGroups)
         let candidates = groups.filter {
-            $0.int64("sequence") < boundary.info.sequence &&
-            !protected.contains($0.string("key") ?? "")
+            $0.sequence < boundary.info.sequence &&
+            !protected.contains($0.key ?? "")
         }
         let holds = try retentionHolds()
         var keptCheckpoints = policy.keptCheckpointIDs
@@ -35,11 +35,11 @@ extension RetainedHistory {
             if case .checkpoint(let id) = plan.source { keptCheckpoints.insert(id) }
             if case .checkpoint(let id) = plan.target { keptCheckpoints.insert(id) }
         }
-        let checkpoints = try history.fetch("HistoryCheckpointRecord", predicate: NSPredicate(
-            format: "scopeKey == %@ AND sequence < %@", scope.uuidString,
+        let checkpoints = try history.fetch(HistoryCheckpointRecord.self, predicate: NSPredicate(
+            format: "\(#keyPath(HistoryCheckpointRecord.scopeKey)) == %@ AND \(#keyPath(HistoryCheckpointRecord.sequence)) < %@", scope.uuidString,
             NSNumber(value: boundary.info.sequence)))
         let removableCheckpoints = checkpoints.filter {
-            guard let id = $0.string("key").flatMap(UUID.init(uuidString:)) else { return false }
+            guard let id = $0.key.flatMap(UUID.init(uuidString:)) else { return false }
             return !keptCheckpoints.contains(id)
         }
         let selectedGroups = Array(candidates.prefix(limits.maxReadPage))
@@ -54,12 +54,12 @@ extension RetainedHistory {
             }
             for row in selectedCheckpoints {
                 try history.removeResourceReferences(ownerType: "checkpoint",
-                    ownerKey: history.transactionKey(try row.uuid("key")))
+                    ownerKey: history.transactionKey(try row.uuid(row.key)))
                 context.delete(row)
             }
             if !selectedGroups.isEmpty || !selectedCheckpoints.isEmpty {
                 let scopeRow = try history.scopeRecord()
-                scopeRow.setValue(scopeRow.int64("committedVersion") + 1, forKey: "committedVersion")
+                scopeRow.committedVersion += 1
                 try history.saveRetention()
             }
         } catch {

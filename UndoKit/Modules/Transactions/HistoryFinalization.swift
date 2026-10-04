@@ -7,25 +7,25 @@ import Foundation
 extension HistoryTransactionCoordinator {
     func finish(transactionKey key: String, outcome: HistoryHostOutcome) async -> HistoryResult {
         do {
-            guard let transaction = try history.fetchOne("HistoryTransactionRecord", key: key) else {
+            guard let transaction = try history.fetchOne(HistoryTransactionRecord.self, keyPath: \.key, key: key) else {
                 throw HistoryFailure(.storage, stage: .reconciliation, disposition: .suspended)
             }
             switch outcome {
             case .unresolved:
-                transaction.setValue("unresolved", forKey: "stage")
+                transaction.stage = "unresolved"
                 try history.saveContext()
                 suspend()
                 return .failure(HistoryFailure(.unresolved, stage: .reconciliation, disposition: .suspended))
             case .failure(let failure):
                 guard failure.disposition == .usable else {
-                    transaction.setValue("unresolved", forKey: "stage")
+                    transaction.stage = "unresolved"
                     try history.saveContext()
                     suspend()
                     return .failure(failure)
                 }
                 return try closeUsableFailure(failure, transaction: transaction)
             case .rejected:
-                transaction.setValue("rejectionPending", forKey: "stage")
+                transaction.stage = "rejectionPending"
                 try history.saveContext()
                 return try finalizeRejected(transaction)
             case .accepted(let effects):
@@ -33,7 +33,7 @@ extension HistoryTransactionCoordinator {
                 guard effects.count == members.count,
                       Set(effects.map(\.memberID)).count == members.count,
                       zip(effects, members).allSatisfy({
-                          $0.memberID.uuidString == $1.string("memberID")
+                          $0.memberID.uuidString == $1.memberID
                       }),
                       effects.allSatisfy({
                           history.valid($0.undo) && history.valid($0.redo) && history.valid($0.resources)
@@ -51,15 +51,15 @@ extension HistoryTransactionCoordinator {
                     return .failure(HistoryFailure(.hostProtocol, stage: .reconciliation, disposition: .suspended))
                 }
                 for (effect, member) in zip(effects, members) {
-                    history.put(effect.undo, on: member, prefix: "undo")
-                    history.put(effect.redo, on: member, prefix: "redo")
+                    history.put(effect.undo, on: member, role: .undo)
+                    history.put(effect.redo, on: member, role: .redo)
                     try history.addResourceReferences(effect.resources,
-                                              ownerType: transaction.bool("recordsAction") ? "action" : "session",
-                                              ownerKey: member.string("key") ?? "")
+                                              ownerType: transaction.recordsAction ? "action" : "session",
+                                              ownerKey: member.key ?? "")
                 }
-                transaction.setValue("acceptancePending", forKey: "stage")
+                transaction.stage = "acceptancePending"
                 try history.saveContext()
-                return try transaction.bool("recordsAction")
+                return try transaction.recordsAction
                     ? finalizeAccepted(transaction) : finalizeSessionAccepted(transaction)
             }
         } catch {
@@ -70,39 +70,39 @@ extension HistoryTransactionCoordinator {
         }
     }
 
-    func finalizeSessionAccepted(_ transaction: NSManagedObject) throws -> HistoryResult {
+    func finalizeSessionAccepted(_ transaction: HistoryTransactionRecord) throws -> HistoryResult {
         let token = try history.token(for: transaction)
-        let groupID = try transaction.uuid("groupID")
-        let kind = HistoryDeliveryKind(rawValue: transaction.string("kind") ?? "") ?? .command
-        let targetID = transaction.string("targetGroupID").flatMap(UUID.init(uuidString:))
+        let groupID = try transaction.uuid(transaction.groupID)
+        let kind = HistoryDeliveryKind(rawValue: transaction.kind ?? "") ?? .command
+        let targetID = transaction.targetGroupID.flatMap(UUID.init(uuidString:))
         let effects = try history.transactionMembers(transaction).map { member in
-            HistoryEffect(memberID: try member.uuid("memberID"),
-                undo: try history.payload(on: member, prefix: "undo"),
-                redo: try history.payload(on: member, prefix: "redo"))
+            HistoryEffect(memberID: try member.uuid(member.memberID),
+                undo: try history.payload(on: member, role: .undo),
+                redo: try history.payload(on: member, role: .redo))
         }
-        let receipt = history.insert("HistoryRetiredCommandRecord")
-        receipt.setValue(transaction.string("key"), forKey: "key")
-        receipt.setValue(scope.uuidString, forKey: "scopeKey")
-        receipt.setValue(token.generation.uuidString, forKey: "generationID")
-        receipt.setValue(token.command.uuidString, forKey: "commandID")
-        receipt.setValue(transaction.data("fingerprint"), forKey: "fingerprint")
-        receipt.setValue(token.sequence, forKey: "sequence")
-        receipt.setValue(groupID.uuidString, forKey: "groupID")
-        let gap = history.insert("HistoryGapRecord")
-        gap.setValue(UUID().uuidString, forKey: "key")
-        gap.setValue(scope.uuidString, forKey: "scopeKey")
-        gap.setValue(token.generation.uuidString, forKey: "generationID")
-        gap.setValue(token.sequence - 1, forKey: "lowerExclusiveSequence")
-        gap.setValue(token.sequence, forKey: "upperInclusiveSequence")
+        let receipt = history.insert(HistoryRetiredCommandRecord.self)
+        receipt.key = transaction.key
+        receipt.scopeKey = scope.uuidString
+        receipt.generationID = token.generation.uuidString
+        receipt.commandID = token.command.uuidString
+        receipt.fingerprint = transaction.fingerprint
+        receipt.sequence = token.sequence
+        receipt.groupID = groupID.uuidString
+        let gap = history.insert(HistoryGapRecord.self)
+        gap.key = UUID().uuidString
+        gap.scopeKey = scope.uuidString
+        gap.generationID = token.generation.uuidString
+        gap.lowerExclusiveSequence = token.sequence - 1
+        gap.upperInclusiveSequence = token.sequence
         for member in try history.transactionMembers(transaction) { context.delete(member) }
         context.delete(transaction)
         let scopeRow = try history.scopeRecord()
-        if scopeRow.int64("offStartSequence") > 0 &&
-           token.sequence >= scopeRow.int64("offStartSequence") &&
-           scopeRow.int64("undoFloorSequence") < scopeRow.int64("offStartSequence") {
-            scopeRow.setValue(token.sequence, forKey: "undoFloorSequence")
+        if scopeRow.offStartSequence > 0 &&
+           token.sequence >= scopeRow.offStartSequence &&
+           scopeRow.undoFloorSequence < scopeRow.offStartSequence {
+            scopeRow.undoFloorSequence = token.sequence
         }
-        scopeRow.setValue(scopeRow.int64("committedVersion") + 1, forKey: "committedVersion")
+        scopeRow.committedVersion += 1
         try history.saveContext()
         guard token.sequence >= sessionStartSequence else {
             updateSnapshot()
@@ -136,100 +136,102 @@ extension HistoryTransactionCoordinator {
     }
 
     private func closeUsableFailure(_ failure: HistoryFailure,
-                                    transaction: NSManagedObject) throws -> HistoryResult {
+                                    transaction: HistoryTransactionRecord) throws -> HistoryResult {
         // A usable failure proves no effect, but does not authoritatively
         // reject the target's semantic Undo/Redo eligibility.
         let recorded = HistoryFailure(
             failure.cause, stage: failure.stage, disposition: .usable,
             underlyingDescription: failure.underlyingDescription.map { String($0.prefix(1_024)) }
         )
-        transaction.setValue(recorded.cause.rawValue, forKey: "failureCause")
-        transaction.setValue(recorded.stage.rawValue, forKey: "failureStage")
-        transaction.setValue(recorded.underlyingDescription, forKey: "failureDescription")
-        transaction.setValue("cancelled", forKey: "stage")
+        transaction.failureCause = recorded.cause.rawValue
+        transaction.failureStage = recorded.stage.rawValue
+        transaction.failureDescription = recorded.underlyingDescription
+        transaction.stage = "cancelled"
         try history.saveContext()
         updateSnapshot()
         return .failure(recorded)
     }
 
-    func finalizeAccepted(_ transaction: NSManagedObject) throws -> HistoryResult {
-        let kind = HistoryDeliveryKind(rawValue: transaction.string("kind") ?? "") ?? .command
-        let group = history.insert("HistoryGroupRecord")
-        let groupKey = transaction.string("groupID") ?? UUID().uuidString
-        group.setValue(groupKey, forKey: "key")
-        group.setValue(scope.uuidString, forKey: "scopeKey")
-        group.setValue(transaction.int64("sequence"), forKey: "sequence")
-        group.setValue(kind.rawValue, forKey: "kind")
-        group.setValue(kind == .command ? "applied" : "historical", forKey: "state")
-        group.setValue(transaction.string("targetGroupID"), forKey: "sourceGroupID")
-        if kind == .redo, let original = transaction.string("targetGroupID") {
-            let request = NSFetchRequest<NSManagedObject>(entityName: "HistoryGroupRecord")
-            request.predicate = NSPredicate(format: "scopeKey == %@ AND kind == %@ AND sourceGroupID == %@",
+    func finalizeAccepted(_ transaction: HistoryTransactionRecord) throws -> HistoryResult {
+        let kind = HistoryDeliveryKind(rawValue: transaction.kind ?? "") ?? .command
+        let group = history.insert(HistoryGroupRecord.self)
+        let groupKey = transaction.groupID ?? UUID().uuidString
+        group.key = groupKey
+        group.scopeKey = scope.uuidString
+        group.sequence = transaction.sequence
+        group.kind = kind.rawValue
+        group.state = kind == .command ? "applied" : "historical"
+        group.sourceGroupID = transaction.targetGroupID
+        if kind == .redo, let original = transaction.targetGroupID {
+            let request = NSFetchRequest<HistoryGroupRecord>(entityName: "HistoryGroupRecord")
+            request.predicate = NSPredicate(format: "\(#keyPath(HistoryGroupRecord.scopeKey)) == %@ AND " +
+                "\(#keyPath(HistoryGroupRecord.kind)) == %@ AND " +
+                "\(#keyPath(HistoryGroupRecord.sourceGroupID)) == %@",
                                             scope.uuidString, HistoryDeliveryKind.undo.rawValue, original)
-            request.sortDescriptors = [NSSortDescriptor(key: "sequence", ascending: false)]
+            request.sortDescriptors = [NSSortDescriptor(key: #keyPath(HistoryGroupRecord.sequence), ascending: false)]
             request.fetchLimit = 1
             guard let compensation = try context.fetch(request).first else {
                 throw HistoryFailure(.hostProtocol, stage: .finalization, disposition: .suspended)
             }
-            group.setValue(compensation.string("key"), forKey: "compensationGroupID")
+            group.compensationGroupID = compensation.key
         }
-        group.setValue(transaction.string("restorationOrigin"), forKey: "restorationOrigin")
-        group.setValue(transaction.int64("memberCount"), forKey: "memberCount")
-        group.setValue(transaction.value(forKey: "recordedAt"), forKey: "recordedAt")
-        if transaction.string("presentationFamily") != nil {
-            group.setValue(transaction.string("presentationFamily"), forKey: "presentationFamily")
-            group.setValue(transaction.value(forKey: "presentationVersion"), forKey: "presentationVersion")
-            group.setValue(transaction.value(forKey: "presentationPayload"), forKey: "presentationPayload")
-            group.setValue(transaction.value(forKey: "presentationDigest"), forKey: "presentationDigest")
+        group.restorationOrigin = transaction.restorationOrigin
+        group.memberCount = transaction.memberCount
+        group.recordedAt = transaction.recordedAt
+        if transaction.presentationFamily != nil {
+            group.presentationFamily = transaction.presentationFamily
+            group.presentationVersion = transaction.presentationVersion
+            group.presentationPayload = transaction.presentationPayload
+            group.presentationDigest = transaction.presentationDigest
         }
         let finalizedMembers = try history.transactionMembers(transaction)
         for member in finalizedMembers {
-            let action = history.insert("HistoryActionRecord")
-            action.setValue(member.string("key"), forKey: "key")
-            action.setValue(transaction.string("key"), forKey: "transactionKey")
-            action.setValue(member.string("memberID"), forKey: "memberID")
-            action.setValue(member.int64("ordinal"), forKey: "ordinal")
-            action.setValue(kind.rawValue, forKey: "kind")
-            history.put(try history.payload(on: member, prefix: "undo"), on: action, prefix: "undo")
-            history.put(try history.payload(on: member, prefix: "redo"), on: action, prefix: "redo")
-            action.setValue(group, forKey: "group")
+            let action = history.insert(HistoryActionRecord.self)
+            action.key = member.key
+            action.transactionKey = transaction.key
+            action.memberID = member.memberID
+            action.ordinal = member.ordinal
+            action.kind = kind.rawValue
+            history.put(try history.payload(on: member, role: .undo), on: action, role: .undo)
+            history.put(try history.payload(on: member, role: .redo), on: action, role: .redo)
+            action.group = group
         }
         // Action payloads are the accepted historical material. The prepared
         // delivery members are terminal duplicates and no longer aid recovery.
         for member in finalizedMembers { context.delete(member) }
         switch kind {
         case .command:
-            for row in try history.ordinaryGroups(state: "undone") { row.setValue("branched", forKey: "state") }
+            for row in try history.ordinaryGroups(state: "undone") { row.state = "branched" }
         case .undo, .redo:
-            if let key = transaction.string("targetGroupID"),
+            if let key = transaction.targetGroupID,
                let target = try history.groupRecord(key: key) {
-                target.setValue(kind == .undo ? "undone" : "applied", forKey: "state")
+                target.state = kind == .undo ? "undone" : "applied"
             }
         }
-        transaction.setValue("accepted", forKey: "stage")
-        transaction.setValue(nil, forKey: "presentationPayload")
-        transaction.setValue(nil, forKey: "presentationDigest")
+        transaction.stage = "accepted"
+        transaction.presentationPayload = nil
+        transaction.presentationDigest = nil
         let scopeRow = try history.scopeRecord()
-        group.setValue(scopeRow.int64("latestAcceptedSequence"), forKey: "previousAcceptedSequence")
-        scopeRow.setValue(transaction.int64("sequence"), forKey: "latestAcceptedSequence")
-        scopeRow.setValue(scopeRow.int64("committedVersion") + 1, forKey: "committedVersion")
+        group.previousAcceptedSequence = scopeRow.latestAcceptedSequence
+        scopeRow.latestAcceptedSequence = transaction.sequence
+        scopeRow.committedVersion += 1
         try history.saveContext()
         updateSnapshot()
         let token = try history.token(for: transaction)
-        return .accepted(HistoryReceipt(token: token, groupID: try group.uuid("key")))
+        return .accepted(HistoryReceipt(token: token, groupID: try group.uuid(group.key)))
     }
 
-    func finalizeRejected(_ transaction: NSManagedObject) throws -> HistoryResult {
-        let kind = HistoryDeliveryKind(rawValue: transaction.string("kind") ?? "") ?? .command
-        if kind != .command, let targetKey = transaction.string("targetGroupID"),
+    func finalizeRejected(_ transaction: HistoryTransactionRecord) throws -> HistoryResult {
+        let kind = HistoryDeliveryKind(rawValue: transaction.kind ?? "") ?? .command
+        if kind != .command, let targetKey = transaction.targetGroupID,
            let target = try history.groupRecord(key: targetKey) {
-            target.setValue("invalid", forKey: "state")
+            target.state = "invalid"
         }
-        transaction.setValue("rejected", forKey: "stage")
-        for member in try history.fetch("HistoryMemberRecord", predicate: NSPredicate(
-            format: "transaction == %@", transaction)) { context.delete(member) }
-        transaction.setValue(nil, forKey: "presentationPayload")
-        transaction.setValue(nil, forKey: "presentationDigest")
+        transaction.stage = "rejected"
+        for member in try history.fetch(HistoryMemberRecord.self, predicate: NSPredicate(
+            format: "\(#keyPath(HistoryMemberRecord.transaction)) == %@", transaction)) { context.delete(member) }
+        transaction.presentationPayload = nil
+        transaction.presentationDigest = nil
         try history.saveContext()
         updateSnapshot()
         return .rejected

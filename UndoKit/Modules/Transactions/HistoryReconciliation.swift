@@ -5,26 +5,26 @@ import CoreData
 import Foundation
 
 extension HistoryTransactionCoordinator {
-    func reconcile(_ transaction: NSManagedObject) async -> HistoryResult {
-        switch transaction.string("stage") ?? "" {
+    func reconcile(_ transaction: HistoryTransactionRecord) async -> HistoryResult {
+        switch transaction.stage ?? "" {
         case "accepted":
             do {
                 return .accepted(HistoryReceipt(token: try history.token(for: transaction),
-                                                groupID: try transaction.uuid("groupID")))
+                                                groupID: try transaction.uuid(transaction.groupID)))
             } catch { return .failure(HistoryFailure(.storage, stage: .reconciliation, disposition: .suspended)) }
         case "rejected":
             return .rejected
         case "cancelled":
-            if let causeName = transaction.string("failureCause"),
-               let stageName = transaction.string("failureStage"),
+            if let causeName = transaction.failureCause,
+               let stageName = transaction.failureStage,
                let cause = HistoryFailureCause(rawValue: causeName),
                let stage = HistoryFailureStage(rawValue: stageName) {
                 return .failure(HistoryFailure(cause, stage: stage, disposition: .usable,
-                                               underlyingDescription: transaction.string("failureDescription")))
+                                               underlyingDescription: transaction.failureDescription))
             }
             return .failure(HistoryFailure(.busy, stage: .reconciliation, disposition: .usable))
         case "prepared":
-            transaction.setValue("cancelled", forKey: "stage")
+            transaction.stage = "cancelled"
             do { try history.saveContext() } catch { context.rollback() }
             return .failure(HistoryFailure(.busy, stage: .reconciliation, disposition: .usable))
         case "acceptancePending":
@@ -36,10 +36,10 @@ extension HistoryTransactionCoordinator {
         }
     }
 
-    private func finalize(_ transaction: NSManagedObject, accepting: Bool) -> HistoryResult {
+    private func finalize(_ transaction: HistoryTransactionRecord, accepting: Bool) -> HistoryResult {
         do {
             if !accepting { return try finalizeRejected(transaction) }
-            return try transaction.bool("recordsAction")
+            return try transaction.recordsAction
                 ? finalizeAccepted(transaction) : finalizeSessionAccepted(transaction)
         } catch {
             context.rollback()
@@ -48,7 +48,7 @@ extension HistoryTransactionCoordinator {
         }
     }
 
-    private func reconcileDelivered(_ transaction: NSManagedObject) async -> HistoryResult {
+    private func reconcileDelivered(_ transaction: HistoryTransactionRecord) async -> HistoryResult {
         do {
             let token = try history.token(for: transaction)
             let activeStores = HistoryStore.deliveringStores.union([ObjectIdentifier(store)])
@@ -58,7 +58,7 @@ extension HistoryTransactionCoordinator {
                     await host.outcome(for: token)
                 }
             }
-            return await finish(transactionKey: transaction.string("key") ?? "", outcome: outcome)
+            return await finish(transactionKey: transaction.key ?? "", outcome: outcome)
         } catch {
             suspend()
             return .failure(HistoryFailure(.storage, stage: .reconciliation, disposition: .suspended))
@@ -67,10 +67,13 @@ extension HistoryTransactionCoordinator {
 
     func reconcileOnOpen() async {
         do {
-            let request = NSFetchRequest<NSManagedObject>(entityName: "HistoryTransactionRecord")
-            request.predicate = NSPredicate(format: "scopeKey == %@ AND stage != %@ AND stage != %@ AND stage != %@",
+            let request = NSFetchRequest<HistoryTransactionRecord>(entityName: "HistoryTransactionRecord")
+            request.predicate = NSPredicate(format: "\(#keyPath(HistoryTransactionRecord.scopeKey)) == %@ AND " +
+                "\(#keyPath(HistoryTransactionRecord.stage)) != %@ AND " +
+                "\(#keyPath(HistoryTransactionRecord.stage)) != %@ AND " +
+                "\(#keyPath(HistoryTransactionRecord.stage)) != %@",
                                             scope.uuidString, "accepted", "rejected", "cancelled")
-            request.sortDescriptors = [NSSortDescriptor(key: "sequence", ascending: true)]
+            request.sortDescriptors = [NSSortDescriptor(key: #keyPath(HistoryTransactionRecord.sequence), ascending: true)]
             for row in try context.fetch(request) { _ = await reconcile(row) }
             let remaining = try context.fetch(request)
             if remaining.isEmpty { unsuspend() }
@@ -91,10 +94,13 @@ extension HistoryTransactionCoordinator {
         reconciling = true
         defer { reconciling = false }
         do {
-            let request = NSFetchRequest<NSManagedObject>(entityName: "HistoryTransactionRecord")
-            request.predicate = NSPredicate(format: "scopeKey == %@ AND stage != %@ AND stage != %@ AND stage != %@",
+            let request = NSFetchRequest<HistoryTransactionRecord>(entityName: "HistoryTransactionRecord")
+            request.predicate = NSPredicate(format: "\(#keyPath(HistoryTransactionRecord.scopeKey)) == %@ AND " +
+                "\(#keyPath(HistoryTransactionRecord.stage)) != %@ AND " +
+                "\(#keyPath(HistoryTransactionRecord.stage)) != %@ AND " +
+                "\(#keyPath(HistoryTransactionRecord.stage)) != %@",
                                             scope.uuidString, "accepted", "rejected", "cancelled")
-            request.sortDescriptors = [NSSortDescriptor(key: "sequence", ascending: true)]
+            request.sortDescriptors = [NSSortDescriptor(key: #keyPath(HistoryTransactionRecord.sequence), ascending: true)]
             guard let row = try context.fetch(request).first else {
                 unsuspend()
                 if sessionGroups.isEmpty { try releaseSessionReferences() }

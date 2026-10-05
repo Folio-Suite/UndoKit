@@ -12,6 +12,7 @@ import Foundation
 /// operation family and schema version. Encoding and decoding are synchronous
 /// so a host can run them on the actor that owns its domain values.
 public struct HistoryCodec<Value>: Sendable {
+    /// Stable representation identity; changing encoding settings requires matching configuration or a new identity.
     public let identifier: String
     /// Stable caller-defined codec settings. Built-in Foundation codecs use empty configuration.
     public let configuration: Data

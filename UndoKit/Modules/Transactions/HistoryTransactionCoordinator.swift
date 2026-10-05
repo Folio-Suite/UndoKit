@@ -89,6 +89,9 @@ enum HistoryHostCallbackContext {
             return .failure(HistoryFailure(.capacity, stage: .admission, disposition: .usable))
         }
         let id = UUID()
+        // MainActor is reentrant across await, so actor isolation alone cannot preserve
+        // request order. The explicit queue has one drain task, which keeps preparation,
+        // host delivery and finalization together before starting the next request.
         return await withTaskCancellationHandler {
             await withCheckedContinuation { continuation in
                 queue.append(Waiting(id: id, request: request, continuation: continuation))

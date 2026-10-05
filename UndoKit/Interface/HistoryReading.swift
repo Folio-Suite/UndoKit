@@ -90,6 +90,10 @@ extension HistoryReading {
     }
 
     /// Plans reconstruction from coherent current domain state captured by the host.
+    /// Creates a fixed historical view with temporary retention protection.
+    /// Capture coherent host state before using `.current` and promise that effects are reconstructible.
+    /// Release on success, failure or abandonment. Missing targets, gaps, suspension,
+    /// plan capacity and cancellation fail explicitly without executing a Command.
     public func beginRecoveryPlan(to target: HistoryRecoveryTarget,
                                   using evidence: HistoryReconstructionEvidence) throws -> HistoryRecoveryPlan {
         try beginRecoveryPlan(from: .current, to: target, using: evidence)
@@ -104,32 +108,47 @@ extension HistoryReading {
 // MARK: - Scope forwarding
 
 extension HistoryEngine {
+    /// Reads one integrity-checked opaque checkpoint, or nil if absent.
+    /// The host decodes and validates its state; this never performs restoration.
     public func checkpoint(id: UUID) throws -> HistoryCheckpoint? {
         try retained.checkpoint(id: id)
     }
 
+    /// Reads checkpoint metadata in increasing sequence order, strictly after the cursor.
+    /// Pass the last returned sequence; the positive limit cannot exceed ``HistoryLimits/maxReadPage``.
     public func checkpoints(after sequence: Int64? = nil, limit: Int) throws -> [HistoryCheckpointInfo] {
         try retained.checkpoints(after: sequence, limit: limit)
     }
 
+    /// Reads committed accepted-group metadata strictly after the sequence cursor.
+    /// The positive limit cannot exceed ``HistoryLimits/maxReadPage``; host payloads remain opaque.
     public func historyPage(after sequence: Int64? = nil, limit: Int) throws -> [HistoryEntry] {
         try retained.historyPage(after: sequence, limit: limit)
     }
 
+    /// Reads generation and committed position together without moving live Undo position.
     public func readIdentity() throws -> HistoryReadIdentity {
         try retained.readIdentity()
     }
 
+    /// Reads bounded integrity-checked display metadata, or nil if absent.
+    /// Unknown host presentation formats may use a generic label without blocking recovery.
     public func presentation(forGroup id: UUID) throws -> HistoryPayload? {
         try retained.presentation(forGroup: id)
     }
 
+    /// Resolves host-authored menu labels and matching availability in one main-actor turn.
+    /// The resolver interprets display payloads only; its errors propagate to the caller.
     public func nativeActionNames(
         resolve: (HistoryPayload) throws -> String?
     ) throws -> (snapshot: HistorySnapshot, names: HistoryNativeActionNames) {
         try retained.nativeActionNames(resolve: resolve)
     }
 
+    /// Creates a fixed historical view with temporary retention protection.
+    /// Capture coherent host state before using `.current` and promise that effects are reconstructible.
+    /// Release on success, failure or abandonment. Missing targets, gaps, suspension,
+    /// plan capacity and cancellation fail explicitly without executing a Command.
     public func beginRecoveryPlan(
         from source: HistoryRecoverySource = .current,
         to target: HistoryRecoveryTarget,
@@ -138,24 +157,31 @@ extension HistoryEngine {
         try retained.beginRecoveryPlan(from: source, to: target, using: evidence)
     }
 
+    /// Reads bounded transition references in the plan direction without decoding host payloads.
+    /// Use only this plan’s preceding cursor. Cancellation releases the plan; stale handles fail.
     public func recoveryPage(_ plan: HistoryRecoveryPlan, after cursor: Int64? = nil,
                              limit: Int) throws -> HistoryRecoveryPage {
         try retained.recoveryPage(plan, after: cursor, limit: limit)
     }
 
+    /// Retrieves one integrity-checked member in this plan’s interval.
+    /// Use valid zero-based ordinals and reconstruct on the host; live domain state is untouched.
     public func recoveryMaterial(_ plan: HistoryRecoveryPlan, groupID: UUID,
                                  ordinal: Int) throws -> HistoryRecoveryMaterial {
         try retained.recoveryMaterial(plan, groupID: groupID, ordinal: ordinal)
     }
 
+    /// Retrieves the stored checkpoint baseline belonging to this live plan, if any.
     public func recoveryCheckpoint(_ plan: HistoryRecoveryPlan) throws -> HistoryCheckpoint? {
         try retained.recoveryCheckpoint(plan)
     }
 
+    /// Releases temporary retention protection; repeating release is harmless.
     public func releaseRecoveryPlan(_ plan: HistoryRecoveryPlan) {
         retained.releaseRecoveryPlan(plan)
     }
 
+    /// Ends this plan immediately and relinquishes its temporary retention protection.
     public func cancelRecoveryPlan(_ plan: HistoryRecoveryPlan) {
         retained.cancelRecoveryPlan(plan)
     }

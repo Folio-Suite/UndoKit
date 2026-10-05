@@ -9,7 +9,9 @@ import Foundation
 /// executor and matching outcome lookup before mixed-family commands can cross
 /// the host boundary or participate in recovery.
 public final class HistoryHostRegistry: HistoryHost {
+    /// One all-or-nothing delivery across families; commit its token with the domain effect.
     public typealias AtomicGroupExecutor = @Sendable (HistoryDelivery) async -> HistoryHostOutcome
+    /// Authoritative lookup of that same atomic group token without repeating its effects.
     public typealias AtomicOutcomeLookup = @Sendable (HistoryToken) async -> HistoryHostOutcome
 
     private let router: HistoryFamilyRouter

@@ -88,6 +88,10 @@ extension HistoryStore {
         let container = NSPersistentContainer(name: "History", managedObjectModel: model)
         let description = NSPersistentStoreDescription(url: url)
         description.type = NSSQLiteStoreType
+        // Store loading must complete before register(mode:) inspects durable identity.
+        // The local loadError below relies on synchronous store addition; async public
+        // opening does not make this Core Data configuration callback asynchronous.
+        // Apple: https://developer.apple.com/documentation/coredata/nspersistentstoredescription/shouldaddstoreasynchronously
         description.shouldAddStoreAsynchronously = false
         description.shouldMigrateStoreAutomatically = false
         description.shouldInferMappingModelAutomatically = false
@@ -221,6 +225,9 @@ extension HistoryStore {
         let coordinator = container.persistentStoreCoordinator
         let options: [AnyHashable: Any] = [NSSQLitePragmasOption: ["journal_mode": "DELETE"]]
         do {
+            // Copy through Core Data rather than copying the SQLite file alone: committed
+            // pages may still live in its WAL. The separate coordinator then opens/closes
+            // the destination with DELETE journaling so the host receives a closed file.
             try coordinator.replacePersistentStore(at: destination, destinationOptions: options,
                                                    withPersistentStoreFrom: url, sourceOptions: nil,
                                                    ofType: NSSQLiteStoreType)

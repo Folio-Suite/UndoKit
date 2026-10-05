@@ -56,22 +56,30 @@ import Foundation
 
 extension HistoryRetentionManaging {
     /// Records a checkpoint with a fresh identity after the host secures its resources.
+    /// Records opaque host-confirmed coherent state at an idle usable boundary.
+    /// Secure resources first; a checkpoint does not save the host document or execute a Command.
     public func createCheckpoint(name: String?, state: HistoryPayload,
                                  resources: [HistoryObjectReference] = []) throws -> HistoryCheckpointInfo {
         try createCheckpoint(id: UUID(), name: name, state: state, resources: resources)
     }
 
     /// Records an explicitly identified checkpoint with no external resource references.
+    /// Records opaque host-confirmed coherent state at an idle usable boundary.
+    /// Secure resources first; a checkpoint does not save the host document or execute a Command.
     public func createCheckpoint(id: UUID, name: String?, state: HistoryPayload) throws -> HistoryCheckpointInfo {
         try createCheckpoint(id: id, name: name, state: state, resources: [])
     }
 
     /// Creates a fresh hold for one host-authored checkpoint state.
+    /// Durably protects one checkpoint state and its dependencies until this hold is released.
+    /// It does not preserve all preceding editing detail or extend ordinary Undo depth.
     @discardableResult public func holdState(_ checkpointID: UUID) throws -> HistoryRetentionHold {
         try holdState(checkpointID, id: UUID())
     }
 
     /// Creates a fresh hold for an inclusive interval of accepted groups.
+    /// Durably protects complete accepted groups between the inclusive endpoints.
+    /// An already removed accepted interval cannot be held; ordinary sequence holes are allowed.
     @discardableResult public func holdDetail(from firstGroupID: UUID,
                                               through lastGroupID: UUID) throws -> HistoryRetentionHold {
         try holdDetail(from: firstGroupID, through: lastGroupID, id: UUID())
@@ -81,6 +89,8 @@ extension HistoryRetentionManaging {
 // MARK: - Scope forwarding
 
 extension HistoryEngine {
+    /// Records opaque host-confirmed coherent state at an idle usable boundary.
+    /// Secure resources first; a checkpoint does not save the host document or execute a Command.
     public func createCheckpoint(
         id: UUID = UUID(), name: String?, state: HistoryPayload,
         resources: [HistoryObjectReference] = []
@@ -88,23 +98,33 @@ extension HistoryEngine {
         try retained.createCheckpoint(id: id, name: name, state: state, resources: resources)
     }
 
+    /// Durably protects one checkpoint state and its dependencies until this hold is released.
+    /// It does not preserve all preceding editing detail or extend ordinary Undo depth.
     @discardableResult public func holdState(_ checkpointID: UUID, id: UUID = UUID()) throws -> HistoryRetentionHold {
         try retained.holdState(checkpointID, id: id)
     }
 
+    /// Durably protects complete accepted groups between the inclusive endpoints.
+    /// An already removed accepted interval cannot be held; ordinary sequence holes are allowed.
     @discardableResult public func holdDetail(from firstGroupID: UUID, through lastGroupID: UUID,
                                               id: UUID = UUID()) throws -> HistoryRetentionHold {
         try retained.holdDetail(from: firstGroupID, through: lastGroupID, id: id)
     }
 
+    /// Releases only the named durable promise; overlapping protection remains in force.
     public func releaseHold(_ id: UUID) throws {
         try retained.releaseHold(id)
     }
 
+    /// Lists durable state and detail promises in the current generation.
     public func retentionHolds() throws -> [HistoryRetentionHold] {
         try retained.retentionHolds()
     }
 
+    /// Atomically removes eligible detail before a coherent host checkpoint in a bounded pass.
+    /// Depth, holds, current state and plans remain protected. Inspect `hasMore` and `targetUnmet`.
+    /// This may scan retained metadata; save failure suspends the store and preserves recovery needs.
+    /// See ``HistoryRetentionManaging/consolidateHistory(through:policy:)`` for policy and cleanup obligations.
     public func consolidateHistory(through checkpointID: UUID,
                                    policy: HistoryRetentionPolicy) throws -> HistoryConsolidationResult {
         try retained.consolidateHistory(through: checkpointID, policy: policy)

@@ -28,6 +28,9 @@ import Foundation
         }
     }
 
+    // MainActor serializes context access, but a host callback can suspend a transaction.
+    // Every protocol boundary saves before that suspension; rollback only affects unsaved
+    // history changes and cannot retract a domain effect accepted in the host's own store.
     func saveContext() throws {
         do { try context.save() } catch {
             context.rollback()

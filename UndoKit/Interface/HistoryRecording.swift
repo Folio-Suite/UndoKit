@@ -6,7 +6,12 @@ import Foundation
 /// Host-selected durability for new ordinary Actions in one History Scope.
 /// Off keeps transaction preparation and recovery while ordinary Undo remains
 /// available only during the open engine session.
-public enum HistoryRecordingMode: Equatable, Sendable { case on, off }
+public enum HistoryRecordingMode: Equatable, Sendable {
+    /// Retain finalized ordinary Actions for reopening and historical reads.
+    case on
+    /// Keep safe preparation and reconciliation, with ordinary Undo only for this open session.
+    case off
+}
 
 extension HistoryEngine {
     /// Read the persisted mode; storage failures are returned to the host.

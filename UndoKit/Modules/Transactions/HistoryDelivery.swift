@@ -217,6 +217,9 @@ extension HistoryTransactionCoordinator {
             row.transaction = transaction
         }
         scopeRow.nextSequence = sequence + 1
+        // These are separate durable fences. A reopened prepared record proves that
+        // delivery never began; deliveryStarted requires authoritative host lookup even
+        // if the process stopped before the callback actually received the request.
         try history.saveContext()
         transaction.stage = "deliveryStarted"
         try history.saveContext()

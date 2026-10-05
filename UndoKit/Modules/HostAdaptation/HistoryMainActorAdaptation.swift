@@ -11,6 +11,8 @@ import Foundation
                           to engine: any HistoryTransactions) async -> HistoryResult {
         do {
             try registration.requireHandler(self, stage: .admission)
+            // Encode before hopping to the engine. Command may be non-Sendable; only
+            // its immutable HistoryCommand representation leaves the handler's actor.
             let encoded = try registration.encodeCommand(command)
             return await engine.submit(encoded)
         } catch {
@@ -39,6 +41,9 @@ import Foundation
         do {
             try registration.validateDelivery(delivery)
             let context = HistoryOperationContext(token: delivery.token, restorationOrigin: delivery.restorationOrigin)
+            // This extension executes on the registered handler's isolation. Decoded
+            // domain values stay here through dispatch and are encoded before returning.
+            // Undo member order was already reversed by the engine; do not reverse again.
             switch delivery.kind {
             case .command:
                 outcome = await apply(try registration.decodeCommands(delivery.members), context: context)

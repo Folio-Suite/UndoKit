@@ -12,14 +12,21 @@ import Foundation
 /// authoritative outcomes cross into UndoKit. Older decoders interpret retained
 /// host payload versions without changing their stored bytes or fingerprints.
 public struct HistoryOperationRegistration<Handler: HistoryTypedOperationHandler>: Sendable {
+    /// Validated operation, codec settings and write versions derived at construction.
     public let identity: HistorySchemaIdentity
+    /// Current intent encoder and decoder; used only on the handler’s actor.
     public let commandCodec: HistoryCodec<Handler.Command>
+    /// Current accepted-effect encoder and decoder; host meaning stays on its actor.
     public let effectCodec: HistoryCodec<Handler.Effect>
+    /// Current coherent-state encoder and decoder for host checkpoints.
     public let stateCodec: HistoryCodec<Handler.State>
     /// Decoders for earlier host payload versions. The current codecs above are used for all new writes.
     public let oldCommandCodecs: [Int: HistoryCodec<Handler.Command>]
+    /// Read decoders for explicitly supported earlier accepted-effect versions.
     public let oldEffectCodecs: [Int: HistoryCodec<Handler.Effect>]
+    /// Read decoders for explicitly supported earlier checkpoint-state versions.
     public let oldStateCodecs: [Int: HistoryCodec<Handler.State>]
+    /// Strongly retained owner of semantic execution and authoritative outcome evidence.
     public let handler: Handler
 
     /// Binds one handler to its codecs and derives their durable identities and settings.

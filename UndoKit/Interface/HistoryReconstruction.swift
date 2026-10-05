@@ -6,24 +6,31 @@ import Foundation
 /// The host promises that each accepted effect's undo and redo payloads can be
 /// interpreted as historical state transitions, without executing the command.
 public enum HistoryReconstructionEvidence: Sendable {
+    /// Explicit host promise that stored accepted-effect payloads suffice for isolated reconstruction.
     case acceptedEffects
 }
 
 /// A coherent source state already held by the host, or a stored state snapshot.
 public enum HistoryRecoverySource: Equatable, Sendable {
+    /// Coherent live domain state already captured by the host, without executing further edits.
     case current
+    /// The state snapshot of the identified retained checkpoint.
     case checkpoint(UUID)
 }
 
 /// The state immediately after an accepted group, or the state of a checkpoint.
 public enum HistoryRecoveryTarget: Equatable, Sendable {
+    /// Historical state immediately after the identified accepted group.
     case group(UUID)
+    /// The state snapshot of the identified retained checkpoint.
     case checkpoint(UUID)
 }
 
 /// Forward applies members in ascending ordinal order; reverse applies descending order.
 public enum HistoryRecoveryDirection: Equatable, Sendable {
+    /// Traverse accepted transitions in increasing sequence order and use Redo evidence.
     case forward
+    /// Traverse accepted transitions in decreasing sequence order and use Undo evidence.
     case reverse
 }
 

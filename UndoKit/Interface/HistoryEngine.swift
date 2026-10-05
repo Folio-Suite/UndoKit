@@ -5,8 +5,12 @@ import Foundation
 
 /// Whether a registered history file is new, reopened, or an independent working copy.
 public enum HistoryOpenMode: Sendable {
+    /// Create a new writable history file; an existing database is a conflict.
     case create
+    /// Open existing compatible history bound to the supplied working identity.
     case existing
+    /// Adopt a closed coordinated copy under a different working identity.
+    /// The associated identity must match the copied source's durable registration.
     case independentCopy(sourceWorkingIdentity: UUID)
 }
 

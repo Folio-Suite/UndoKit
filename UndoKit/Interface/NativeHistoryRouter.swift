@@ -28,7 +28,11 @@ public enum NativeHistoryRoutingState: Equatable, Sendable {
     /// Return false while marked text is composing. The host should break text coalescing
     /// and submit the current native group before returning true.
     public var settleEditing: (() -> Bool)?
+    /// Starts host asynchronous Undo after settlement and barrier publication.
+    /// Capture ``pendingInvocationID`` synchronously and finish that identity with committed availability.
     public var undoRequested: (() -> Void)?
+    /// Starts host asynchronous Redo after settlement and barrier publication.
+    /// Capture ``pendingInvocationID`` synchronously and finish that identity with committed availability.
     public var redoRequested: (() -> Void)?
     /// Invoked when a top-level native group closes. The host classifies registered work,
     /// submits a semantic Command, or reports an unexplained registration.
@@ -67,6 +71,9 @@ public enum NativeHistoryRoutingState: Equatable, Sendable {
     private var queuedEdits = 0
     private var recognizedGroupPendingClose = false
 
+    /// Creates an unbound router and a single-level provisional native manager.
+    /// The router owns the manager and notification observation; host callbacks run on the main actor.
+    /// Closures are retained, so host owners should use weak captures when they retain this router.
     public override init() {
         let manager = RoutedUndoManager()
         // The durable store retains accepted history. Native registrations are kept only
@@ -158,6 +165,8 @@ public enum NativeHistoryRoutingState: Equatable, Sendable {
         publishBarrier()
     }
 
+    /// Resumes routing after the host has identified and reconciled unknown registrations.
+    /// This clears the mismatch flag; it does not submit edits or repair history evidence.
     public func reconcileRegistrations() {
         registrationObserved = false
         publishBarrier()
@@ -186,18 +195,28 @@ public enum NativeHistoryRoutingState: Equatable, Sendable {
         if registrationCount > 0 { recognizedGroupPendingClose = true }
     }
 
+    /// Balances one queued provisional edit after its operation finishes, including rejection or failure.
+    /// Pair with ``didQueueProvisionalEdit()`` so provisional Undo availability tracks outstanding work.
     public func didFinishQueuedEdit() { queuedEdits = max(0, queuedEdits - 1) }
 
+    /// Whether an unexplained native registration still requires host classification.
     public var hasRegistrationMismatch: Bool { registrationObserved }
+    /// Whether invocation, suspension, unknown registration or reattachment requires an editing barrier.
     public var isEditingBlocked: Bool {
         requestPending || snapshot.isSuspended || registrationObserved || requiresReattachment
     }
+    /// Native Undo eligibility, including provisional and queued edits while routing is unblocked.
+    /// The host must settle those edits before submitting the reversal.
     public var canUndo: Bool {
         (snapshot.canUndo || hasProvisionalEdit || queuedEdits > 0) && !isEditingBlocked
     }
+    /// Committed Redo eligibility while routing is unblocked.
     public var canRedo: Bool { snapshot.canRedo && !isEditingBlocked }
+    /// Host-resolved Undo name when eligible, or an empty generic name otherwise.
     public var undoActionName: String { canUndo ? undoName : "" }
+    /// Host-resolved Redo name when eligible, or an empty generic name otherwise.
     public var redoActionName: String { canRedo ? redoName : "" }
+    /// Latest name assigned by the native control, independent of accepted history labels.
     public var provisionalActionName: String { manager.provisionalActionName }
 
     private func request(_ kind: HistoryDeliveryKind) {
@@ -212,8 +231,10 @@ public enum NativeHistoryRoutingState: Equatable, Sendable {
     }
 
     @objc private func groupDidClose(_ notification: Notification) {
-        // Foundation posts this notification before the closing group has fully left
-        // its stack. A nested close must remain part of the enclosing user step.
+        // endUndoGrouping posts this notification just before removing the closing group.
+        // Its groupingLevel can therefore still include that group. A nested close belongs
+        // to its enclosing user step and cannot trigger an independent semantic submission.
+        // Apple: https://developer.apple.com/documentation/foundation/undomanager/endundogrouping()
         guard manager.groupingLevel <= 1 else { return }
         let count = registrationCount
         registrationCount = 0
@@ -267,6 +288,11 @@ public enum NativeHistoryRoutingState: Equatable, Sendable {
         override var undoActionName: String { router?.undoActionName ?? "" }
         override var redoActionName: String { router?.redoActionName ?? "" }
 
+        // Foundation normally invokes its registered callbacks synchronously during Undo.
+        // This manager keeps those registrations for native grouping only: semantic Undo
+        // enters the asynchronous host path and must finish through a finalized snapshot.
+        // Calling super.undo() would replay provisional callbacks outside durable acceptance.
+        // Apple: https://developer.apple.com/documentation/foundation/undomanager/undo()
         override func undo() { router?.request(.undo) }
         override func redo() { router?.request(.redo) }
 
@@ -275,6 +301,9 @@ public enum NativeHistoryRoutingState: Equatable, Sendable {
             super.setActionName(actionName)
         }
 
+        // Swift’s generic registerUndo overlay reaches this Objective-C entry point;
+        // selector-based AppKit registrations use the override below. Count both routes
+        // while retaining Foundation’s grouping behavior so the host can classify them.
         override func __registerUndoWithTarget(
             _ target: Any,
             handler: @escaping @MainActor @Sendable (Any) -> Void

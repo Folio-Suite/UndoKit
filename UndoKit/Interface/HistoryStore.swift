@@ -6,10 +6,20 @@ import Darwin
 import Foundation
 
 /// How a scope is registered inside an already open physical history store.
-public enum HistoryScopeOpenMode: Sendable { case create, existing }
+public enum HistoryScopeOpenMode: Sendable {
+    /// Register a new scope; refuse a scope with the same existing identity.
+    case create
+    /// Reopen a registered scope bound to the physical store's working identity.
+    case existing
+}
 
 /// Whether a store session can change history or only inspect its durable records.
-public enum HistoryStoreAccess: Sendable { case readWrite, readOnly }
+public enum HistoryStoreAccess: Sendable {
+    /// Own the exclusive writer lock and permit scope delivery and maintenance.
+    case readWrite
+    /// Inspect committed records without creating history or delivering host commands.
+    case readOnly
+}
 
 /// Measured on-disk history bytes and configured headroom for future writes.
 public struct HistoryStoreFootprint: Equatable, Sendable {
@@ -54,6 +64,7 @@ public struct HistoryScopeInspection: Equatable, Sendable {
     public let url: URL
     /// Identity of the host document or app-owned data associated with this store.
     public let workingIdentity: UUID
+    /// Durable physical-store registration identity; an independent copy receives a new one.
     public internal(set) var storeIdentity: UUID
     /// Session access selected at opening and fixed until closure.
     public let access: HistoryStoreAccess
@@ -67,6 +78,10 @@ public struct HistoryScopeInspection: Equatable, Sendable {
     var maintenance: Bool { activity.maintenance }
     var activeMaintenanceURL: URL?
     var writeFailed = false
+    // NSPersistentContainer owns a main-queue viewContext. All store/scoped helpers stay
+    // on MainActor, so managed records are accessed here without crossing a context queue.
+    // Host actors exchange immutable encoded values, never these NSManagedObject instances.
+    // Apple: https://developer.apple.com/documentation/coredata/nspersistentcontainer/viewcontext
     var context: NSManagedObjectContext { container.viewContext }
 
     private init(url: URL, workingIdentity: UUID, storeIdentity: UUID,

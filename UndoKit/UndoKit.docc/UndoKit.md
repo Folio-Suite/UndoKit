@@ -15,6 +15,90 @@ owns semantic meaning, validation, no-op filtering, atomic compensation, durable
 outcome receipts, resource preservation, and application policy. No Folio model
 is required. Swift clients import `UndoKit`.
 
+## Choose an entry point
+
+Start with ``HistoryHost`` if the application already produces bounded opaque
+payloads and durable outcome receipts. Use ``HistoryOperationHandler`` or
+``MainActorHistoryOperationHandler`` with ``HistoryOperationRegistration`` when
+commands, accepted effects and checkpoint states should remain typed on the
+host's actor. These adapters retain their handlers; rebuild them from application
+code when reopening. No application model needs to inherit an UndoKit class.
+
+| Caller responsibility | Capability |
+| --- | --- |
+| Choose storage, register independent scopes, coordinate copies and close ownership | ``HistoryStore`` |
+| Open one scope with its own store as a convenience | ``HistoryEngine`` |
+| Submit ordinary changes or request whole-group Undo/Redo | ``HistoryTransactions`` |
+| Browse metadata, retrieve opaque states and protect reconstruction reads | ``HistoryReading`` |
+| Create checkpoints, hold state/detail and run retention policy | ``HistoryRetentionManaging`` |
+| Present finalized history through native controls and editing barriers | ``NativeHistoryRouter`` |
+
+Session and capability calls are main-actor isolated. A ``HistoryHost`` may own a
+separate actor; only immutable encoded history values cross that boundary. A
+scope serializes deliveries explicitly, while the host establishes intended
+submission order before admission. Do not await another submission to the same
+scope from a host callback.
+
+## Await finalized completion
+
+The following helper uses only the transaction capability. The host has already
+filtered known no-ops, assigned a stable identity and canonical-intent fingerprint,
+and encoded the Command before calling it:
+
+```swift
+import UndoKit
+
+@MainActor
+func submitChange(
+    _ command: HistoryCommand,
+    to history: any HistoryTransactions
+) async throws -> HistoryReceipt? {
+    switch await history.submit(command) {
+    case .accepted(let receipt):
+        return receipt
+    case .rejected:
+        return nil
+    case .failure(let failure):
+        throw failure
+    }
+}
+```
+
+An accepted result means the host's atomic effect and history finalization both
+completed. Rejection proves no semantic effect. A thrown ``HistoryFailure`` from
+this helper preserves its ``HistoryFailure/disposition``: the caller must inspect
+it before allowing further edits. In particular, failure after possible delivery
+requires authoritative reconciliation rather than a new identity and blind retry.
+Queue admission alone is neither a durable receipt nor a guarantee that a waiting
+request survives a crash. Cancellation after delivery cannot retract its effect.
+
+## Read one state explicitly
+
+Metadata listing does not decode every state. This helper retrieves one selected
+checkpoint and interprets it on the caller's actor using the host's own decoder:
+
+```swift
+import Foundation
+import UndoKit
+
+@MainActor
+func readCheckpointState<State>(
+    id: UUID,
+    from history: any HistoryReading,
+    decode: (HistoryPayload) throws -> State
+) throws -> State? {
+    guard let checkpoint = try history.checkpoint(id: id) else { return nil }
+    return try decode(checkpoint.state)
+}
+```
+
+Retrieval verifies stored-byte integrity; the decoder and host still establish
+schema compatibility and semantic completeness. Reading does not restore live
+state. To restore, secure dependencies, reconstruct and validate the selected
+state in the host, then submit a new Command carrying its `restorationOrigin`.
+Use a ``HistoryRecoveryPlan`` for accepted-effect reconstruction across multiple
+records, and always release its temporary protection when done.
+
 ## Public interface map
 
 - `Interface/HistoryStore.swift` — physical registration, placement, read-only inspection, copies, capacity and closure.
@@ -235,31 +319,84 @@ publication remain deferred. Apps and Kits ship as a coordinated Suite version.
 
 ## Topics
 
-### Durable history
+### Sessions and ownership
+
+- ``HistoryStore``
+- ``HistoryEngine``
+- ``HistoryOpenMode``
+- ``HistoryScopeOpenMode``
+- ``HistoryStoreAccess``
+- ``HistoryStoreFootprint``
+- ``HistoryScopeInspection``
+- ``HistoryRecordingMode``
+- ``HistoryLimits``
+
+### Commands, outcomes and recovery failures
 
 - ``HistoryTransactions``
-- ``HistoryReading``
-- ``HistoryRetentionManaging``
-- ``HistoryEngine``
-- ``HistoryStore``
 - ``HistoryHost``
 - ``HistoryCommand``
+- ``HistoryMember``
 - ``HistoryPayload``
+- ``HistoryToken``
+- ``HistoryDelivery``
+- ``HistoryDeliveryKind``
+- ``HistoryEffect``
+- ``HistoryHostOutcome``
 - ``HistoryResult``
+- ``HistoryReceipt``
 - ``HistoryFailure``
-- ``HistoryLimits``
-- ``HistoryCodec``
-- ``HistorySchemaIdentity``
-- ``HistoryOperationRegistration``
+- ``HistoryFailureCause``
+- ``HistoryFailureStage``
+- ``HistoryScopeDisposition``
+
+### Typed host adaptation
+
+- ``HistoryTypedOperationHandler``
 - ``HistoryOperationHandler``
 - ``MainActorHistoryOperationHandler``
+- ``HistoryOperationRegistration``
+- ``HistoryRegisteredHost``
+- ``MainActorHistoryRegisteredHost``
 - ``HistoryHostRegistry``
+- ``HistoryCodec``
+- ``HistorySchemaIdentity``
+- ``HistoryTypedCommand``
+- ``HistoryTypedOutcome``
+- ``HistoryTypedEffect``
+- ``HistoryOperationContext``
+
+### Browsing and reconstruction
+
+- ``HistoryReading``
+- ``HistoryEntry``
+- ``HistoryEntryKind``
+- ``HistoryCheckpointInfo``
+- ``HistoryCheckpoint``
+- ``HistoryReadIdentity``
+- ``HistoryReconstructionEvidence``
+- ``HistoryRecoverySource``
+- ``HistoryRecoveryTarget``
+- ``HistoryRecoveryDirection``
+- ``HistoryRecoveryPlan``
+- ``HistoryRecoveryStep``
+- ``HistoryRecoveryPage``
+- ``HistoryRecoveryMaterial``
+
+### Retention and host resources
+
+- ``HistoryRetentionManaging``
 - ``HistoryRetentionHold``
+- ``HistoryRetentionHold/Kind``
 - ``HistoryRetentionPolicy``
+- ``HistoryConsolidationResult``
 - ``HistoryObjectReference``
-- ``HistoryRecordingMode``
+- ``HistoryRequiredObject``
+- ``HistoryRequiredObjectPage``
 
 ### Native integration
 
 - ``NativeHistoryRouter``
+- ``NativeHistoryRoutingState``
 - ``HistorySnapshot``
+- ``HistoryNativeActionNames``

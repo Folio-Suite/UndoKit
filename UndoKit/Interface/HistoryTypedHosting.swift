@@ -9,15 +9,25 @@ import Foundation
 /// Runtime closures and model objects are rebuilt after reopening; only these
 /// identities, versions and encoded values belong in durable history.
 public struct HistorySchemaIdentity: Hashable, Sendable {
+    /// Stable host operation family derived from its validated registration.
     public let operation: String
+    /// Codec identity used for newly encoded Command values.
     public let commandCodec: String
+    /// Codec identity used for newly encoded compensation and reapplication evidence.
     public let effectCodec: String
+    /// Codec identity used for newly encoded checkpoint states.
     public let stateCodec: String
+    /// Persisted format settings for the current Command codec.
     public let commandCodecConfiguration: Data
+    /// Persisted format settings for the current accepted-effect codec.
     public let effectCodecConfiguration: Data
+    /// Persisted format settings for the current checkpoint codec.
     public let stateCodecConfiguration: Data
+    /// Current positive host Command schema version; earlier versions require explicit decoders.
     public let commandVersion: Int
+    /// Current positive host accepted-effect schema version.
     public let effectVersion: Int
+    /// Current positive host checkpoint-state schema version.
     public let stateVersion: Int
 }
 
@@ -26,13 +36,17 @@ public struct HistorySchemaIdentity: Hashable, Sendable {
 /// A typed Command paired with its stable host-supplied intent fingerprint.
 /// The fingerprint is never inferred from an ordinary codec's output.
 public struct HistoryTypedCommand<Value> {
+    /// Stable Command identity retained for exact retries of this intent.
     public let id: UUID
+    /// Host canonical-intent fingerprint, unchanged by codec representation.
     public let fingerprint: Data
+    /// Host-owned typed intent, encoded on the registered handler’s actor before submission.
     public let value: Value
     /// Historical state this command restores, when supplied by the host.
     public let restorationOrigin: UUID?
     /// Bounded opaque display metadata, independent of recovery evidence.
     public let presentation: HistoryPayload?
+    /// Generation captured with this intent; required after an explicit history reset.
     public let expectedGeneration: UUID?
 
     /// Pairs a host-owned value with its stable identity and canonical intent fingerprint.
@@ -59,14 +73,22 @@ public struct HistoryTypedCommand<Value> {
 
 /// Result from a typed host operation. Rejection must prove no semantic effect.
 public enum HistoryTypedOutcome<Effect> {
+    /// Every member took effect atomically. Return durable evidence in delivery member order.
     case accepted([HistoryTypedEffect<Effect>])
+    /// Authoritative proof that no member changed domain state.
     case rejected
+    /// The host cannot prove acceptance or no-effect; preserve evidence for outcome lookup.
     case unresolved
 }
 
+/// Actor-local accepted evidence encoded by the registered effect codec.
+/// The handler must reconstruct this evidence from its durable receipt after interruption.
 public struct HistoryTypedEffect<Effect> {
+    /// Delivered member identity to which this accepted evidence belongs.
     public let memberID: UUID
+    /// Typed compensation input owned and interpreted by the handler.
     public let undo: Effect
+    /// Typed reapplication input owned and interpreted by the handler.
     public let redo: Effect
     /// Opaque dependencies secured by the host before reporting acceptance.
     public let resources: [HistoryObjectReference]
@@ -97,6 +119,7 @@ public struct HistoryOperationContext: Sendable {
     /// The host-authored historical origin of a restoration Command, when supplied.
     public let restorationOrigin: UUID?
 
+    /// Packages engine delivery metadata for a typed host callback; it does not authorize effects.
     public init(token: HistoryToken, restorationOrigin: UUID? = nil) {
         self.token = token
         self.restorationOrigin = restorationOrigin
@@ -105,8 +128,11 @@ public struct HistoryOperationContext: Sendable {
 
 /// Common typed values for an operation handler. Values need not be `Sendable`.
 public protocol HistoryTypedOperationHandler: AnyObject, Sendable {
+    /// Host-owned intent decoded on the handler’s actor before ordinary execution.
     associatedtype Command
+    /// Host-owned compensation and reapplication evidence, distinct from intent if necessary.
     associatedtype Effect
+    /// Coherent host checkpoint state used for explicit encoding and reconstruction.
     associatedtype State
 }
 

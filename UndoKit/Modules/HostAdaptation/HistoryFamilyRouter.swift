@@ -40,6 +40,9 @@ final class HistoryFamilyRouter: Sendable {
         guard !memberFamilies.isEmpty else {
             return .failure(HistoryFailure(.invalidInput, stage: .delivery, disposition: .usable))
         }
+        // Per-family dispatch cannot manufacture atomicity across separate domain commits.
+        // A mixed group therefore needs the host's explicit all-or-nothing executor and
+        // matching durable outcome lookup, supplied together during registration.
         guard memberFamilies.count == 1 else {
             guard let atomicGroupExecutor else {
                 return .failure(HistoryFailure(.invalidInput, stage: .delivery, disposition: .usable))

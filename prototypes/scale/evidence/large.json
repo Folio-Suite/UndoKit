@@ -1,0 +1,2673 @@
+{
+  "fixture": "large",
+  "source_head": "631bd231a5135d8a3de3345f52f5d6eec7a0672d",
+  "source_sha256": {
+    "Package.swift": "5a08ce02325ada935e8a67a3b8927c8bfff97290cc858475456adc72d960f1f1",
+    "Sources/ScaleChild/main.swift": "3e936b7c28d1a4302fead14b7085a81405ccb29438d2c4085bf31fea1a566cab",
+    "Sources/ScaleProbe/HistoryStore.swift": "7288cee345fb34bf9016ff464c7755cc58a4b69d0ea6b3e9f0d44cffa8a328b1",
+    "Tests/ScaleProbeTests/ScaleProbeTests.swift": "e2c2e58efb6e36a1ca627a46ef391850f85470063c9bce0fbff7e432aa1a7454",
+    "run.rb": "1a783bdcac59b48143a0a61c536f246c5d0c635c2abb1f771cd0be7f66169484"
+  },
+  "swift_version": "Apple Swift version 6.4 (swiftlang-6.4.0.34.1 clang-2100.3.34.1)\nTarget: arm64-apple-macosx27.0.0",
+  "os_version": "27.0",
+  "hardware": "Mac15,6",
+  "cpu_brand": "Apple M3 Pro",
+  "physical_memory_bytes": 19327352832,
+  "build_configuration": "release",
+  "limits": {
+    "case_seconds": 600,
+    "memory_bytes": 2147483648,
+    "owned_bytes": 12884901888,
+    "free_floor_bytes": 21474836480
+  },
+  "page_bytes": 16777216,
+  "fixture_directory": "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-large-20260929-44110-1w0dhzv",
+  "steps": [
+    {
+      "phase": "build",
+      "command": [
+        "swift",
+        "build",
+        "-c",
+        "release",
+        "--package-path",
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale"
+      ],
+      "elapsed_seconds": 0.9011710000013409,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 44129,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 80084992,
+      "peak_owned_bytes": 132325376,
+      "events": [
+
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T213810Z-large/build.log"
+    },
+    {
+      "phase": "fixture-1",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "fixture",
+        "large",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-large-20260929-44110-1w0dhzv/run-1/History.sqlite",
+        "17"
+      ],
+      "elapsed_seconds": 70.98071900000286,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 44178,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 1079083008,
+      "peak_owned_bytes": 193482752,
+      "events": [
+        {
+          "groups": 8000,
+          "phase": "build",
+          "seconds": 1.3513773333324934
+        },
+        {
+          "groups": 9000,
+          "phase": "build",
+          "seconds": 1.5559045416666777
+        },
+        {
+          "groups": 10000,
+          "phase": "build",
+          "seconds": 1.7630220833307249
+        },
+        {
+          "groups": 11000,
+          "phase": "build",
+          "seconds": 1.978999749997456
+        },
+        {
+          "groups": 12000,
+          "phase": "build",
+          "seconds": 2.2009699166665087
+        },
+        {
+          "groups": 13000,
+          "phase": "build",
+          "seconds": 2.427423541663302
+        },
+        {
+          "groups": 14000,
+          "phase": "build",
+          "seconds": 2.665028874998825
+        },
+        {
+          "groups": 15000,
+          "phase": "build",
+          "seconds": 2.905442541665252
+        },
+        {
+          "groups": 16000,
+          "phase": "build",
+          "seconds": 3.1540922499989392
+        },
+        {
+          "groups": 17000,
+          "phase": "build",
+          "seconds": 3.4099843749972933
+        },
+        {
+          "groups": 18000,
+          "phase": "build",
+          "seconds": 3.6774391250000917
+        },
+        {
+          "groups": 19000,
+          "phase": "build",
+          "seconds": 3.948306374997628
+        },
+        {
+          "groups": 20000,
+          "phase": "build",
+          "seconds": 4.231057333330682
+        },
+        {
+          "groups": 21000,
+          "phase": "build",
+          "seconds": 4.513287249999848
+        },
+        {
+          "groups": 22000,
+          "phase": "build",
+          "seconds": 4.882999541663594
+        },
+        {
+          "groups": 23000,
+          "phase": "build",
+          "seconds": 5.255791749998025
+        },
+        {
+          "groups": 24000,
+          "phase": "build",
+          "seconds": 5.634913541663991
+        },
+        {
+          "groups": 25000,
+          "phase": "build",
+          "seconds": 6.043919124997046
+        },
+        {
+          "groups": 26000,
+          "phase": "build",
+          "seconds": 6.451442291665444
+        },
+        {
+          "groups": 27000,
+          "phase": "build",
+          "seconds": 6.868207666666422
+        },
+        {
+          "groups": 28000,
+          "phase": "build",
+          "seconds": 7.301484999999957
+        },
+        {
+          "groups": 29000,
+          "phase": "build",
+          "seconds": 7.742264874999819
+        },
+        {
+          "groups": 30000,
+          "phase": "build",
+          "seconds": 8.21565708333219
+        },
+        {
+          "groups": 31000,
+          "phase": "build",
+          "seconds": 8.68676558333027
+        },
+        {
+          "groups": 32000,
+          "phase": "build",
+          "seconds": 9.164158166666311
+        },
+        {
+          "groups": 33000,
+          "phase": "build",
+          "seconds": 9.637718708330794
+        },
+        {
+          "groups": 34000,
+          "phase": "build",
+          "seconds": 10.142176541663503
+        },
+        {
+          "groups": 35000,
+          "phase": "build",
+          "seconds": 10.645571916666086
+        },
+        {
+          "groups": 36000,
+          "phase": "build",
+          "seconds": 11.15251462499873
+        },
+        {
+          "groups": 37000,
+          "phase": "build",
+          "seconds": 11.688378124999872
+        },
+        {
+          "groups": 38000,
+          "phase": "build",
+          "seconds": 12.266695708331099
+        },
+        {
+          "groups": 39000,
+          "phase": "build",
+          "seconds": 12.860634083332116
+        },
+        {
+          "groups": 40000,
+          "phase": "build",
+          "seconds": 13.463327291665337
+        },
+        {
+          "groups": 41000,
+          "phase": "build",
+          "seconds": 14.058696958330984
+        },
+        {
+          "groups": 42000,
+          "phase": "build",
+          "seconds": 14.689825249999558
+        },
+        {
+          "groups": 43000,
+          "phase": "build",
+          "seconds": 15.33246704166595
+        },
+        {
+          "groups": 44000,
+          "phase": "build",
+          "seconds": 15.941106249996665
+        },
+        {
+          "groups": 45000,
+          "phase": "build",
+          "seconds": 16.561948999999004
+        },
+        {
+          "groups": 46000,
+          "phase": "build",
+          "seconds": 17.197064583331667
+        },
+        {
+          "groups": 47000,
+          "phase": "build",
+          "seconds": 17.829818374997558
+        },
+        {
+          "groups": 48000,
+          "phase": "build",
+          "seconds": 18.491777083330817
+        },
+        {
+          "groups": 49000,
+          "phase": "build",
+          "seconds": 19.150382749998244
+        },
+        {
+          "groups": 50000,
+          "phase": "build",
+          "seconds": 19.819563499997457
+        },
+        {
+          "groups": 51000,
+          "phase": "build",
+          "seconds": 20.516968541665847
+        },
+        {
+          "groups": 52000,
+          "phase": "build",
+          "seconds": 21.223720499998308
+        },
+        {
+          "groups": 53000,
+          "phase": "build",
+          "seconds": 21.922604666666302
+        },
+        {
+          "groups": 54000,
+          "phase": "build",
+          "seconds": 22.648635416666366
+        },
+        {
+          "groups": 55000,
+          "phase": "build",
+          "seconds": 23.384171874997264
+        },
+        {
+          "groups": 56000,
+          "phase": "build",
+          "seconds": 24.119909499997448
+        },
+        {
+          "groups": 57000,
+          "phase": "build",
+          "seconds": 24.87627533333216
+        },
+        {
+          "groups": 58000,
+          "phase": "build",
+          "seconds": 25.625762958330597
+        },
+        {
+          "groups": 59000,
+          "phase": "build",
+          "seconds": 26.403548333331855
+        },
+        {
+          "groups": 60000,
+          "phase": "build",
+          "seconds": 27.173543208333285
+        },
+        {
+          "groups": 61000,
+          "phase": "build",
+          "seconds": 27.98489358333245
+        },
+        {
+          "groups": 62000,
+          "phase": "build",
+          "seconds": 28.800333833332843
+        },
+        {
+          "groups": 63000,
+          "phase": "build",
+          "seconds": 29.612167458330077
+        },
+        {
+          "groups": 64000,
+          "phase": "build",
+          "seconds": 30.44357666666474
+        },
+        {
+          "groups": 65000,
+          "phase": "build",
+          "seconds": 31.281852249998337
+        },
+        {
+          "groups": 66000,
+          "phase": "build",
+          "seconds": 32.1355094999999
+        },
+        {
+          "groups": 67000,
+          "phase": "build",
+          "seconds": 33.015856999998505
+        },
+        {
+          "groups": 68000,
+          "phase": "build",
+          "seconds": 33.90590324999721
+        },
+        {
+          "groups": 69000,
+          "phase": "build",
+          "seconds": 34.789615999998205
+        },
+        {
+          "groups": 70000,
+          "phase": "build",
+          "seconds": 35.691689041665086
+        },
+        {
+          "groups": 71000,
+          "phase": "build",
+          "seconds": 36.60016433333294
+        },
+        {
+          "groups": 72000,
+          "phase": "build",
+          "seconds": 37.51708766666343
+        },
+        {
+          "groups": 73000,
+          "phase": "build",
+          "seconds": 38.453150333330996
+        },
+        {
+          "groups": 74000,
+          "phase": "build",
+          "seconds": 39.379247208333254
+        },
+        {
+          "groups": 75000,
+          "phase": "build",
+          "seconds": 40.323473833330354
+        },
+        {
+          "groups": 76000,
+          "phase": "build",
+          "seconds": 41.285460791663354
+        },
+        {
+          "groups": 77000,
+          "phase": "build",
+          "seconds": 42.24589329166338
+        },
+        {
+          "groups": 78000,
+          "phase": "build",
+          "seconds": 43.22845349999989
+        },
+        {
+          "groups": 79000,
+          "phase": "build",
+          "seconds": 44.21276870833026
+        },
+        {
+          "groups": 80000,
+          "phase": "build",
+          "seconds": 45.22244837499966
+        },
+        {
+          "groups": 81000,
+          "phase": "build",
+          "seconds": 46.22092470833013
+        },
+        {
+          "groups": 82000,
+          "phase": "build",
+          "seconds": 47.24465799999962
+        },
+        {
+          "groups": 83000,
+          "phase": "build",
+          "seconds": 48.27791933332992
+        },
+        {
+          "groups": 84000,
+          "phase": "build",
+          "seconds": 49.330297916665586
+        },
+        {
+          "groups": 85000,
+          "phase": "build",
+          "seconds": 50.404901249999966
+        },
+        {
+          "groups": 86000,
+          "phase": "build",
+          "seconds": 51.46162308333078
+        },
+        {
+          "groups": 87000,
+          "phase": "build",
+          "seconds": 52.5506050833319
+        },
+        {
+          "groups": 88000,
+          "phase": "build",
+          "seconds": 53.65509299999758
+        },
+        {
+          "groups": 89000,
+          "phase": "build",
+          "seconds": 54.765310166665586
+        },
+        {
+          "groups": 90000,
+          "phase": "build",
+          "seconds": 55.88060366666468
+        },
+        {
+          "groups": 91000,
+          "phase": "build",
+          "seconds": 57.002697249998164
+        },
+        {
+          "groups": 92000,
+          "phase": "build",
+          "seconds": 58.151618208332366
+        },
+        {
+          "groups": 93000,
+          "phase": "build",
+          "seconds": 59.39317879166629
+        },
+        {
+          "groups": 94000,
+          "phase": "build",
+          "seconds": 60.60845416666416
+        },
+        {
+          "groups": 95000,
+          "phase": "build",
+          "seconds": 61.80955829166487
+        },
+        {
+          "groups": 96000,
+          "phase": "build",
+          "seconds": 62.99903445833115
+        },
+        {
+          "groups": 97000,
+          "phase": "build",
+          "seconds": 64.19708274999721
+        },
+        {
+          "groups": 98000,
+          "phase": "build",
+          "seconds": 65.39140358333316
+        },
+        {
+          "groups": 99000,
+          "phase": "build",
+          "seconds": 66.6118528333318
+        },
+        {
+          "groups": 100000,
+          "phase": "build",
+          "seconds": 67.83466724999744
+        },
+        {
+          "divergentBytes": 450808,
+          "divergentRecords": 1501,
+          "nearBytes": 33932,
+          "nearRecords": 101,
+          "phase": "distantRecovery"
+        },
+        {
+          "actions": 105050,
+          "branches": 100,
+          "checkpoints": 101,
+          "encodedBytes": 29826289,
+          "footprintBytes": 60235944,
+          "groups": 100000,
+          "kind": "large",
+          "phase": "fixtureComplete",
+          "seconds": 70.49548333333223,
+          "seed": 17
+        },
+        {
+          "count": 1000,
+          "footprintBytes": 58828360,
+          "milliseconds": {
+            "max": 13.153791667718906,
+            "p50": 0.22375000116880983,
+            "p95": 0.28391666637617163,
+            "p99": 0.934374998905696
+          },
+          "phase": "smallOperations"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T213810Z-large/fixture-1.jsonl"
+    },
+    {
+      "phase": "reopen-1-1",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-large-20260929-44110-1w0dhzv/run-1/History.sqlite"
+      ],
+      "elapsed_seconds": 0.3051210000012361,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 45550,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 1458176,
+      "peak_owned_bytes": 190341120,
+      "events": [
+        {
+          "availabilityMs": 9.069208332221024,
+          "firstPlanAdvertisedBytes": 29775,
+          "firstPlanBytes": 29775,
+          "firstPlanMs": 114.55941666645231,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 40.62500000145519,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T213810Z-large/reopen-1-1.jsonl"
+    },
+    {
+      "phase": "reopen-1-2",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-large-20260929-44110-1w0dhzv/run-1/History.sqlite"
+      ],
+      "elapsed_seconds": 0.3065370000003895,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 45560,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 4603904,
+      "peak_owned_bytes": 190345216,
+      "events": [
+        {
+          "availabilityMs": 9.955166668078164,
+          "firstPlanAdvertisedBytes": 29775,
+          "firstPlanBytes": 29775,
+          "firstPlanMs": 112.31550000229618,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 41.32454166756361,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T213810Z-large/reopen-1-2.jsonl"
+    },
+    {
+      "phase": "reopen-1-3",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-large-20260929-44110-1w0dhzv/run-1/History.sqlite"
+      ],
+      "elapsed_seconds": 0.307926999998017,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 45566,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 4603904,
+      "peak_owned_bytes": 190349312,
+      "events": [
+        {
+          "availabilityMs": 10.426875000121072,
+          "firstPlanAdvertisedBytes": 29775,
+          "firstPlanBytes": 29775,
+          "firstPlanMs": 114.12920833026874,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 41.811416664131684,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T213810Z-large/reopen-1-3.jsonl"
+    },
+    {
+      "phase": "reopen-1-4",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-large-20260929-44110-1w0dhzv/run-1/History.sqlite"
+      ],
+      "elapsed_seconds": 0.30613699999958044,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 45573,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 4702208,
+      "peak_owned_bytes": 190353408,
+      "events": [
+        {
+          "availabilityMs": 9.89145833227667,
+          "firstPlanAdvertisedBytes": 29775,
+          "firstPlanBytes": 29775,
+          "firstPlanMs": 113.95758333310368,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 40.735833332291804,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T213810Z-large/reopen-1-4.jsonl"
+    },
+    {
+      "phase": "reopen-1-5",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-large-20260929-44110-1w0dhzv/run-1/History.sqlite"
+      ],
+      "elapsed_seconds": 0.30229399999734596,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 45587,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 4718592,
+      "peak_owned_bytes": 190357504,
+      "events": [
+        {
+          "availabilityMs": 8.379208335099975,
+          "firstPlanAdvertisedBytes": 29775,
+          "firstPlanBytes": 29775,
+          "firstPlanMs": 118.64408333349274,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 36.864041667286074,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T213810Z-large/reopen-1-5.jsonl"
+    },
+    {
+      "phase": "reopen-1-6",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-large-20260929-44110-1w0dhzv/run-1/History.sqlite"
+      ],
+      "elapsed_seconds": 0.30510399999911897,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 45593,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 4636672,
+      "peak_owned_bytes": 190361600,
+      "events": [
+        {
+          "availabilityMs": 9.41479166795034,
+          "firstPlanAdvertisedBytes": 29775,
+          "firstPlanBytes": 29775,
+          "firstPlanMs": 113.92391666595358,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 41.05291666564881,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T213810Z-large/reopen-1-6.jsonl"
+    },
+    {
+      "phase": "reopen-1-7",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-large-20260929-44110-1w0dhzv/run-1/History.sqlite"
+      ],
+      "elapsed_seconds": 0.29983200000060606,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 45599,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 4685824,
+      "peak_owned_bytes": 190365696,
+      "events": [
+        {
+          "availabilityMs": 7.703541665250668,
+          "firstPlanAdvertisedBytes": 29775,
+          "firstPlanBytes": 29775,
+          "firstPlanMs": 114.37529166505556,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 40.96645833487855,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T213810Z-large/reopen-1-7.jsonl"
+    },
+    {
+      "phase": "reopen-1-8",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-large-20260929-44110-1w0dhzv/run-1/History.sqlite"
+      ],
+      "elapsed_seconds": 0.3018439999978,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 45605,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 4702208,
+      "peak_owned_bytes": 190369792,
+      "events": [
+        {
+          "availabilityMs": 8.144041665218538,
+          "firstPlanAdvertisedBytes": 29775,
+          "firstPlanBytes": 29775,
+          "firstPlanMs": 115.09025000123074,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 40.1365416655608,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T213810Z-large/reopen-1-8.jsonl"
+    },
+    {
+      "phase": "reopen-1-9",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-large-20260929-44110-1w0dhzv/run-1/History.sqlite"
+      ],
+      "elapsed_seconds": 0.3026110000027984,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 45615,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 4718592,
+      "peak_owned_bytes": 190373888,
+      "events": [
+        {
+          "availabilityMs": 6.790333332901355,
+          "firstPlanAdvertisedBytes": 29775,
+          "firstPlanBytes": 29775,
+          "firstPlanMs": 114.10879166578525,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 39.57154166710097,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T213810Z-large/reopen-1-9.jsonl"
+    },
+    {
+      "phase": "reopen-1-10",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-large-20260929-44110-1w0dhzv/run-1/History.sqlite"
+      ],
+      "elapsed_seconds": 0.30543500000203494,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 45621,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 4653056,
+      "peak_owned_bytes": 190377984,
+      "events": [
+        {
+          "availabilityMs": 9.224749999702908,
+          "firstPlanAdvertisedBytes": 29775,
+          "firstPlanBytes": 29775,
+          "firstPlanMs": 114.26908333305619,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 41.13604166923324,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T213810Z-large/reopen-1-10.jsonl"
+    },
+    {
+      "phase": "consolidate-1",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "consolidate",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-large-20260929-44110-1w0dhzv/run-1/History.sqlite"
+      ],
+      "elapsed_seconds": 8.555758000002243,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 45627,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 146997248,
+      "peak_owned_bytes": 195805184,
+      "events": [
+        {
+          "divergentRecords": 0,
+          "earlyRecords": 0,
+          "footprintBytes": 9748184,
+          "phase": "consolidation",
+          "removed": 98498,
+          "retained": 2503,
+          "seconds": 8.311408125002345,
+          "selectedAction": "CDE7A2A8-4D82-4EEB-A94A-9D5FCCE91480",
+          "unmet": true
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T213810Z-large/consolidate-1.jsonl"
+    },
+    {
+      "phase": "fixture-2",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "fixture",
+        "large",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-large-20260929-44110-1w0dhzv/run-2/History.sqlite",
+        "29"
+      ],
+      "elapsed_seconds": 71.46191299999919,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 45789,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 1016266752,
+      "peak_owned_bytes": 194633728,
+      "events": [
+        {
+          "groups": 8000,
+          "phase": "build",
+          "seconds": 1.3614313333309838
+        },
+        {
+          "groups": 9000,
+          "phase": "build",
+          "seconds": 1.56630637499984
+        },
+        {
+          "groups": 10000,
+          "phase": "build",
+          "seconds": 1.7764893749990733
+        },
+        {
+          "groups": 11000,
+          "phase": "build",
+          "seconds": 1.9917423333317856
+        },
+        {
+          "groups": 12000,
+          "phase": "build",
+          "seconds": 2.213653874998272
+        },
+        {
+          "groups": 13000,
+          "phase": "build",
+          "seconds": 2.4394786249977187
+        },
+        {
+          "groups": 14000,
+          "phase": "build",
+          "seconds": 2.674332750000758
+        },
+        {
+          "groups": 15000,
+          "phase": "build",
+          "seconds": 2.9195814583326865
+        },
+        {
+          "groups": 16000,
+          "phase": "build",
+          "seconds": 3.1663014583318727
+        },
+        {
+          "groups": 17000,
+          "phase": "build",
+          "seconds": 3.418131499998708
+        },
+        {
+          "groups": 18000,
+          "phase": "build",
+          "seconds": 3.679356208333047
+        },
+        {
+          "groups": 19000,
+          "phase": "build",
+          "seconds": 3.9513016666678595
+        },
+        {
+          "groups": 20000,
+          "phase": "build",
+          "seconds": 4.224378250000882
+        },
+        {
+          "groups": 21000,
+          "phase": "build",
+          "seconds": 4.543388791666075
+        },
+        {
+          "groups": 22000,
+          "phase": "build",
+          "seconds": 4.930157124999823
+        },
+        {
+          "groups": 23000,
+          "phase": "build",
+          "seconds": 5.317752291666693
+        },
+        {
+          "groups": 24000,
+          "phase": "build",
+          "seconds": 5.71764979166619
+        },
+        {
+          "groups": 25000,
+          "phase": "build",
+          "seconds": 6.131080833332817
+        },
+        {
+          "groups": 26000,
+          "phase": "build",
+          "seconds": 6.543220666666457
+        },
+        {
+          "groups": 27000,
+          "phase": "build",
+          "seconds": 6.970515041666658
+        },
+        {
+          "groups": 28000,
+          "phase": "build",
+          "seconds": 7.401244958331517
+        },
+        {
+          "groups": 29000,
+          "phase": "build",
+          "seconds": 7.854724541666656
+        },
+        {
+          "groups": 30000,
+          "phase": "build",
+          "seconds": 8.30360437499985
+        },
+        {
+          "groups": 31000,
+          "phase": "build",
+          "seconds": 8.766146458332514
+        },
+        {
+          "groups": 32000,
+          "phase": "build",
+          "seconds": 9.246550666666735
+        },
+        {
+          "groups": 33000,
+          "phase": "build",
+          "seconds": 9.796075624999503
+        },
+        {
+          "groups": 34000,
+          "phase": "build",
+          "seconds": 10.310553166666068
+        },
+        {
+          "groups": 35000,
+          "phase": "build",
+          "seconds": 10.827246624998224
+        },
+        {
+          "groups": 36000,
+          "phase": "build",
+          "seconds": 11.361002333331271
+        },
+        {
+          "groups": 37000,
+          "phase": "build",
+          "seconds": 11.890091333334567
+        },
+        {
+          "groups": 38000,
+          "phase": "build",
+          "seconds": 12.430924208332726
+        },
+        {
+          "groups": 39000,
+          "phase": "build",
+          "seconds": 12.979634958333918
+        },
+        {
+          "groups": 40000,
+          "phase": "build",
+          "seconds": 13.539225583332154
+        },
+        {
+          "groups": 41000,
+          "phase": "build",
+          "seconds": 14.109508833331347
+        },
+        {
+          "groups": 42000,
+          "phase": "build",
+          "seconds": 14.708508833333326
+        },
+        {
+          "groups": 43000,
+          "phase": "build",
+          "seconds": 15.32621837500119
+        },
+        {
+          "groups": 44000,
+          "phase": "build",
+          "seconds": 15.936502208332968
+        },
+        {
+          "groups": 45000,
+          "phase": "build",
+          "seconds": 16.58033224999963
+        },
+        {
+          "groups": 46000,
+          "phase": "build",
+          "seconds": 17.201102083334263
+        },
+        {
+          "groups": 47000,
+          "phase": "build",
+          "seconds": 17.84798629166471
+        },
+        {
+          "groups": 48000,
+          "phase": "build",
+          "seconds": 18.49410641666691
+        },
+        {
+          "groups": 49000,
+          "phase": "build",
+          "seconds": 19.173505666665733
+        },
+        {
+          "groups": 50000,
+          "phase": "build",
+          "seconds": 19.84881033333295
+        },
+        {
+          "groups": 51000,
+          "phase": "build",
+          "seconds": 20.54488704166579
+        },
+        {
+          "groups": 52000,
+          "phase": "build",
+          "seconds": 21.242412999999942
+        },
+        {
+          "groups": 53000,
+          "phase": "build",
+          "seconds": 21.941854416665592
+        },
+        {
+          "groups": 54000,
+          "phase": "build",
+          "seconds": 22.669329958331218
+        },
+        {
+          "groups": 55000,
+          "phase": "build",
+          "seconds": 23.398914749999676
+        },
+        {
+          "groups": 56000,
+          "phase": "build",
+          "seconds": 24.144429666666838
+        },
+        {
+          "groups": 57000,
+          "phase": "build",
+          "seconds": 24.90623395833245
+        },
+        {
+          "groups": 58000,
+          "phase": "build",
+          "seconds": 25.68082133333155
+        },
+        {
+          "groups": 59000,
+          "phase": "build",
+          "seconds": 26.471685083331977
+        },
+        {
+          "groups": 60000,
+          "phase": "build",
+          "seconds": 27.26456529166535
+        },
+        {
+          "groups": 61000,
+          "phase": "build",
+          "seconds": 28.06334958333173
+        },
+        {
+          "groups": 62000,
+          "phase": "build",
+          "seconds": 28.862937999998394
+        },
+        {
+          "groups": 63000,
+          "phase": "build",
+          "seconds": 29.696126124999864
+        },
+        {
+          "groups": 64000,
+          "phase": "build",
+          "seconds": 30.524289000000863
+        },
+        {
+          "groups": 65000,
+          "phase": "build",
+          "seconds": 31.387609791665454
+        },
+        {
+          "groups": 66000,
+          "phase": "build",
+          "seconds": 32.22731866666436
+        },
+        {
+          "groups": 67000,
+          "phase": "build",
+          "seconds": 33.09451562499817
+        },
+        {
+          "groups": 68000,
+          "phase": "build",
+          "seconds": 33.96365695833447
+        },
+        {
+          "groups": 69000,
+          "phase": "build",
+          "seconds": 34.864026499999454
+        },
+        {
+          "groups": 70000,
+          "phase": "build",
+          "seconds": 35.760154666666494
+        },
+        {
+          "groups": 71000,
+          "phase": "build",
+          "seconds": 36.702626874997804
+        },
+        {
+          "groups": 72000,
+          "phase": "build",
+          "seconds": 37.62700558333381
+        },
+        {
+          "groups": 73000,
+          "phase": "build",
+          "seconds": 38.553490958332986
+        },
+        {
+          "groups": 74000,
+          "phase": "build",
+          "seconds": 39.509575208332535
+        },
+        {
+          "groups": 75000,
+          "phase": "build",
+          "seconds": 40.48980266666695
+        },
+        {
+          "groups": 76000,
+          "phase": "build",
+          "seconds": 41.449287458333856
+        },
+        {
+          "groups": 77000,
+          "phase": "build",
+          "seconds": 42.429155166664714
+        },
+        {
+          "groups": 78000,
+          "phase": "build",
+          "seconds": 43.44670100000076
+        },
+        {
+          "groups": 79000,
+          "phase": "build",
+          "seconds": 44.45512274999783
+        },
+        {
+          "groups": 80000,
+          "phase": "build",
+          "seconds": 45.47577620833181
+        },
+        {
+          "groups": 81000,
+          "phase": "build",
+          "seconds": 46.49237987499873
+        },
+        {
+          "groups": 82000,
+          "phase": "build",
+          "seconds": 47.52406387500014
+        },
+        {
+          "groups": 83000,
+          "phase": "build",
+          "seconds": 48.55007824999848
+        },
+        {
+          "groups": 84000,
+          "phase": "build",
+          "seconds": 49.59997483333427
+        },
+        {
+          "groups": 85000,
+          "phase": "build",
+          "seconds": 50.66107541666497
+        },
+        {
+          "groups": 86000,
+          "phase": "build",
+          "seconds": 51.75782954166789
+        },
+        {
+          "groups": 87000,
+          "phase": "build",
+          "seconds": 52.8403547083326
+        },
+        {
+          "groups": 88000,
+          "phase": "build",
+          "seconds": 53.921050166667555
+        },
+        {
+          "groups": 89000,
+          "phase": "build",
+          "seconds": 55.04483729166532
+        },
+        {
+          "groups": 90000,
+          "phase": "build",
+          "seconds": 56.17425124999863
+        },
+        {
+          "groups": 91000,
+          "phase": "build",
+          "seconds": 57.33340904166471
+        },
+        {
+          "groups": 92000,
+          "phase": "build",
+          "seconds": 58.48929387499811
+        },
+        {
+          "groups": 93000,
+          "phase": "build",
+          "seconds": 59.66240408333397
+        },
+        {
+          "groups": 94000,
+          "phase": "build",
+          "seconds": 60.830237541667884
+        },
+        {
+          "groups": 95000,
+          "phase": "build",
+          "seconds": 61.98958583333297
+        },
+        {
+          "groups": 96000,
+          "phase": "build",
+          "seconds": 63.17768908333164
+        },
+        {
+          "groups": 97000,
+          "phase": "build",
+          "seconds": 64.38476437499776
+        },
+        {
+          "groups": 98000,
+          "phase": "build",
+          "seconds": 65.58758112500072
+        },
+        {
+          "groups": 99000,
+          "phase": "build",
+          "seconds": 66.885550541665
+        },
+        {
+          "groups": 100000,
+          "phase": "build",
+          "seconds": 68.1091522083334
+        },
+        {
+          "divergentBytes": 450808,
+          "divergentRecords": 1501,
+          "nearBytes": 33932,
+          "nearRecords": 101,
+          "phase": "distantRecovery"
+        },
+        {
+          "actions": 105050,
+          "branches": 100,
+          "checkpoints": 101,
+          "encodedBytes": 29826289,
+          "footprintBytes": 57172480,
+          "groups": 100000,
+          "kind": "large",
+          "phase": "fixtureComplete",
+          "seconds": 70.8379796666668,
+          "seed": 29
+        },
+        {
+          "count": 1000,
+          "footprintBytes": 59779384,
+          "milliseconds": {
+            "max": 7.896750001236796,
+            "p50": 0.23608333140145987,
+            "p95": 0.3047499994863756,
+            "p99": 0.7440833323926199
+          },
+          "phase": "smallOperations"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T213810Z-large/fixture-2.jsonl"
+    },
+    {
+      "phase": "reopen-2-1",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-large-20260929-44110-1w0dhzv/run-2/History.sqlite"
+      ],
+      "elapsed_seconds": 0.30984499999976833,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 47174,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 2949120,
+      "peak_owned_bytes": 190443520,
+      "events": [
+        {
+          "availabilityMs": 9.212000000843545,
+          "firstPlanAdvertisedBytes": 29775,
+          "firstPlanBytes": 29775,
+          "firstPlanMs": 117.62045833529555,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 39.73799999948824,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T213810Z-large/reopen-2-1.jsonl"
+    },
+    {
+      "phase": "reopen-2-2",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-large-20260929-44110-1w0dhzv/run-2/History.sqlite"
+      ],
+      "elapsed_seconds": 0.30545599999823025,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 47180,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 4603904,
+      "peak_owned_bytes": 190447616,
+      "events": [
+        {
+          "availabilityMs": 9.94837499820278,
+          "firstPlanAdvertisedBytes": 29775,
+          "firstPlanBytes": 29775,
+          "firstPlanMs": 111.74716666573659,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 41.31908333511092,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T213810Z-large/reopen-2-2.jsonl"
+    },
+    {
+      "phase": "reopen-2-3",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-large-20260929-44110-1w0dhzv/run-2/History.sqlite"
+      ],
+      "elapsed_seconds": 0.3051070000001346,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 47190,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 4603904,
+      "peak_owned_bytes": 190451712,
+      "events": [
+        {
+          "availabilityMs": 9.625624999898719,
+          "firstPlanAdvertisedBytes": 29775,
+          "firstPlanBytes": 29775,
+          "firstPlanMs": 111.8655416648835,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 41.10616666730493,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T213810Z-large/reopen-2-3.jsonl"
+    },
+    {
+      "phase": "reopen-2-4",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-large-20260929-44110-1w0dhzv/run-2/History.sqlite"
+      ],
+      "elapsed_seconds": 0.30677099999957136,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 47196,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 4521984,
+      "peak_owned_bytes": 190455808,
+      "events": [
+        {
+          "availabilityMs": 10.57612500153482,
+          "firstPlanAdvertisedBytes": 29775,
+          "firstPlanBytes": 29775,
+          "firstPlanMs": 113.40275000111433,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 42.41674999866518,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T213810Z-large/reopen-2-4.jsonl"
+    },
+    {
+      "phase": "reopen-2-5",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-large-20260929-44110-1w0dhzv/run-2/History.sqlite"
+      ],
+      "elapsed_seconds": 0.30759799999941606,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 47202,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 4521984,
+      "peak_owned_bytes": 190459904,
+      "events": [
+        {
+          "availabilityMs": 10.662083335773787,
+          "firstPlanAdvertisedBytes": 29775,
+          "firstPlanBytes": 29775,
+          "firstPlanMs": 112.1131666659494,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 41.67270833568182,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T213810Z-large/reopen-2-5.jsonl"
+    },
+    {
+      "phase": "reopen-2-6",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-large-20260929-44110-1w0dhzv/run-2/History.sqlite"
+      ],
+      "elapsed_seconds": 0.30676799999855575,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 47208,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 4603904,
+      "peak_owned_bytes": 190464000,
+      "events": [
+        {
+          "availabilityMs": 10.932583336398238,
+          "firstPlanAdvertisedBytes": 29775,
+          "firstPlanBytes": 29775,
+          "firstPlanMs": 112.30975000216858,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 42.825083331990754,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T213810Z-large/reopen-2-6.jsonl"
+    },
+    {
+      "phase": "reopen-2-7",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-large-20260929-44110-1w0dhzv/run-2/History.sqlite"
+      ],
+      "elapsed_seconds": 0.30451300000277115,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 47214,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 4325376,
+      "peak_owned_bytes": 190468096,
+      "events": [
+        {
+          "availabilityMs": 9.806291665881872,
+          "firstPlanAdvertisedBytes": 29775,
+          "firstPlanBytes": 29775,
+          "firstPlanMs": 113.22749999817461,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 40.96429166747839,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T213810Z-large/reopen-2-7.jsonl"
+    },
+    {
+      "phase": "reopen-2-8",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-large-20260929-44110-1w0dhzv/run-2/History.sqlite"
+      ],
+      "elapsed_seconds": 0.3041990000019723,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 47220,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 4603904,
+      "peak_owned_bytes": 190472192,
+      "events": [
+        {
+          "availabilityMs": 10.2574166667182,
+          "firstPlanAdvertisedBytes": 29775,
+          "firstPlanBytes": 29775,
+          "firstPlanMs": 114.25000000235741,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 39.72312500263797,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T213810Z-large/reopen-2-8.jsonl"
+    },
+    {
+      "phase": "reopen-2-9",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-large-20260929-44110-1w0dhzv/run-2/History.sqlite"
+      ],
+      "elapsed_seconds": 0.3068359999997483,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 47226,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 4587520,
+      "peak_owned_bytes": 190476288,
+      "events": [
+        {
+          "availabilityMs": 10.644125002727378,
+          "firstPlanAdvertisedBytes": 29775,
+          "firstPlanBytes": 29775,
+          "firstPlanMs": 113.25929166559945,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 41.864875001920154,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T213810Z-large/reopen-2-9.jsonl"
+    },
+    {
+      "phase": "reopen-2-10",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-large-20260929-44110-1w0dhzv/run-2/History.sqlite"
+      ],
+      "elapsed_seconds": 0.3035630000013043,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 47236,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 4636672,
+      "peak_owned_bytes": 190480384,
+      "events": [
+        {
+          "availabilityMs": 9.627750001527602,
+          "firstPlanAdvertisedBytes": 29775,
+          "firstPlanBytes": 29775,
+          "firstPlanMs": 114.29866666730959,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 39.848749998782296,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T213810Z-large/reopen-2-10.jsonl"
+    },
+    {
+      "phase": "consolidate-2",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "consolidate",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-large-20260929-44110-1w0dhzv/run-2/History.sqlite"
+      ],
+      "elapsed_seconds": 8.561470000000554,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 47242,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 145850368,
+      "peak_owned_bytes": 195895296,
+      "events": [
+        {
+          "divergentRecords": 0,
+          "earlyRecords": 0,
+          "footprintBytes": 9813960,
+          "phase": "consolidation",
+          "removed": 98498,
+          "retained": 2503,
+          "seconds": 8.37203370833231,
+          "selectedAction": "496D8ECB-5E78-4DE3-9D0D-4C60C27BA689",
+          "unmet": true
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T213810Z-large/consolidate-2.jsonl"
+    },
+    {
+      "phase": "fixture-3",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "fixture",
+        "large",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-large-20260929-44110-1w0dhzv/run-3/History.sqlite",
+        "43"
+      ],
+      "elapsed_seconds": 71.29153900000165,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 47413,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 1079984128,
+      "peak_owned_bytes": 192610304,
+      "events": [
+        {
+          "groups": 8000,
+          "phase": "build",
+          "seconds": 1.3542325000016717
+        },
+        {
+          "groups": 9000,
+          "phase": "build",
+          "seconds": 1.558463124998525
+        },
+        {
+          "groups": 10000,
+          "phase": "build",
+          "seconds": 1.7675040416652337
+        },
+        {
+          "groups": 11000,
+          "phase": "build",
+          "seconds": 1.982245208331733
+        },
+        {
+          "groups": 12000,
+          "phase": "build",
+          "seconds": 2.203577166666946
+        },
+        {
+          "groups": 13000,
+          "phase": "build",
+          "seconds": 2.43384904166669
+        },
+        {
+          "groups": 14000,
+          "phase": "build",
+          "seconds": 2.667480958334636
+        },
+        {
+          "groups": 15000,
+          "phase": "build",
+          "seconds": 2.9143442916683853
+        },
+        {
+          "groups": 16000,
+          "phase": "build",
+          "seconds": 3.168523249998543
+        },
+        {
+          "groups": 17000,
+          "phase": "build",
+          "seconds": 3.4294902916662977
+        },
+        {
+          "groups": 18000,
+          "phase": "build",
+          "seconds": 3.692725958331721
+        },
+        {
+          "groups": 19000,
+          "phase": "build",
+          "seconds": 3.9669188750012836
+        },
+        {
+          "groups": 20000,
+          "phase": "build",
+          "seconds": 4.239875791667146
+        },
+        {
+          "groups": 21000,
+          "phase": "build",
+          "seconds": 4.533179291665874
+        },
+        {
+          "groups": 22000,
+          "phase": "build",
+          "seconds": 4.901860708334425
+        },
+        {
+          "groups": 23000,
+          "phase": "build",
+          "seconds": 5.275061874999665
+        },
+        {
+          "groups": 24000,
+          "phase": "build",
+          "seconds": 5.659266333332198
+        },
+        {
+          "groups": 25000,
+          "phase": "build",
+          "seconds": 6.065281291666906
+        },
+        {
+          "groups": 26000,
+          "phase": "build",
+          "seconds": 6.475136583332642
+        },
+        {
+          "groups": 27000,
+          "phase": "build",
+          "seconds": 6.90617737499997
+        },
+        {
+          "groups": 28000,
+          "phase": "build",
+          "seconds": 7.355653791666555
+        },
+        {
+          "groups": 29000,
+          "phase": "build",
+          "seconds": 7.804112624999107
+        },
+        {
+          "groups": 30000,
+          "phase": "build",
+          "seconds": 8.270776458331966
+        },
+        {
+          "groups": 31000,
+          "phase": "build",
+          "seconds": 8.727486833333387
+        },
+        {
+          "groups": 32000,
+          "phase": "build",
+          "seconds": 9.201334708333889
+        },
+        {
+          "groups": 33000,
+          "phase": "build",
+          "seconds": 9.681245083334943
+        },
+        {
+          "groups": 34000,
+          "phase": "build",
+          "seconds": 10.177051499998925
+        },
+        {
+          "groups": 35000,
+          "phase": "build",
+          "seconds": 10.688197083334671
+        },
+        {
+          "groups": 36000,
+          "phase": "build",
+          "seconds": 11.208680666666623
+        },
+        {
+          "groups": 37000,
+          "phase": "build",
+          "seconds": 11.75738308333166
+        },
+        {
+          "groups": 38000,
+          "phase": "build",
+          "seconds": 12.305230875001143
+        },
+        {
+          "groups": 39000,
+          "phase": "build",
+          "seconds": 12.877759750001132
+        },
+        {
+          "groups": 40000,
+          "phase": "build",
+          "seconds": 13.44786862500041
+        },
+        {
+          "groups": 41000,
+          "phase": "build",
+          "seconds": 14.018382291666057
+        },
+        {
+          "groups": 42000,
+          "phase": "build",
+          "seconds": 14.613525583332375
+        },
+        {
+          "groups": 43000,
+          "phase": "build",
+          "seconds": 15.216785458334925
+        },
+        {
+          "groups": 44000,
+          "phase": "build",
+          "seconds": 15.851142208332021
+        },
+        {
+          "groups": 45000,
+          "phase": "build",
+          "seconds": 16.56648249999853
+        },
+        {
+          "groups": 46000,
+          "phase": "build",
+          "seconds": 17.28745383333444
+        },
+        {
+          "groups": 47000,
+          "phase": "build",
+          "seconds": 17.939065624999785
+        },
+        {
+          "groups": 48000,
+          "phase": "build",
+          "seconds": 18.60526949999985
+        },
+        {
+          "groups": 49000,
+          "phase": "build",
+          "seconds": 19.268669666667847
+        },
+        {
+          "groups": 50000,
+          "phase": "build",
+          "seconds": 19.94488958333386
+        },
+        {
+          "groups": 51000,
+          "phase": "build",
+          "seconds": 20.631996041665843
+        },
+        {
+          "groups": 52000,
+          "phase": "build",
+          "seconds": 21.33024908333391
+        },
+        {
+          "groups": 53000,
+          "phase": "build",
+          "seconds": 22.05950541666607
+        },
+        {
+          "groups": 54000,
+          "phase": "build",
+          "seconds": 22.794433416667744
+        },
+        {
+          "groups": 55000,
+          "phase": "build",
+          "seconds": 23.529709458332945
+        },
+        {
+          "groups": 56000,
+          "phase": "build",
+          "seconds": 24.261558833331947
+        },
+        {
+          "groups": 57000,
+          "phase": "build",
+          "seconds": 25.017478041667346
+        },
+        {
+          "groups": 58000,
+          "phase": "build",
+          "seconds": 25.772957749999478
+        },
+        {
+          "groups": 59000,
+          "phase": "build",
+          "seconds": 26.547174833332974
+        },
+        {
+          "groups": 60000,
+          "phase": "build",
+          "seconds": 27.40349091666576
+        },
+        {
+          "groups": 61000,
+          "phase": "build",
+          "seconds": 28.250537041665666
+        },
+        {
+          "groups": 62000,
+          "phase": "build",
+          "seconds": 29.09044995833392
+        },
+        {
+          "groups": 63000,
+          "phase": "build",
+          "seconds": 29.937012708334805
+        },
+        {
+          "groups": 64000,
+          "phase": "build",
+          "seconds": 30.755907208334975
+        },
+        {
+          "groups": 65000,
+          "phase": "build",
+          "seconds": 31.59586283333192
+        },
+        {
+          "groups": 66000,
+          "phase": "build",
+          "seconds": 32.455178833333775
+        },
+        {
+          "groups": 67000,
+          "phase": "build",
+          "seconds": 33.33219437500156
+        },
+        {
+          "groups": 68000,
+          "phase": "build",
+          "seconds": 34.21095312499892
+        },
+        {
+          "groups": 69000,
+          "phase": "build",
+          "seconds": 35.087041208334995
+        },
+        {
+          "groups": 70000,
+          "phase": "build",
+          "seconds": 35.98431354166678
+        },
+        {
+          "groups": 71000,
+          "phase": "build",
+          "seconds": 36.906798791667825
+        },
+        {
+          "groups": 72000,
+          "phase": "build",
+          "seconds": 37.821173208332766
+        },
+        {
+          "groups": 73000,
+          "phase": "build",
+          "seconds": 38.761836458332255
+        },
+        {
+          "groups": 74000,
+          "phase": "build",
+          "seconds": 39.69611616666589
+        },
+        {
+          "groups": 75000,
+          "phase": "build",
+          "seconds": 40.66858145833248
+        },
+        {
+          "groups": 76000,
+          "phase": "build",
+          "seconds": 41.62792291666847
+        },
+        {
+          "groups": 77000,
+          "phase": "build",
+          "seconds": 42.615627666666114
+        },
+        {
+          "groups": 78000,
+          "phase": "build",
+          "seconds": 43.595874291666405
+        },
+        {
+          "groups": 79000,
+          "phase": "build",
+          "seconds": 44.606593708333094
+        },
+        {
+          "groups": 80000,
+          "phase": "build",
+          "seconds": 45.60670841666797
+        },
+        {
+          "groups": 81000,
+          "phase": "build",
+          "seconds": 46.62363708333214
+        },
+        {
+          "groups": 82000,
+          "phase": "build",
+          "seconds": 47.65151020833218
+        },
+        {
+          "groups": 83000,
+          "phase": "build",
+          "seconds": 48.721353375000035
+        },
+        {
+          "groups": 84000,
+          "phase": "build",
+          "seconds": 49.763784791666694
+        },
+        {
+          "groups": 85000,
+          "phase": "build",
+          "seconds": 50.8345679999984
+        },
+        {
+          "groups": 86000,
+          "phase": "build",
+          "seconds": 51.91559749999942
+        },
+        {
+          "groups": 87000,
+          "phase": "build",
+          "seconds": 53.00689570833492
+        },
+        {
+          "groups": 88000,
+          "phase": "build",
+          "seconds": 54.11542349999945
+        },
+        {
+          "groups": 89000,
+          "phase": "build",
+          "seconds": 55.197505791667936
+        },
+        {
+          "groups": 90000,
+          "phase": "build",
+          "seconds": 56.321909208334546
+        },
+        {
+          "groups": 91000,
+          "phase": "build",
+          "seconds": 57.45489558333429
+        },
+        {
+          "groups": 92000,
+          "phase": "build",
+          "seconds": 58.6014674166654
+        },
+        {
+          "groups": 93000,
+          "phase": "build",
+          "seconds": 59.7470075416677
+        },
+        {
+          "groups": 94000,
+          "phase": "build",
+          "seconds": 60.91723179166729
+        },
+        {
+          "groups": 95000,
+          "phase": "build",
+          "seconds": 62.0938644166672
+        },
+        {
+          "groups": 96000,
+          "phase": "build",
+          "seconds": 63.28221783333356
+        },
+        {
+          "groups": 97000,
+          "phase": "build",
+          "seconds": 64.47956570833412
+        },
+        {
+          "groups": 98000,
+          "phase": "build",
+          "seconds": 65.65822383333216
+        },
+        {
+          "groups": 99000,
+          "phase": "build",
+          "seconds": 66.86865412499901
+        },
+        {
+          "groups": 100000,
+          "phase": "build",
+          "seconds": 68.11810374999914
+        },
+        {
+          "divergentBytes": 450808,
+          "divergentRecords": 1501,
+          "nearBytes": 33932,
+          "nearRecords": 101,
+          "phase": "distantRecovery"
+        },
+        {
+          "actions": 105050,
+          "branches": 100,
+          "checkpoints": 101,
+          "encodedBytes": 29826289,
+          "footprintBytes": 57758336,
+          "groups": 100000,
+          "kind": "large",
+          "phase": "fixtureComplete",
+          "seconds": 70.79087408333362,
+          "seed": 43
+        },
+        {
+          "count": 1000,
+          "footprintBytes": 60315296,
+          "milliseconds": {
+            "max": 8.196333335945383,
+            "p50": 0.23587499890709296,
+            "p95": 0.2771666659100447,
+            "p99": 0.6007500014675315
+          },
+          "phase": "smallOperations"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T213810Z-large/fixture-3.jsonl"
+    },
+    {
+      "phase": "reopen-3-1",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-large-20260929-44110-1w0dhzv/run-3/History.sqlite"
+      ],
+      "elapsed_seconds": 0.3095240000002377,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 48792,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 2031616,
+      "peak_owned_bytes": 190517248,
+      "events": [
+        {
+          "availabilityMs": 10.926208335149568,
+          "firstPlanAdvertisedBytes": 29775,
+          "firstPlanBytes": 29775,
+          "firstPlanMs": 113.09487499966053,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 43.86204166439711,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T213810Z-large/reopen-3-1.jsonl"
+    },
+    {
+      "phase": "reopen-3-2",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-large-20260929-44110-1w0dhzv/run-3/History.sqlite"
+      ],
+      "elapsed_seconds": 0.3077320000011241,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 48798,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 4702208,
+      "peak_owned_bytes": 190521344,
+      "events": [
+        {
+          "availabilityMs": 10.574374999123393,
+          "firstPlanAdvertisedBytes": 29775,
+          "firstPlanBytes": 29775,
+          "firstPlanMs": 114.96437499954482,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 41.22687500057509,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T213810Z-large/reopen-3-2.jsonl"
+    },
+    {
+      "phase": "reopen-3-3",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-large-20260929-44110-1w0dhzv/run-3/History.sqlite"
+      ],
+      "elapsed_seconds": 0.30927299999893876,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 48804,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 4603904,
+      "peak_owned_bytes": 190525440,
+      "events": [
+        {
+          "availabilityMs": 10.034041668404825,
+          "firstPlanAdvertisedBytes": 29775,
+          "firstPlanBytes": 29775,
+          "firstPlanMs": 115.51395833157585,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 42.068499999004416,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T213810Z-large/reopen-3-3.jsonl"
+    },
+    {
+      "phase": "reopen-3-4",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-large-20260929-44110-1w0dhzv/run-3/History.sqlite"
+      ],
+      "elapsed_seconds": 0.2990239999999176,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 48810,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 4603904,
+      "peak_owned_bytes": 190529536,
+      "events": [
+        {
+          "availabilityMs": 8.789874998910818,
+          "firstPlanAdvertisedBytes": 29775,
+          "firstPlanBytes": 29775,
+          "firstPlanMs": 114.60445833290578,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 37.70112499842071,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T213810Z-large/reopen-3-4.jsonl"
+    },
+    {
+      "phase": "reopen-3-5",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-large-20260929-44110-1w0dhzv/run-3/History.sqlite"
+      ],
+      "elapsed_seconds": 0.302996999998868,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 48820,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 4636672,
+      "peak_owned_bytes": 190533632,
+      "events": [
+        {
+          "availabilityMs": 9.00704166633659,
+          "firstPlanAdvertisedBytes": 29775,
+          "firstPlanBytes": 29775,
+          "firstPlanMs": 116.09162500099046,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 40.61120833284804,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T213810Z-large/reopen-3-5.jsonl"
+    },
+    {
+      "phase": "reopen-3-6",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-large-20260929-44110-1w0dhzv/run-3/History.sqlite"
+      ],
+      "elapsed_seconds": 0.30657399999836343,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 48826,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 4587520,
+      "peak_owned_bytes": 190537728,
+      "events": [
+        {
+          "availabilityMs": 10.418208334158408,
+          "firstPlanAdvertisedBytes": 29775,
+          "firstPlanBytes": 29775,
+          "firstPlanMs": 114.1008749982575,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 41.56716666693683,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T213810Z-large/reopen-3-6.jsonl"
+    },
+    {
+      "phase": "reopen-3-7",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-large-20260929-44110-1w0dhzv/run-3/History.sqlite"
+      ],
+      "elapsed_seconds": 0.30879499999718973,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 48832,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 4603904,
+      "peak_owned_bytes": 190541824,
+      "events": [
+        {
+          "availabilityMs": 10.650916665326804,
+          "firstPlanAdvertisedBytes": 29775,
+          "firstPlanBytes": 29775,
+          "firstPlanMs": 114.54620833319495,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 41.86412499984726,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T213810Z-large/reopen-3-7.jsonl"
+    },
+    {
+      "phase": "reopen-3-8",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-large-20260929-44110-1w0dhzv/run-3/History.sqlite"
+      ],
+      "elapsed_seconds": 0.3037499999991269,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 48838,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 4603904,
+      "peak_owned_bytes": 190545920,
+      "events": [
+        {
+          "availabilityMs": 11.24287499987986,
+          "firstPlanAdvertisedBytes": 29775,
+          "firstPlanBytes": 29775,
+          "firstPlanMs": 115.66479166503996,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 38.15300000132993,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T213810Z-large/reopen-3-8.jsonl"
+    },
+    {
+      "phase": "reopen-3-9",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-large-20260929-44110-1w0dhzv/run-3/History.sqlite"
+      ],
+      "elapsed_seconds": 0.304111000001285,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 48844,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 4521984,
+      "peak_owned_bytes": 190550016,
+      "events": [
+        {
+          "availabilityMs": 9.18012500187615,
+          "firstPlanAdvertisedBytes": 29775,
+          "firstPlanBytes": 29775,
+          "firstPlanMs": 113.09591666940833,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 40.915624998888234,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T213810Z-large/reopen-3-9.jsonl"
+    },
+    {
+      "phase": "reopen-3-10",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-large-20260929-44110-1w0dhzv/run-3/History.sqlite"
+      ],
+      "elapsed_seconds": 0.3068920000005164,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 48850,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 4603904,
+      "peak_owned_bytes": 190554112,
+      "events": [
+        {
+          "availabilityMs": 10.043875001429114,
+          "firstPlanAdvertisedBytes": 29775,
+          "firstPlanBytes": 29775,
+          "firstPlanMs": 113.91883333271835,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 42.082249998202315,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T213810Z-large/reopen-3-10.jsonl"
+    },
+    {
+      "phase": "consolidate-3",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "consolidate",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-large-20260929-44110-1w0dhzv/run-3/History.sqlite"
+      ],
+      "elapsed_seconds": 8.567183000002842,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 48856,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 145997824,
+      "peak_owned_bytes": 195977216,
+      "events": [
+        {
+          "divergentRecords": 0,
+          "earlyRecords": 0,
+          "footprintBytes": 9678384,
+          "phase": "consolidation",
+          "removed": 98498,
+          "retained": 2503,
+          "seconds": 8.378517125001963,
+          "selectedAction": "B4F3AC7E-8CA5-47B3-8BC3-BB9F2BE85795",
+          "unmet": true
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T213810Z-large/consolidate-3.jsonl"
+    }
+  ],
+  "peak_descendant_rss_bytes": 1079984128,
+  "peak_owned_bytes": 195977216,
+  "result": "completed",
+  "failure": null
+}

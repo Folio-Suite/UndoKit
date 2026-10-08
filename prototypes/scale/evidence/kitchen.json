@@ -1,0 +1,1864 @@
+{
+  "fixture": "kitchen",
+  "source_head": "631bd231a5135d8a3de3345f52f5d6eec7a0672d",
+  "source_sha256": {
+    "Package.swift": "5a08ce02325ada935e8a67a3b8927c8bfff97290cc858475456adc72d960f1f1",
+    "Sources/ScaleChild/main.swift": "3e936b7c28d1a4302fead14b7085a81405ccb29438d2c4085bf31fea1a566cab",
+    "Sources/ScaleProbe/HistoryStore.swift": "7288cee345fb34bf9016ff464c7755cc58a4b69d0ea6b3e9f0d44cffa8a328b1",
+    "Tests/ScaleProbeTests/ScaleProbeTests.swift": "e2c2e58efb6e36a1ca627a46ef391850f85470063c9bce0fbff7e432aa1a7454",
+    "run.rb": "723c6050dc65f70e1457d8c6f4da62374a58d578e981f0c17b99833891b2d05c"
+  },
+  "swift_version": "Apple Swift version 6.4 (swiftlang-6.4.0.34.1 clang-2100.3.34.1)\nTarget: arm64-apple-macosx27.0.0",
+  "os_version": "27.0",
+  "hardware": "Mac15,6",
+  "cpu_brand": "Apple M3 Pro",
+  "physical_memory_bytes": 19327352832,
+  "build_configuration": "release",
+  "limits": {
+    "case_seconds": 600,
+    "memory_bytes": 2147483648,
+    "owned_bytes": 12884901888,
+    "free_floor_bytes": 21474836480
+  },
+  "page_bytes": 16777216,
+  "fixture_directory": "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-kitchen-20260929-50196-1xa29e2",
+  "steps": [
+    {
+      "phase": "build",
+      "command": [
+        "swift",
+        "build",
+        "-c",
+        "release",
+        "--package-path",
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale"
+      ],
+      "elapsed_seconds": 0.8948369999998249,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 50215,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 77004800,
+      "peak_owned_bytes": 132845568,
+      "events": [
+
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/build.log",
+      "stderr_log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/build.log.stderr.log"
+    },
+    {
+      "phase": "fixture-1",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "fixture",
+        "kitchen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-kitchen-20260929-50196-1xa29e2/run-1/History.sqlite",
+        "17"
+      ],
+      "elapsed_seconds": 2.654232000000775,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 50264,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 127254528,
+      "peak_owned_bytes": 137629696,
+      "events": [
+        {
+          "groups": 800,
+          "phase": "turnover",
+          "removed": 396,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 1000,
+          "phase": "build",
+          "seconds": 0.1564037083335279
+        },
+        {
+          "groups": 1200,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 1600,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 2000,
+          "phase": "build",
+          "seconds": 0.3531911250029225
+        },
+        {
+          "groups": 2000,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 2400,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 2800,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 3000,
+          "phase": "build",
+          "seconds": 0.5531430000010005
+        },
+        {
+          "groups": 3200,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 3600,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 4000,
+          "phase": "build",
+          "seconds": 0.7482541250028589
+        },
+        {
+          "groups": 4000,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 4400,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 4800,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 5000,
+          "phase": "build",
+          "seconds": 0.9566870000016934
+        },
+        {
+          "groups": 5200,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 5600,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 6000,
+          "phase": "build",
+          "seconds": 1.153840291666711
+        },
+        {
+          "groups": 6000,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 6400,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 6800,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 7000,
+          "phase": "build",
+          "seconds": 1.358744958335592
+        },
+        {
+          "groups": 7200,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 7600,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 8000,
+          "phase": "build",
+          "seconds": 1.5571548333355167
+        },
+        {
+          "groups": 8000,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 8400,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 8800,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 9000,
+          "phase": "build",
+          "seconds": 1.760964958335535
+        },
+        {
+          "groups": 9200,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 9600,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 10000,
+          "phase": "build",
+          "seconds": 1.9559227916688542
+        },
+        {
+          "groups": 10000,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "phase": "allowance",
+          "redoGroupsPerScope": 100,
+          "scopes": 4,
+          "undoGroupsPerScope": 100
+        },
+        {
+          "actions": 10400,
+          "branches": 1,
+          "checkpoints": 96,
+          "encodedBytes": 2587155,
+          "footprintBytes": 3890984,
+          "groups": 10000,
+          "kind": "kitchen",
+          "phase": "fixtureComplete",
+          "seconds": 2.2075797083343787,
+          "seed": 17
+        },
+        {
+          "count": 1000,
+          "footprintBytes": 1051656,
+          "milliseconds": {
+            "max": 3.1751666647323873,
+            "p50": 0.21300000298651867,
+            "p95": 0.25441666730330326,
+            "p99": 0.8299166656797752
+          },
+          "phase": "smallOperations"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/fixture-1.jsonl",
+      "stderr_log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/fixture-1.jsonl.stderr.log"
+    },
+    {
+      "phase": "reopen-1-1",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-kitchen-20260929-50196-1xa29e2/run-1/History.sqlite"
+      ],
+      "elapsed_seconds": 0.3142100000004575,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 50314,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 4587520,
+      "peak_owned_bytes": 133419008,
+      "events": [
+        {
+          "availabilityMs": 11.585708332859213,
+          "firstPlanAdvertisedBytes": 25872,
+          "firstPlanBytes": 25872,
+          "firstPlanMs": 5.973083330900408,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 0.7563749968539923,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-1-1.jsonl",
+      "stderr_log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-1-1.jsonl.stderr.log"
+    },
+    {
+      "phase": "reopen-1-2",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-kitchen-20260929-50196-1xa29e2/run-1/History.sqlite"
+      ],
+      "elapsed_seconds": 0.3256250000013097,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 50320,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 5292032,
+      "peak_owned_bytes": 133423104,
+      "events": [
+        {
+          "availabilityMs": 15.92170833464479,
+          "firstPlanAdvertisedBytes": 25872,
+          "firstPlanBytes": 25872,
+          "firstPlanMs": 6.582499998330604,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 0.8654999983264133,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-1-2.jsonl",
+      "stderr_log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-1-2.jsonl.stderr.log"
+    },
+    {
+      "phase": "reopen-1-3",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-kitchen-20260929-50196-1xa29e2/run-1/History.sqlite"
+      ],
+      "elapsed_seconds": 0.3242480000008072,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 50326,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 4915200,
+      "peak_owned_bytes": 133427200,
+      "events": [
+        {
+          "availabilityMs": 14.29808333341498,
+          "firstPlanAdvertisedBytes": 25872,
+          "firstPlanBytes": 25872,
+          "firstPlanMs": 6.0191249976924155,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 0.7666250021429732,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-1-3.jsonl",
+      "stderr_log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-1-3.jsonl.stderr.log"
+    },
+    {
+      "phase": "reopen-1-4",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-kitchen-20260929-50196-1xa29e2/run-1/History.sqlite"
+      ],
+      "elapsed_seconds": 0.32811299999957555,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 50336,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 4685824,
+      "peak_owned_bytes": 133459968,
+      "events": [
+        {
+          "availabilityMs": 16.656541665724944,
+          "firstPlanAdvertisedBytes": 25872,
+          "firstPlanBytes": 25872,
+          "firstPlanMs": 7.041291664791061,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 0.9306249994551763,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-1-4.jsonl",
+      "stderr_log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-1-4.jsonl.stderr.log"
+    },
+    {
+      "phase": "reopen-1-5",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-kitchen-20260929-50196-1xa29e2/run-1/History.sqlite"
+      ],
+      "elapsed_seconds": 0.32820599999831757,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 50342,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 5603328,
+      "peak_owned_bytes": 133435392,
+      "events": [
+        {
+          "availabilityMs": 15.452916668436956,
+          "firstPlanAdvertisedBytes": 25872,
+          "firstPlanBytes": 25872,
+          "firstPlanMs": 6.772541666578036,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 0.8096250021480955,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-1-5.jsonl",
+      "stderr_log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-1-5.jsonl.stderr.log"
+    },
+    {
+      "phase": "reopen-1-6",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-kitchen-20260929-50196-1xa29e2/run-1/History.sqlite"
+      ],
+      "elapsed_seconds": 0.32643800000005285,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 50348,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 4767744,
+      "peak_owned_bytes": 133439488,
+      "events": [
+        {
+          "availabilityMs": 15.424999997776467,
+          "firstPlanAdvertisedBytes": 25872,
+          "firstPlanBytes": 25872,
+          "firstPlanMs": 6.08437499977299,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 0.8289166653412394,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-1-6.jsonl",
+      "stderr_log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-1-6.jsonl.stderr.log"
+    },
+    {
+      "phase": "reopen-1-7",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-kitchen-20260929-50196-1xa29e2/run-1/History.sqlite"
+      ],
+      "elapsed_seconds": 0.3310859999983222,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 50354,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 5472256,
+      "peak_owned_bytes": 133443584,
+      "events": [
+        {
+          "availabilityMs": 16.93587499903515,
+          "firstPlanAdvertisedBytes": 25872,
+          "firstPlanBytes": 25872,
+          "firstPlanMs": 6.742875000782078,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 0.8988333320303354,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-1-7.jsonl",
+      "stderr_log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-1-7.jsonl.stderr.log"
+    },
+    {
+      "phase": "reopen-1-8",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-kitchen-20260929-50196-1xa29e2/run-1/History.sqlite"
+      ],
+      "elapsed_seconds": 0.329422999999224,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 50360,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 4898816,
+      "peak_owned_bytes": 133447680,
+      "events": [
+        {
+          "availabilityMs": 16.409541665780125,
+          "firstPlanAdvertisedBytes": 25872,
+          "firstPlanBytes": 25872,
+          "firstPlanMs": 6.63729166626581,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 0.9174166661978234,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-1-8.jsonl",
+      "stderr_log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-1-8.jsonl.stderr.log"
+    },
+    {
+      "phase": "reopen-1-9",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-kitchen-20260929-50196-1xa29e2/run-1/History.sqlite"
+      ],
+      "elapsed_seconds": 0.32725399999981164,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 50366,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 4685824,
+      "peak_owned_bytes": 133480448,
+      "events": [
+        {
+          "availabilityMs": 15.412500000820728,
+          "firstPlanAdvertisedBytes": 25872,
+          "firstPlanBytes": 25872,
+          "firstPlanMs": 6.550375001097564,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 0.8322083340317477,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-1-9.jsonl",
+      "stderr_log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-1-9.jsonl.stderr.log"
+    },
+    {
+      "phase": "reopen-1-10",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-kitchen-20260929-50196-1xa29e2/run-1/History.sqlite"
+      ],
+      "elapsed_seconds": 0.3246099999996659,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 50376,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 4702208,
+      "peak_owned_bytes": 133484544,
+      "events": [
+        {
+          "availabilityMs": 15.745583335956326,
+          "firstPlanAdvertisedBytes": 25872,
+          "firstPlanBytes": 25872,
+          "firstPlanMs": 7.204249999631429,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 0.7987916687852703,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-1-10.jsonl",
+      "stderr_log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-1-10.jsonl.stderr.log"
+    },
+    {
+      "phase": "fixture-2",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "fixture",
+        "kitchen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-kitchen-20260929-50196-1xa29e2/run-2/History.sqlite",
+        "29"
+      ],
+      "elapsed_seconds": 2.7005520000020624,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 50382,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 128679936,
+      "peak_owned_bytes": 137596928,
+      "events": [
+        {
+          "groups": 800,
+          "phase": "turnover",
+          "removed": 396,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 1000,
+          "phase": "build",
+          "seconds": 0.17040329166775336
+        },
+        {
+          "groups": 1200,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 1600,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 2000,
+          "phase": "build",
+          "seconds": 0.37746129166771425
+        },
+        {
+          "groups": 2000,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 2400,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 2800,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 3000,
+          "phase": "build",
+          "seconds": 0.5818067916661676
+        },
+        {
+          "groups": 3200,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 3600,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 4000,
+          "phase": "build",
+          "seconds": 0.781784583334229
+        },
+        {
+          "groups": 4000,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 4400,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 4800,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 5000,
+          "phase": "build",
+          "seconds": 0.9844449999982317
+        },
+        {
+          "groups": 5200,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 5600,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 6000,
+          "phase": "build",
+          "seconds": 1.176105833332258
+        },
+        {
+          "groups": 6000,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 6400,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 6800,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 7000,
+          "phase": "build",
+          "seconds": 1.3761015416675946
+        },
+        {
+          "groups": 7200,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 7600,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 8000,
+          "phase": "build",
+          "seconds": 1.5697922083345475
+        },
+        {
+          "groups": 8000,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 8400,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 8800,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 9000,
+          "phase": "build",
+          "seconds": 1.7716994583315682
+        },
+        {
+          "groups": 9200,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 9600,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 10000,
+          "phase": "build",
+          "seconds": 1.9642619166661461
+        },
+        {
+          "groups": 10000,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "phase": "allowance",
+          "redoGroupsPerScope": 100,
+          "scopes": 4,
+          "undoGroupsPerScope": 100
+        },
+        {
+          "actions": 10400,
+          "branches": 1,
+          "checkpoints": 96,
+          "encodedBytes": 2587155,
+          "footprintBytes": 4323584,
+          "groups": 10000,
+          "kind": "kitchen",
+          "phase": "fixtureComplete",
+          "seconds": 2.214172416664951,
+          "seed": 29
+        },
+        {
+          "count": 1000,
+          "footprintBytes": 1661416,
+          "milliseconds": {
+            "max": 3.3449166658101603,
+            "p50": 0.2128749983967282,
+            "p95": 0.2548333322920371,
+            "p99": 0.7447083335136995
+          },
+          "phase": "smallOperations"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/fixture-2.jsonl",
+      "stderr_log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/fixture-2.jsonl.stderr.log"
+    },
+    {
+      "phase": "reopen-2-1",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-kitchen-20260929-50196-1xa29e2/run-2/History.sqlite"
+      ],
+      "elapsed_seconds": 0.31909300000188523,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 50432,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 4685824,
+      "peak_owned_bytes": 133468160,
+      "events": [
+        {
+          "availabilityMs": 11.844666667457204,
+          "firstPlanAdvertisedBytes": 25872,
+          "firstPlanBytes": 25872,
+          "firstPlanMs": 6.011250003211899,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 0.7832083319954108,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-2-1.jsonl",
+      "stderr_log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-2-1.jsonl.stderr.log"
+    },
+    {
+      "phase": "reopen-2-2",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-kitchen-20260929-50196-1xa29e2/run-2/History.sqlite"
+      ],
+      "elapsed_seconds": 0.3159320000013395,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 50438,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 4997120,
+      "peak_owned_bytes": 133472256,
+      "events": [
+        {
+          "availabilityMs": 12.5258333318925,
+          "firstPlanAdvertisedBytes": 25872,
+          "firstPlanBytes": 25872,
+          "firstPlanMs": 4.773000000568572,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 0.8442500002274755,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-2-2.jsonl",
+      "stderr_log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-2-2.jsonl.stderr.log"
+    },
+    {
+      "phase": "reopen-2-3",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-kitchen-20260929-50196-1xa29e2/run-2/History.sqlite"
+      ],
+      "elapsed_seconds": 0.3253720000029716,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 50444,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 5275648,
+      "peak_owned_bytes": 133476352,
+      "events": [
+        {
+          "availabilityMs": 13.106416667142184,
+          "firstPlanAdvertisedBytes": 25872,
+          "firstPlanBytes": 25872,
+          "firstPlanMs": 6.430125002225395,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 1.0202083321928512,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-2-3.jsonl",
+      "stderr_log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-2-3.jsonl.stderr.log"
+    },
+    {
+      "phase": "reopen-2-4",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-kitchen-20260929-50196-1xa29e2/run-2/History.sqlite"
+      ],
+      "elapsed_seconds": 0.32887699999992037,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 50450,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 5390336,
+      "peak_owned_bytes": 133480448,
+      "events": [
+        {
+          "availabilityMs": 14.451083330641268,
+          "firstPlanAdvertisedBytes": 25872,
+          "firstPlanBytes": 25872,
+          "firstPlanMs": 6.228624999494059,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 0.8282083363155834,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-2-4.jsonl",
+      "stderr_log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-2-4.jsonl.stderr.log"
+    },
+    {
+      "phase": "reopen-2-5",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-kitchen-20260929-50196-1xa29e2/run-2/History.sqlite"
+      ],
+      "elapsed_seconds": 0.3345229999977164,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 50460,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 5472256,
+      "peak_owned_bytes": 133484544,
+      "events": [
+        {
+          "availabilityMs": 15.955999999277992,
+          "firstPlanAdvertisedBytes": 25872,
+          "firstPlanBytes": 25872,
+          "firstPlanMs": 6.753625002602348,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 0.9266250017390121,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-2-5.jsonl",
+      "stderr_log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-2-5.jsonl.stderr.log"
+    },
+    {
+      "phase": "reopen-2-6",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-kitchen-20260929-50196-1xa29e2/run-2/History.sqlite"
+      ],
+      "elapsed_seconds": 0.3322050000024319,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 50466,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 5029888,
+      "peak_owned_bytes": 133488640,
+      "events": [
+        {
+          "availabilityMs": 17.229416665941244,
+          "firstPlanAdvertisedBytes": 25872,
+          "firstPlanBytes": 25872,
+          "firstPlanMs": 6.66270833244198,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 0.9085833335120697,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-2-6.jsonl",
+      "stderr_log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-2-6.jsonl.stderr.log"
+    },
+    {
+      "phase": "reopen-2-7",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-kitchen-20260929-50196-1xa29e2/run-2/History.sqlite"
+      ],
+      "elapsed_seconds": 0.3293650000014168,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 50472,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 5341184,
+      "peak_owned_bytes": 133492736,
+      "events": [
+        {
+          "availabilityMs": 15.111000000615604,
+          "firstPlanAdvertisedBytes": 25872,
+          "firstPlanBytes": 25872,
+          "firstPlanMs": 6.079333332309034,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 0.882625001395354,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-2-7.jsonl",
+      "stderr_log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-2-7.jsonl.stderr.log"
+    },
+    {
+      "phase": "reopen-2-8",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-kitchen-20260929-50196-1xa29e2/run-2/History.sqlite"
+      ],
+      "elapsed_seconds": 0.32771599999978207,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 50478,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 4997120,
+      "peak_owned_bytes": 133525504,
+      "events": [
+        {
+          "availabilityMs": 13.445833330479218,
+          "firstPlanAdvertisedBytes": 25872,
+          "firstPlanBytes": 25872,
+          "firstPlanMs": 7.022041667369194,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 0.9061250020749867,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-2-8.jsonl",
+      "stderr_log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-2-8.jsonl.stderr.log"
+    },
+    {
+      "phase": "reopen-2-9",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-kitchen-20260929-50196-1xa29e2/run-2/History.sqlite"
+      ],
+      "elapsed_seconds": 0.3285519999990356,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 50484,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 5488640,
+      "peak_owned_bytes": 133500928,
+      "events": [
+        {
+          "availabilityMs": 16.265416667010868,
+          "firstPlanAdvertisedBytes": 25872,
+          "firstPlanBytes": 25872,
+          "firstPlanMs": 5.9593749974737875,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 0.869625000632368,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-2-9.jsonl",
+      "stderr_log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-2-9.jsonl.stderr.log"
+    },
+    {
+      "phase": "reopen-2-10",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-kitchen-20260929-50196-1xa29e2/run-2/History.sqlite"
+      ],
+      "elapsed_seconds": 0.33193300000129966,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 50490,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 5308416,
+      "peak_owned_bytes": 133505024,
+      "events": [
+        {
+          "availabilityMs": 16.43191666516941,
+          "firstPlanAdvertisedBytes": 25872,
+          "firstPlanBytes": 25872,
+          "firstPlanMs": 6.471333334047813,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 0.8202916651498526,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-2-10.jsonl",
+      "stderr_log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-2-10.jsonl.stderr.log"
+    },
+    {
+      "phase": "fixture-3",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "fixture",
+        "kitchen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-kitchen-20260929-50196-1xa29e2/run-3/History.sqlite",
+        "43"
+      ],
+      "elapsed_seconds": 2.693042000002606,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 50500,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 126648320,
+      "peak_owned_bytes": 137646080,
+      "events": [
+        {
+          "groups": 800,
+          "phase": "turnover",
+          "removed": 396,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 1000,
+          "phase": "build",
+          "seconds": 0.16178104166465346
+        },
+        {
+          "groups": 1200,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 1600,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 2000,
+          "phase": "build",
+          "seconds": 0.3578192916647822
+        },
+        {
+          "groups": 2000,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 2400,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 2800,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 3000,
+          "phase": "build",
+          "seconds": 0.5588546250000945
+        },
+        {
+          "groups": 3200,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 3600,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 4000,
+          "phase": "build",
+          "seconds": 0.7538110833338578
+        },
+        {
+          "groups": 4000,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 4400,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 4800,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 5000,
+          "phase": "build",
+          "seconds": 0.958356166665908
+        },
+        {
+          "groups": 5200,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 5600,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 6000,
+          "phase": "build",
+          "seconds": 1.1546104166664009
+        },
+        {
+          "groups": 6000,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 6400,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 6800,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 7000,
+          "phase": "build",
+          "seconds": 1.358043791664386
+        },
+        {
+          "groups": 7200,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 7600,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 8000,
+          "phase": "build",
+          "seconds": 1.5566534166646306
+        },
+        {
+          "groups": 8000,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 8400,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 8800,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 9000,
+          "phase": "build",
+          "seconds": 1.7630487916649145
+        },
+        {
+          "groups": 9200,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 9600,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "groups": 10000,
+          "phase": "build",
+          "seconds": 1.9607330416656623
+        },
+        {
+          "groups": 10000,
+          "phase": "turnover",
+          "removed": 400,
+          "retained": 404,
+          "unmet": false
+        },
+        {
+          "phase": "allowance",
+          "redoGroupsPerScope": 100,
+          "scopes": 4,
+          "undoGroupsPerScope": 100
+        },
+        {
+          "actions": 10400,
+          "branches": 1,
+          "checkpoints": 96,
+          "encodedBytes": 2587155,
+          "footprintBytes": 4298888,
+          "groups": 10000,
+          "kind": "kitchen",
+          "phase": "fixtureComplete",
+          "seconds": 2.2247762916667853,
+          "seed": 43
+        },
+        {
+          "count": 1000,
+          "footprintBytes": 1677896,
+          "milliseconds": {
+            "max": 3.844750001007924,
+            "p50": 0.21912499869358726,
+            "p95": 0.27562499963096343,
+            "p99": 0.9204583329847082
+          },
+          "phase": "smallOperations"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/fixture-3.jsonl",
+      "stderr_log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/fixture-3.jsonl.stderr.log"
+    },
+    {
+      "phase": "reopen-3-1",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-kitchen-20260929-50196-1xa29e2/run-3/History.sqlite"
+      ],
+      "elapsed_seconds": 0.3029069999975036,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 50554,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 4751360,
+      "peak_owned_bytes": 133513216,
+      "events": [
+        {
+          "availabilityMs": 9.814500001084525,
+          "firstPlanAdvertisedBytes": 25872,
+          "firstPlanBytes": 25872,
+          "firstPlanMs": 4.415291667100973,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 0.6295833336480428,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-3-1.jsonl",
+      "stderr_log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-3-1.jsonl.stderr.log"
+    },
+    {
+      "phase": "reopen-3-2",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-kitchen-20260929-50196-1xa29e2/run-3/History.sqlite"
+      ],
+      "elapsed_seconds": 0.32594499999686377,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 50560,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 5341184,
+      "peak_owned_bytes": 133517312,
+      "events": [
+        {
+          "availabilityMs": 15.0998333338066,
+          "firstPlanAdvertisedBytes": 25872,
+          "firstPlanBytes": 25872,
+          "firstPlanMs": 6.473041663412005,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 0.770583330449881,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-3-2.jsonl",
+      "stderr_log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-3-2.jsonl.stderr.log"
+    },
+    {
+      "phase": "reopen-3-3",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-kitchen-20260929-50196-1xa29e2/run-3/History.sqlite"
+      ],
+      "elapsed_seconds": 0.3195610000002489,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 50566,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 4685824,
+      "peak_owned_bytes": 133550080,
+      "events": [
+        {
+          "availabilityMs": 13.929249998909654,
+          "firstPlanAdvertisedBytes": 25872,
+          "firstPlanBytes": 25872,
+          "firstPlanMs": 7.190874999650987,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 0.7886666644481011,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-3-3.jsonl",
+      "stderr_log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-3-3.jsonl.stderr.log"
+    },
+    {
+      "phase": "reopen-3-4",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-kitchen-20260929-50196-1xa29e2/run-3/History.sqlite"
+      ],
+      "elapsed_seconds": 0.328125,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 50572,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 4685824,
+      "peak_owned_bytes": 133525504,
+      "events": [
+        {
+          "availabilityMs": 15.855749999900581,
+          "firstPlanAdvertisedBytes": 25872,
+          "firstPlanBytes": 25872,
+          "firstPlanMs": 6.2825416680425406,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 0.887624999450054,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-3-4.jsonl",
+      "stderr_log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-3-4.jsonl.stderr.log"
+    },
+    {
+      "phase": "reopen-3-5",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-kitchen-20260929-50196-1xa29e2/run-3/History.sqlite"
+      ],
+      "elapsed_seconds": 0.3283159999991767,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 50582,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 4816896,
+      "peak_owned_bytes": 133529600,
+      "events": [
+        {
+          "availabilityMs": 16.33929166928283,
+          "firstPlanAdvertisedBytes": 25872,
+          "firstPlanBytes": 25872,
+          "firstPlanMs": 6.671291666862089,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 0.9228749986505136,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-3-5.jsonl",
+      "stderr_log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-3-5.jsonl.stderr.log"
+    },
+    {
+      "phase": "reopen-3-6",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-kitchen-20260929-50196-1xa29e2/run-3/History.sqlite"
+      ],
+      "elapsed_seconds": 0.3351040000015928,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 50588,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 5390336,
+      "peak_owned_bytes": 133533696,
+      "events": [
+        {
+          "availabilityMs": 17.186375000164844,
+          "firstPlanAdvertisedBytes": 25872,
+          "firstPlanBytes": 25872,
+          "firstPlanMs": 5.957749999652151,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 0.801166668679798,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-3-6.jsonl",
+      "stderr_log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-3-6.jsonl.stderr.log"
+    },
+    {
+      "phase": "reopen-3-7",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-kitchen-20260929-50196-1xa29e2/run-3/History.sqlite"
+      ],
+      "elapsed_seconds": 0.33209100000021863,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 50594,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 5079040,
+      "peak_owned_bytes": 133537792,
+      "events": [
+        {
+          "availabilityMs": 18.11920833279146,
+          "firstPlanAdvertisedBytes": 25872,
+          "firstPlanBytes": 25872,
+          "firstPlanMs": 6.724666669470025,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 0.923999999940861,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-3-7.jsonl",
+      "stderr_log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-3-7.jsonl.stderr.log"
+    },
+    {
+      "phase": "reopen-3-8",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-kitchen-20260929-50196-1xa29e2/run-3/History.sqlite"
+      ],
+      "elapsed_seconds": 0.3319230000015523,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 50600,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 5472256,
+      "peak_owned_bytes": 133541888,
+      "events": [
+        {
+          "availabilityMs": 16.936124997300794,
+          "firstPlanAdvertisedBytes": 25872,
+          "firstPlanBytes": 25872,
+          "firstPlanMs": 5.922624997765524,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 0.8788333361735567,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-3-8.jsonl",
+      "stderr_log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-3-8.jsonl.stderr.log"
+    },
+    {
+      "phase": "reopen-3-9",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-kitchen-20260929-50196-1xa29e2/run-3/History.sqlite"
+      ],
+      "elapsed_seconds": 0.31935599999997066,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 50606,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 5406720,
+      "peak_owned_bytes": 133545984,
+      "events": [
+        {
+          "availabilityMs": 11.052708334318595,
+          "firstPlanAdvertisedBytes": 25872,
+          "firstPlanBytes": 25872,
+          "firstPlanMs": 4.966791664628545,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 0.5969583326077554,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-3-9.jsonl",
+      "stderr_log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-3-9.jsonl.stderr.log"
+    },
+    {
+      "phase": "reopen-3-10",
+      "command": [
+        "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/release/ScaleChild",
+        "reopen",
+        "/var/folders/l6/1jrtzdgs4xz0bb5pdz8mgknh0000gn/T/folio-scale-kitchen-20260929-50196-1xa29e2/run-3/History.sqlite"
+      ],
+      "elapsed_seconds": 0.3269010000003618,
+      "exit_status": 0,
+      "signal": null,
+      "reason": null,
+      "child_pid": 50612,
+      "child_reaped": true,
+      "termination_errors": [
+
+      ],
+      "peak_descendant_rss_bytes": 4685824,
+      "peak_owned_bytes": 133578752,
+      "events": [
+        {
+          "availabilityMs": 14.787249998335028,
+          "firstPlanAdvertisedBytes": 25872,
+          "firstPlanBytes": 25872,
+          "firstPlanMs": 7.202249998954358,
+          "firstPlanRecords": 100,
+          "pageCount": 100,
+          "pageMs": 0.7415833315462805,
+          "phase": "reopen"
+        }
+      ],
+      "log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-3-10.jsonl",
+      "stderr_log": "/Users/ctwelve/.codex/worktrees/undokit-interface-proof/Folio/UndoKit/prototypes/scale/.build/scale-results/20260929T214614Z-kitchen/reopen-3-10.jsonl.stderr.log"
+    }
+  ],
+  "peak_descendant_rss_bytes": 128679936,
+  "peak_owned_bytes": 137646080,
+  "result": "completed",
+  "failure": null
+}

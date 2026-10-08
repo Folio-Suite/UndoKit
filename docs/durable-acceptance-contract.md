@@ -289,7 +289,7 @@ remain subject to storage and recovery proof.
 ## Documentation contract
 
 UndoKit's eventual public DocC is normative for callers and must meet
-[ADR 0008](../../docs/adr/0008-public-api-quality-kit-documentation.md). Every
+[ADR 0008](https://github.com/Folio-Suite/Folio/blob/5d252a9e791717f598ab3a30aa6fc530d9c0b984/docs/adr/0008-public-api-quality-kit-documentation.md). Every
 public symbol documents ownership, isolation, ordering, reentrancy, cancellation,
 durability, results, failure disposition, recovery responsibility, limits,
 compatibility and potentially expensive behavior. Implemented workflows include

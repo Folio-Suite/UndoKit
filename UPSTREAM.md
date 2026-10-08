@@ -13,8 +13,16 @@ Package.
 The initial package extraction was taken from Folio source commit
 `5d252a9e791717f598ab3a30aa6fc530d9c0b984`. The split was merged while
 preserving the independent repository's initial commit
-`d3ebec289285af283fdcc5779711154f3d538966`; the merge commit is
-`5e6437ada5574d72eb418c6805b029489fb7ea34`.
+`d3ebec289285af283fdcc5779711154f3d538966`. The subtree split commit is
+`5e6437ada5574d72eb418c6805b029489fb7ea34`; the import merge commit is
+`8a4cf4bc8b52ad85c0e31382466be03f64574231`.
+
+Before its development in Folio, the original scaffold and design were imported
+from `ctwelve/UndoKit` on 2026-09-27 at
+`5ca57fd54f91ad754ca3d0d8398f67745a7b5be7`. That remote was deleted with the
+maintainer's authorization after preservation. Its ten-commit Git bundle and
+issue records remain in the design inventory; this is a new repository home,
+not a restoration of that obsolete implementation.
 
 The preserved design inventory in [`docs/imported-design/`](docs/imported-design/)
 contains the imported research, issue snapshot, checksums, and recoverable

@@ -44,19 +44,19 @@ Physical-store resource cleanup remains on `HistoryStore`, where it covers all
 scopes. The [retained-history ownership decision](docs/adr/0002-retained-history-module-ownership.md)
 records this split and its lifecycle guarantees.
 
-## Integration with Folio
+## Architecture and design records
 
-UndoKit is an independently buildable framework in the Folio monorepo. Its source,
-MIT license, domain vocabulary, research, and unresolved design decisions were
-imported from the original repository; see [provenance](UPSTREAM.md) and the
+UndoKit is an independent Swift Package. Its source, MIT license, domain
+vocabulary, research, and design decisions were developed in Folio before the
+repository split; see [provenance](UPSTREAM.md) and the
 [design index](docs/imported-design/README.md).
 
-The framework now implements the first bounded durable-history operation from
-[#53](https://github.com/Folio-Suite/Folio/issues/53): accepted command groups,
-reopenable Undo/Redo, checkpoint snapshots and restoration provenance. Core Data
-stores protocol structure; host payloads remain opaque. The host owns atomic
-semantic effects and durable outcome receipts. See the public DocC catalog and
-[Work adapter description](../docs/architecture/work-history-first-operation.md).
+The implementation supports accepted command groups, reopenable Undo/Redo,
+checkpoint snapshots and restoration provenance. Core Data stores protocol
+structure; host payloads remain opaque. Hosts own semantic effects and durable
+outcome receipts. Historical Folio issue links remain attached to the decisions
+they describe; new work belongs in the
+[UndoKit issue tracker](https://github.com/Folio-Suite/UndoKit/issues).
 
 Public declarations are grouped in `UndoKit/Interface/`; transaction coordination
 lives in `UndoKit/Modules/Transactions/`, retained-history behavior lives in
@@ -72,8 +72,7 @@ for the retained-history capabilities. `HistoryReconstruction.swift` and
 `HistoryRetention.swift` contain their values; `HistorySessionLifecycle.swift`
 contains concrete session copy and closure controls. `HistoryRetentionResources.swift`
 exposes cross-scope resource maintenance.
-Folio's translation layer lives in `Core/WriteKit/Modules/WorkAdapter/`; UndoKit imports
-no Folio domain framework. The Core Data model is bundled from
+UndoKit imports no Folio domain framework. The Core Data model is bundled from
 `UndoKit/Resources/`.
 
 The accepted [history-retention contract](docs/history-retention-contract.md)
@@ -125,18 +124,32 @@ authorizes implementation with verification developed alongside each slice.
 | Package lifecycle (#49) | [Results and remaining failure coverage](prototypes/package/results.md) |
 | Retention and scale (#50) | [Measured results and limits](prototypes/scale/results.md) |
 
-## Building the framework
+## Building the package
 
-Build the shared `UndoKit` scheme in `UndoKit.xcodeproj`, or use the enclosing
-`Folio` workspace scheme. The Folio adaptation supplies a public Swift module,
-macOS 14 deployment, coordinated Suite release identity, and development
-signing. UndoKit has no dependency on FolioKit or any application domain Kit.
-The implementation is Swift, serving Folio first and an independent bounded host second while keeping domain-independent interfaces. External Objective-C/XCFramework distribution is deferred until after Folio Suite 1.0. Historical interoperability research remains preserved.
+UndoKit requires macOS 14 or later and Swift 6. Swift Package Manager is the
+authoritative source build and test workflow; the Xcode project is an optional
+developer harness. iOS qualification and XCFramework distribution are deferred.
+There is no binary product.
 
-`Project.xcconfig` provides standalone version defaults and optionally inherits
-the enclosing Suite's version configuration. The shared scheme can archive the
-framework. A separately versioned XCFramework release policy remains to be
-settled before publishing a usable external history API.
+From the repository root, run `swift build`, `swift test`, and
+`scripts/check-consumer.sh`. The independent consumer check imports the package
+from a separate executable and opens a store through the public API, exercising
+the bundled Core Data model. CI runs package tests and the consumer check on
+macOS with Xcode 27.
+
+The guarded production-scale case can be measured with
+`scripts/check-scale.rb [groups]`. It defaults to 10,000 groups and accepts
+100–100,000; the runner enforces disk, resource and time bounds and retains its
+report and log in a temporary directory. It is not part of routine CI.
+
+The source package begins at `0.1.0` with independent release tags. Consumer
+requirements follow the consumer's stage: development allows updates within the
+selected major version (including across minor versions during `0.x`); beta
+allows updates within the selected minor version; release engineering requires
+an exact version. Commit resolved dependency records at every stage. Stage
+transitions are deliberate and are not inferred from UndoKit's version number.
+Pre-alpha API and storage compatibility remain bounded by the documented
+contracts; a dependency range is not a promise of persisted-format migration.
 
 The original source license and authorship are retained. New integration files
 carry the Folio Project's MIT SPDX notices.
@@ -155,7 +168,6 @@ and acknowledged unresolved reset retire a scope generation; clients bind new
 commands to the returned generation. The current format is pre-alpha; no legacy
 migration is required.
 
-Run the independent tests with `swift test --package-path UndoKit`, or use the
-signed Xcode UndoKit scheme. Work integration tests use Core; native document
-integration tests use Write. Historical prototype results below are separate
-from tests of the implemented engine and do not imply release readiness.
+Run package tests from the repository root with `swift test`. Historical
+prototype results below are separate from tests of the implemented engine and
+do not imply release readiness.

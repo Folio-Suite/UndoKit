@@ -7,7 +7,7 @@ import PackageDescription
 let package = Package(
     name: "UndoKit",
     platforms: [.macOS(.v14)],
-    products: [.library(name: "UndoKit", targets: ["UndoKit"])],
+    products: [.library(name: "UndoKit", type: .dynamic, targets: ["UndoKit"])],
     targets: [
         .target(name: "UndoKit", path: "UndoKit", resources: [.process("Resources")]),
         .testTarget(name: "UndoKitTests", dependencies: ["UndoKit"], path: "UndoKitTests")

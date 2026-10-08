@@ -1,11 +1,10 @@
 // SPDX-FileCopyrightText: 2026 the Folio Project
 // SPDX-License-Identifier: MIT
 
-// Standalone defaults; the enclosing Suite may override them.
-MACOSX_DEPLOYMENT_TARGET = $(RECOMMENDED_MACOSX_DEPLOYMENT_TARGET)
+// Standalone developer-harness defaults. Swift Package Manager is authoritative.
+MACOSX_DEPLOYMENT_TARGET = 14.0
 MARKETING_VERSION = 0.1.0
 CURRENT_PROJECT_VERSION = 1
-#include? "../Config/Suite.xcconfig"
 
 SWIFT_VERSION = 6.0
 SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated

@@ -5,9 +5,9 @@ SPDX-License-Identifier: MIT
 
 # Working on UndoKit
 
-UndoKit is being extracted from Folio into this standalone repository.
-Build and test instructions will accompany the framework migration; this
-initial repository setup does not yet contain the framework or its tests.
+UndoKit is a standalone Swift Package. Swift Package Manager is the authoritative
+source build and test workflow; the Xcode project is an optional developer
+harness.
 
 ## Community participation
 
@@ -38,13 +38,30 @@ The configuration adapts [Matt Pocock's skills](https://github.com/mattpocock/sk
 Preserve his attribution and the [retained MIT notice](docs/agents/MATT-POCOCK-LICENSE)
 when changing imported template material.
 
-## Validation
+## Build and validation
 
-Scale checks to the change. For repository documentation and templates, check
-local links, copyright and license notices, and repository-specific references.
-When framework code arrives, use its documented build and test workflow.
+Requirements are macOS 14 or later and Swift 6. From the repository root, run
+`swift build`, `swift test`, and `scripts/check-consumer.sh` for changes that
+affect package integration. The consumer check builds a separate executable
+against the local package and opens a history store through the public API,
+including its bundled Core Data model. CI runs package tests and this consumer
+check with Xcode 27.
+
+Scale other checks to the change. For documentation and templates, check local
+links, copyright and license notices, and repository-specific references.
 Persistence and recovery changes require meaningful preservation and failure
 recovery checks; report limitations in runtime or consumer validation explicitly.
+
+## Versioning and dependencies
+
+The source package begins at `0.1.0` with independent release tags. Consumer
+requirements follow the consumer's stage: development allows updates within the
+selected major version (including across minor versions during `0.x`); beta
+allows updates within the selected minor version; release engineering requires
+an exact version. Commit resolved dependency records at every stage. Stage
+transitions are deliberate and are not inferred from UndoKit's version number.
+Pre-alpha API and storage compatibility remain bounded by the documented
+contracts; a dependency range is not a promise of persisted-format migration.
 
 ## Licensing
 

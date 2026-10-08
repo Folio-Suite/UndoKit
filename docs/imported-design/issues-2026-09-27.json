@@ -1,0 +1,985 @@
+{
+  "snapshotDate": "2026-09-27",
+  "provenance": "Read-only GitHub GraphQL snapshot captured during the Folio source import. Issue bodies, comments, statuses, labels, timestamps, and native tracked-issue relationships are historical evidence as of this date; this file is not a live tracker, does not replace GitHub identities, and does not assert that decisions remain current.",
+  "repository": "https://github.com/ctwelve/UndoKit",
+  "issues": [
+    {
+      "number": 1,
+      "title": "Define UndoKit for Folio and KitchenMemory",
+      "url": "https://github.com/ctwelve/UndoKit/issues/1",
+      "state": "OPEN",
+      "body": "## Destination\n\nReach an agreed, implementation-ready design for a Core Data-backed UndoKit XCFramework that supports both Folio's long, branching document histories and KitchenMemory's bounded, termination-resilient action history. Settle required behavior, ownership, public interfaces, persistence and recovery guarantees, integration contracts, and acceptance criteria before production implementation.\n\n## Notes\n\n- This is a planning map. Both consumers' established needs shape the initial design; implementation may be incremental. Charting resolves research only; work through one human decision ticket per session.\n- Use `wayfinder`, `grilling`, and `domain-modeling`. Research uses `research`; interface design uses `codebase-design`; disposable design proofs use `prototype`. Consult `docs/agents/` for tracker and domain conventions.\n- Carry forward [KitchenMemory's accepted shared-framework ADR](https://github.com/ctwelve/KitchenMemory/blob/main/docs/adr/0022-shared-durable-undo-framework.md) and [Folio's semantic history contract](https://github.com/Folio-Suite/Folio/blob/main/docs/architecture/semantic-history-contract.md). Distinguish approved requirements, implemented behavior, proposals, and verified evidence. Surface conflicts for the maintainer rather than silently amending either consumer.\n- UndoKit owns its separate local Core Data history store and native integration. The host owns semantic meaning, validation, compensation, acceptance, recovery evidence, and the store location. History storage does not establish domain acceptance.\n- Folio needs document-wide native ordering, persistent Undo/Redo, preserved branches, named checkpoints, historical recovery, and deliberate history omission. Each independently saved document can carry its own history database in its package.\n- KitchenMemory needs local history for the same logical scene and owner/store/Kitchen scope, at most 100 groups, eligibility checks, conservative invalidation, native text priority, and recovery through backgrounding, scene disconnection, process termination, force-quit, and relaunch. Preserve its agreed first-wave scope and later-wave distinctions.\n- Provide idiomatic Swift and independently usable Objective-C interfaces. Swift clients should preserve their typed data, including relevant Swift Collections types, without manually decomposing their models into a lower-level object graph. The maintainer favors Swift Collections and Swift Algorithms where they improve this contract; exact dependency exposure, codecs, compatibility, and binary packaging remain to be established. This does not promise arbitrary runtime-object persistence.\n- Distribution is an XCFramework. The checked-in Xcode project is the starting platform/configuration authority; it currently declares macOS, iOS/iPadOS, watchOS, and relevant simulators. Verify supported slices and effective build settings during research.\n- Initial scope includes history information and operations for host-owned presentation, plus native Undo/Redo integration. Shared AppKit/UIKit history UI may become a later effort if common designs justify it.\n- Disposable prototypes may settle design uncertainty. Their concrete scope and required human/native observations are chosen through decision tickets; a compile or source inspection is not runtime acceptance.\n- Name linked tickets in narration. Claim before work. Completed research findings are retained in `docs/research/` on `main` and linked from their resolution tickets at immutable commits. New research may use dedicated `research/<name>` branches; source repositories stay read-only. Keep resolutions in tickets and only gists/pointers here.\n\n## Decisions so far\n\n<!-- Resolved child tickets are indexed here. Starting agreements are in Notes. -->\n\n- [Inventory Folio and KitchenMemory undo requirements and integration seams](https://github.com/ctwelve/UndoKit/issues/2): Both consumers' accepted requirements, current gaps and integration seams are mapped; history ownership and native behavior require distinct host policies.\n\n- [Establish Core Data, native undo, and lifecycle constraints](https://github.com/ctwelve/UndoKit/issues/3): Apple mechanisms leave explicit recovery, native-restoration and package-lifecycle obligations; precise unrun proof questions are documented.\n\n- [Establish typed Swift, Objective-C, and XCFramework compatibility](https://github.com/ctwelve/UndoKit/issues/4): Typed Swift/Objective-C integration has feasible options; payload support, package exposure and XCFramework compatibility require separate explicit choices.\n\n- [Define shared history vocabulary and ownership boundaries](https://github.com/ctwelve/UndoKit/issues/5#issuecomment-5843165699): Shared vocabulary separates accepted work, atomic Undo Groups, retained history and availability; hosts own semantics and policy while UndoKit owns capabilities and storage safeguards.\n\n## Not yet specified\n\n- Additional protocol or host-adapter decisions exposed when concrete API sketches are tested against the actual consumer seams.\n- Further failure modes or capability mismatches revealed by the scoped design proofs, beyond the interruption, native, package, interoperability and scale questions already ticketed.\n- Adoption or compatibility questions that cannot be specified until the selected payload/model formats and consumer interfaces are concrete.\n\n## Out of scope\n\n- Production framework implementation, consumer integration changes, release engineering execution, and shipping features in Folio or KitchenMemory. This effort establishes the route and required proofs.\n- Shipping shared AppKit/UIKit history-browser or checkpoint-picker UI. Revisit in a later effort if host designs show useful commonality.\n- Turning UndoKit into a synchronized history service, a replacement domain database, or an owner of consumer-specific semantic policy.\n- Expanding either app's approved undo policy silently, or treating all possible future clients as initial requirements.\n",
+      "createdAt": "2026-09-26T03:22:52Z",
+      "updatedAt": "2026-09-26T04:28:53Z",
+      "closedAt": null,
+      "labels": {
+        "nodes": [
+          {
+            "name": "wayfinder:map"
+          }
+        ]
+      },
+      "comments": {
+        "nodes": []
+      },
+      "trackedIssues": {
+        "nodes": []
+      },
+      "trackedInIssues": {
+        "nodes": []
+      },
+      "blockedBy": [],
+      "blocking": []
+    },
+    {
+      "number": 2,
+      "title": "Inventory Folio and KitchenMemory undo requirements and integration seams",
+      "url": "https://github.com/ctwelve/UndoKit/issues/2",
+      "state": "CLOSED",
+      "body": "## Question\n\nWhat established requirements, implemented behavior, unresolved gaps, and integration seams must UndoKit accommodate in both consumers?\n\nInspect the current Folio and KitchenMemory repositories read-only, recording exact revisions and any working-tree drift. Trace requirements to authoritative contracts, code, and tests. Produce a comparison that distinguishes agreed behavior from proposals and existing implementation from future requirements.\n\nCover document versus logical-scene ownership; accepted operations and stable identities; native text coexistence; branching/checkpoints/restoration/omission; bounded retention; interruption and inverse failure; interference from other scenes/devices; payload and external-resource forms; and first versus later adoption waves. Identify actual Swift Collections/Algorithms use relevant to payloads or integration.\n\nStart with Folio's semantic-history, Work Session, native Work, Arrangement and archival contracts, and KitchenMemory's shared-framework ADR plus application-undo-policy, durable-undo-storage and native-undo-facilities research. Locate the narrow consumer code/test seams. Report contradictions and unanswered questions without choosing policies for the maintainer.\n\nWrite one source-linked research note on a dedicated research branch. Do not modify either consumer or treat historical research as current platform proof.\n",
+      "createdAt": "2026-09-26T03:22:53Z",
+      "updatedAt": "2026-09-26T03:36:11Z",
+      "closedAt": "2026-09-26T03:36:11Z",
+      "labels": {
+        "nodes": [
+          {
+            "name": "wayfinder:research"
+          }
+        ]
+      },
+      "comments": {
+        "nodes": [
+          {
+            "url": "https://github.com/ctwelve/UndoKit/issues/2#issuecomment-5842826143",
+            "body": "## Research resolution\n\nThe current consumer contracts, code and test seams are inventoried at pinned clean revisions. Folio's document-wide branching history and KitchenMemory's logical-scene, 100-group history can share infrastructure while retaining distinct native-text, navigation, interference and retention policies.\n\nThe inventory identifies concrete adoption gaps: Folio's current reader accepts only a single Work.sqlite package entry, and neither consumer exposes the complete authoritative outcome/recovery interface needed by the shared protocol. Existing typed commands and Collections/Algorithms use support the requested Swift ergonomics without predetermining binary dependency exposure. No contradictory adopted requirement was found; superseded rules and later-wave proposals are identified.\n\n[Read the source-cited research note](https://github.com/ctwelve/UndoKit/blob/347aca312b4e4b318aca6e7f95b3803d069e381d/docs/research/consumer-requirements.md). Captured on `research/consumer-requirements` at `347aca312b4e`.\n\nThis resolves the evidence inventory, not the architecture. Tests and runtime behavior were not exercised. The linked ownership, recovery, API, routing, package and acceptance decisions remain open.\n",
+            "createdAt": "2026-09-26T03:36:10Z",
+            "author": {
+              "login": "ctwelve"
+            }
+          }
+        ]
+      },
+      "trackedIssues": {
+        "nodes": []
+      },
+      "trackedInIssues": {
+        "nodes": []
+      },
+      "blockedBy": [],
+      "blocking": [
+        {
+          "number": 7,
+          "title": "Define branching, checkpoints, and bounded retention",
+          "url": "https://github.com/ctwelve/UndoKit/issues/7",
+          "state": "OPEN"
+        },
+        {
+          "number": 5,
+          "title": "Define shared history vocabulary and ownership boundaries",
+          "url": "https://github.com/ctwelve/UndoKit/issues/5",
+          "state": "CLOSED"
+        }
+      ]
+    },
+    {
+      "number": 3,
+      "title": "Establish Core Data, native undo, and lifecycle constraints",
+      "url": "https://github.com/ctwelve/UndoKit/issues/3",
+      "state": "CLOSED",
+      "body": "## Question\n\nWhich documented Apple platform constraints govern a separate Core Data history store, native Undo/Redo integration, and interruption-safe recovery across the platforms declared in UndoKit's Xcode project?\n\nRefresh existing KitchenMemory research against Apple documentation and installed SDK declarations. Investigate domain/history store separation and transaction limits; durable preparation/acceptance/finalization evidence; ambiguous outcomes and failed invalidation; history reconstruction without replaying mutations; native callback success/failure and concurrency; responder and scene/document ownership; document-package save/copy/restore/omission with SQLite journals; Core Data model migration and unreadable-store handling; and relevant macOS, iOS/iPadOS, watchOS differences.\n\nSeparate documented guarantees, local source observations, design implications, and unproved runtime behavior. Identify sharply stated disposable proofs needed, without implementing them or selecting the final protocol.\n\nWrite one research note with primary-source citations, toolchain/SDK versions and evidence limitations on a dedicated research branch. Reuse prior research as leads, not as proof of current API behavior.\n",
+      "createdAt": "2026-09-26T03:22:55Z",
+      "updatedAt": "2026-09-26T03:36:16Z",
+      "closedAt": "2026-09-26T03:36:16Z",
+      "labels": {
+        "nodes": [
+          {
+            "name": "wayfinder:research"
+          }
+        ]
+      },
+      "comments": {
+        "nodes": [
+          {
+            "url": "https://github.com/ctwelve/UndoKit/issues/3#issuecomment-5842826638",
+            "body": "## Research resolution\n\nApple documentation and Xcode 27 SDK declarations establish the mechanisms and limits relevant to this design. Independent domain/history stores require explicit outcome reconciliation; native callbacks do not supply an asynchronous or fallible semantic-acceptance result. Failed invalidation and unknown outcomes need a deliberate recovery policy.\n\nNative restoration must avoid both domain replay and spurious document change tracking. Document operations must account for journal data and live store identity. Schema migration, payload compatibility and current semantic eligibility are separate checks. watchOS exposes underlying APIs, while actual scene manager availability and controls still need native proof.\n\n[Read the source-cited research note](https://github.com/ctwelve/UndoKit/blob/506980a74fab8a71131f92557c4fc90001b6bae5/docs/research/apple-platform-contracts.md). Captured on `research/apple-platform-contracts` at `506980a74fab`.\n\nDocumented guarantees, SDK observations, inference and unproved behavior are separated. No build, crash, migration, package-copy or native UI proof was run. The map now includes blocked prototype tickets for the questions made precise by this research.\n",
+            "createdAt": "2026-09-26T03:36:15Z",
+            "author": {
+              "login": "ctwelve"
+            }
+          }
+        ]
+      },
+      "trackedIssues": {
+        "nodes": []
+      },
+      "trackedInIssues": {
+        "nodes": []
+      },
+      "blockedBy": [],
+      "blocking": [
+        {
+          "number": 9,
+          "title": "Define native undo routing and restored availability",
+          "url": "https://github.com/ctwelve/UndoKit/issues/9",
+          "state": "OPEN"
+        },
+        {
+          "number": 6,
+          "title": "Define durable acceptance, compensation, and interruption recovery",
+          "url": "https://github.com/ctwelve/UndoKit/issues/6",
+          "state": "OPEN"
+        },
+        {
+          "number": 5,
+          "title": "Define shared history vocabulary and ownership boundaries",
+          "url": "https://github.com/ctwelve/UndoKit/issues/5",
+          "state": "CLOSED"
+        }
+      ]
+    },
+    {
+      "number": 4,
+      "title": "Establish typed Swift, Objective-C, and XCFramework compatibility",
+      "url": "https://github.com/ctwelve/UndoKit/issues/4",
+      "state": "CLOSED",
+      "body": "## Question\n\nWhat feasible interface and distribution options let one UndoKit XCFramework serve idiomatic Swift clients preserving their own typed data and independently usable Objective-C clients?\n\nUse the current UndoKit project, consumer language/package settings, official Apple/Swift documentation, and pinned upstream Swift Collections/Swift Algorithms sources. Establish concrete type/conformance constraints, generic and Objective-C boundaries, host-provided encoding and semantic handlers, resilient payload evolution, library evolution/module stability, dependency exposure/linkage and consumer version compatibility, model/resource bundling, and the declared device/simulator slices.\n\nThe maintainer favors Collections and Algorithms where they reduce interface complexity. Evaluate dependencies inside the framework, exposed through a Swift API, or supplied through a companion Swift layer. Distinguish data containers from algorithms and explain when each matters; preserve ergonomic typed use without requiring callers to manually build an Objective-C-compatible object graph. Identify nonserializable or unsupported cases explicitly rather than promising arbitrary-object persistence.\n\nCompare feasible options and required compile/link/runtime proofs without selecting a public API, changing project settings, or adding dependencies. Write one primary-source-linked research note on a dedicated research branch.\n",
+      "createdAt": "2026-09-26T03:22:57Z",
+      "updatedAt": "2026-09-26T03:36:22Z",
+      "closedAt": "2026-09-26T03:36:22Z",
+      "labels": {
+        "nodes": [
+          {
+            "name": "wayfinder:research"
+          }
+        ]
+      },
+      "comments": {
+        "nodes": [
+          {
+            "url": "https://github.com/ctwelve/UndoKit/issues/4#issuecomment-5842827054",
+            "body": "## Research resolution\n\nThe research compares feasible idiomatic Swift and independently usable Objective-C boundaries over a common history engine. Typed codecs can preserve host models containing supported Collections values without manual Foundation object-graph decomposition. The concrete coding table identifies supported conditional conformances and types requiring adapters or explicit exclusions; Algorithms is a separate operations/view dependency.\n\nPublic package types, private implementation dependencies and host-owned package use carry different binary/module/linkage obligations. The note records current pins and toolchain evidence, effective deployment settings, static/dynamic resource options, and the archive/import/link/runtime proofs needed before selecting a distribution contract.\n\n[Read the source-cited research note](https://github.com/ctwelve/UndoKit/blob/e1faec9486e72170dc237d006f33232a1aec1f25/docs/research/swift-objc-distribution.md). Captured on `research/swift-objc-distribution` at `e1faec9486e7`.\n\nNo public API, schema, dependency addition or packaging topology was selected. Effective Xcode settings were inspected; no framework archive, compilation probe, codec round trip, packaged resource load or runtime proof was performed.\n",
+            "createdAt": "2026-09-26T03:36:20Z",
+            "author": {
+              "login": "ctwelve"
+            }
+          }
+        ]
+      },
+      "trackedIssues": {
+        "nodes": []
+      },
+      "trackedInIssues": {
+        "nodes": []
+      },
+      "blockedBy": [],
+      "blocking": [
+        {
+          "number": 11,
+          "title": "Define XCFramework distribution and consumer adoption contracts",
+          "url": "https://github.com/ctwelve/UndoKit/issues/11",
+          "state": "OPEN"
+        },
+        {
+          "number": 8,
+          "title": "Define typed payloads and the Swift and Objective-C interfaces",
+          "url": "https://github.com/ctwelve/UndoKit/issues/8",
+          "state": "OPEN"
+        }
+      ]
+    },
+    {
+      "number": 5,
+      "title": "Define shared history vocabulary and ownership boundaries",
+      "url": "https://github.com/ctwelve/UndoKit/issues/5",
+      "state": "CLOSED",
+      "body": "## Question\n\nWhich shared domain concepts and ownership boundaries accommodate both consumers without imposing KitchenMemory's scene/retention policy on Folio or Folio's document graph on KitchenMemory?\n\nUsing the consumer inventory and platform constraints, agree the meanings and relationships of action, group, accepted outcome, Undo/Redo position, historical state, branch, checkpoint, scope and invalidation. Separate ordinary native Undo/Redo from retained navigable history, host-owned current state, and recovery evidence. Identify the minimum capabilities each consumer selects and which decisions remain host policy.\n\nResolve this through live grilling and domain-modeling. Record agreed vocabulary in CONTEXT.md, keep implementation details in the decision, and explicitly surface any conflict with an existing consumer contract.\n",
+      "createdAt": "2026-09-26T03:22:59Z",
+      "updatedAt": "2026-09-26T04:28:51Z",
+      "closedAt": "2026-09-26T04:28:51Z",
+      "labels": {
+        "nodes": [
+          {
+            "name": "wayfinder:grilling"
+          }
+        ]
+      },
+      "comments": {
+        "nodes": [
+          {
+            "url": "https://github.com/ctwelve/UndoKit/issues/5#issuecomment-5843165699",
+            "body": "## Resolution\n\nThe shared vocabulary and ownership boundaries are agreed through the live design\ninterview. The canonical term definitions are in the committed\n[CONTEXT.md](https://github.com/ctwelve/UndoKit/blob/1d3cdf8/CONTEXT.md). This decision selects responsibilities\nand observable semantics, not a schema, public API, branching algorithm, or\nrecovery implementation.\n\n### Ownership and submitted work\n\n- A History Scope has a stable host-defined identity, independent of an editing\n  context, native manager, or process lifetime. Multiple editing contexts may\n  participate in one scope. Folio maps this to independently saved documents;\n  KitchenMemory maps it to its logical scene and owner/store/Kitchen boundary.\n- The host owns data meaning, coherence, semantic validation, compensation,\n  authoritative acceptance and recovery evidence. It supplies the data and\n  identifies the dependencies that history must preserve. UndoKit manages the\n  history structure, ordering, relationships, retained representations, native\n  projection, and its own storage safeguards.\n- The host filters known no-ops before submitting work. UndoKit does not infer\n  meaningful changes by comparing opaque app payloads or take ownership of app\n  data hygiene. Handling a request whose outcome changes or becomes uncertain\n  during acceptance remains part of the recovery protocol decision.\n- Commands are identified requests; Actions represent accepted semantic changes.\n  A retry preserves its Command identity. Accepted Undo and Redo produce Actions\n  related to earlier changes. The host determines the appropriate domain records;\n  there is no universal framework meaning of \"Revision\". KitchenMemory's existing\n  Selection-based Undo Save policy remains intact.\n\n### Groups and retained history\n\n- An Undo Group is one user-visible step containing one or more accepted Actions\n  within one scope. The Actions retain their identities. Reversing or reapplying\n  the group must not leave a partial semantic result; the host supplies the\n  all-or-nothing domain operation and UndoKit changes actionable position only\n  after establishing the complete outcome. This does not claim cross-store\n  atomicity or make the original constituent Actions simultaneous.\n- Retained History and current Undo/Redo Availability are distinct. Historical\n  states and branching are configured capabilities; a bounded-action consumer\n  need not reconstruct complete historical states of its entire application.\n- A Historical State is coherent according to the host's domain and dependency\n  rules. It does not require a full duplicate snapshot per edit. A History Branch\n  retains an alternative continuation from shared earlier history in one scope;\n  the host chooses its presentation.\n- Checkpoints are a requested capability. A host-designated, optionally named\n  Checkpoint refers to a coherent Historical State and retains its required data.\n  Hosts may use checkpoints differently; a checkpoint is not an independent\n  backup promise.\n- The host can select a different branch and Undo/Redo Position. Browsing a state\n  alone need not change that position. Movement that changes domain state requires\n  an accepted host operation; the relation between accepted content, recorded\n  history, and native availability must remain trustworthy. Exact next-Undo\n  behavior after a branch jump remains a branching-model decision.\n\n### Capabilities, policy, and availability\n\n- UndoKit owns supported History Capabilities; hosts request them. Hosts own\n  History Policy within the framework's storage safeguards. Initialization can\n  establish capabilities and defaults, while supported policy choices may change\n  per scope during use. Folio's recording Off behavior and remaining checkpoint\n  support continue to constrain those choices.\n- Suspension is temporary unavailability while a relevant question is unresolved.\n  Invalidation retires affected eligibility without necessarily removing retained\n  history, and coincidental return to old values does not automatically revive it.\n  Pruning removes historical data under an authorized policy while respecting\n  current content, retained history, and pending recovery obligations.\n\n### Storage safeguards and host response\n\n- Host retention policy sets ordinary limits, such as KitchenMemory's previous\n  100 groups. UndoKit additionally enforces a validated safe operating envelope\n  for its Core Data configuration. Its supported capacity is not inferred from\n  SQLite's theoretical format ceiling, nor from group count alone.\n- Safeguards account for the complete owned storage footprint and working\n  headroom, including journals and retained payloads. Numerical budgets, supported\n  Core Data mechanisms, capacity measurement and maintenance strategies require\n  later evidence; a capacity preflight cannot guarantee all subsequent writes.\n- Reclamation follows the host's authorized retention policy. When required\n  tracking cannot safely be preserved, UndoKit may decline preparation before\n  the host accepts new tracked work and must report the condition explicitly.\n  The host must handle it, potentially authorizing archival or truncation.\n  UndoKit does not silently discard protected history or disable recording.\n\n### Follow-through\n\n- [Define durable acceptance, compensation, and interruption recovery](https://github.com/ctwelve/UndoKit/issues/6): establish atomic group compensation, outcome reconciliation, capacity refusal and interrupted transitions.\n- [Define branching, checkpoints, and bounded retention](https://github.com/ctwelve/UndoKit/issues/7): establish retained-state representation, host-selected branch/position transitions, the next Undo after a jump, checkpoint retention and pruning relationships.\n- [Define history store lifecycle, package operations, and compatibility](https://github.com/ctwelve/UndoKit/issues/10): establish the Core Data storage safeguards and the host/framework boundary for any chosen archival or truncation response.\n- [Set acceptance scenarios, scale budgets, and design proof gates](https://github.com/ctwelve/UndoKit/issues/12): choose measured capacity/performance limits and the concrete proof setups.\n\nNo production implementation or runtime proof is claimed by this decision.\n",
+            "createdAt": "2026-09-26T04:28:50Z",
+            "author": {
+              "login": "ctwelve"
+            }
+          }
+        ]
+      },
+      "trackedIssues": {
+        "nodes": []
+      },
+      "trackedInIssues": {
+        "nodes": []
+      },
+      "blockedBy": [
+        {
+          "number": 3,
+          "title": "Establish Core Data, native undo, and lifecycle constraints",
+          "url": "https://github.com/ctwelve/UndoKit/issues/3",
+          "state": "CLOSED"
+        },
+        {
+          "number": 2,
+          "title": "Inventory Folio and KitchenMemory undo requirements and integration seams",
+          "url": "https://github.com/ctwelve/UndoKit/issues/2",
+          "state": "CLOSED"
+        }
+      ],
+      "blocking": [
+        {
+          "number": 8,
+          "title": "Define typed payloads and the Swift and Objective-C interfaces",
+          "url": "https://github.com/ctwelve/UndoKit/issues/8",
+          "state": "OPEN"
+        },
+        {
+          "number": 7,
+          "title": "Define branching, checkpoints, and bounded retention",
+          "url": "https://github.com/ctwelve/UndoKit/issues/7",
+          "state": "OPEN"
+        },
+        {
+          "number": 6,
+          "title": "Define durable acceptance, compensation, and interruption recovery",
+          "url": "https://github.com/ctwelve/UndoKit/issues/6",
+          "state": "OPEN"
+        }
+      ]
+    },
+    {
+      "number": 6,
+      "title": "Define durable acceptance, compensation, and interruption recovery",
+      "url": "https://github.com/ctwelve/UndoKit/issues/6",
+      "state": "OPEN",
+      "body": "## Question\n\nWhat exact host/framework protocol makes action registration, Undo, Redo and invalidation recoverable when domain acceptance and the separate history store cannot be assumed to commit atomically?\n\nAgree stable identities, preparation and finalization, outcome discovery, duplicate-free retries, eligibility checks at domain acceptance, incomplete/ambiguous states, rejected inverses, pending compensation, failed invalidation and the conditions for exposing native availability after reopening. Distinguish ordinary interruption from a reported failure and protect against false Redo or resurrected invalidation.\n\nWalk concrete interruption points for both consumers. Define guarantees and the smallest disposable proofs needed before accepting this protocol; do not implement a production persistence layer.\n\nBuilding on [Define shared history vocabulary and ownership boundaries](https://github.com/ctwelve/UndoKit/issues/5#issuecomment-5843165699), define all-or-nothing group compensation and the point at which a complete accepted outcome permits position changes. Hosts filter known no-ops before submission; resolve changed or uncertain outcomes during acceptance. Define capacity refusal before new tracked domain work is accepted, without treating preflight as a guarantee of later writes, and recover interruption at these boundaries.\n",
+      "createdAt": "2026-09-26T03:23:00Z",
+      "updatedAt": "2026-09-26T04:28:55Z",
+      "closedAt": null,
+      "labels": {
+        "nodes": [
+          {
+            "name": "wayfinder:grilling"
+          }
+        ]
+      },
+      "comments": {
+        "nodes": []
+      },
+      "trackedIssues": {
+        "nodes": []
+      },
+      "trackedInIssues": {
+        "nodes": []
+      },
+      "blockedBy": [
+        {
+          "number": 3,
+          "title": "Establish Core Data, native undo, and lifecycle constraints",
+          "url": "https://github.com/ctwelve/UndoKit/issues/3",
+          "state": "CLOSED"
+        },
+        {
+          "number": 5,
+          "title": "Define shared history vocabulary and ownership boundaries",
+          "url": "https://github.com/ctwelve/UndoKit/issues/5",
+          "state": "CLOSED"
+        }
+      ],
+      "blocking": [
+        {
+          "number": 12,
+          "title": "Set acceptance scenarios, scale budgets, and design proof gates",
+          "url": "https://github.com/ctwelve/UndoKit/issues/12",
+          "state": "OPEN"
+        },
+        {
+          "number": 10,
+          "title": "Define history store lifecycle, package operations, and compatibility",
+          "url": "https://github.com/ctwelve/UndoKit/issues/10",
+          "state": "OPEN"
+        },
+        {
+          "number": 9,
+          "title": "Define native undo routing and restored availability",
+          "url": "https://github.com/ctwelve/UndoKit/issues/9",
+          "state": "OPEN"
+        },
+        {
+          "number": 8,
+          "title": "Define typed payloads and the Swift and Objective-C interfaces",
+          "url": "https://github.com/ctwelve/UndoKit/issues/8",
+          "state": "OPEN"
+        }
+      ]
+    },
+    {
+      "number": 7,
+      "title": "Define branching, checkpoints, and bounded retention",
+      "url": "https://github.com/ctwelve/UndoKit/issues/7",
+      "state": "OPEN",
+      "body": "## Question\n\nWhat history and traversal model supports Folio's long branching history and KitchenMemory's last 100 eligible action groups under one coherent framework contract?\n\nAgree what a branch and historical state preserve; how native Undo/Redo relates to retained reversals and abandoned futures; how checkpoints, restoration and selected-material recovery establish new current work; and what may be consolidated, pruned or retained under host-selected policies. Account for payload/dependency lifetime and scalable traversal without assuming full command replay.\n\nSpecify observable behavior and the conditions that would favor particular algorithms or storage representations. Keep policy examples distinct from universal defaults and identify scale questions requiring human budgets or prototypes.\n\nBuilding on [Define shared history vocabulary and ownership boundaries](https://github.com/ctwelve/UndoKit/issues/5#issuecomment-5843165699), define host-selected branch and Undo/Redo Position changes, including the next Undo and Redo after a jump and the distinction between browsing and accepted domain changes. Preserve Undo Group boundaries, optional checkpoint capability and the data required by retained checkpoints. A bounded-action consumer need not reconstruct historical states of its entire application.\n",
+      "createdAt": "2026-09-26T03:23:02Z",
+      "updatedAt": "2026-09-26T04:28:56Z",
+      "closedAt": null,
+      "labels": {
+        "nodes": [
+          {
+            "name": "wayfinder:grilling"
+          }
+        ]
+      },
+      "comments": {
+        "nodes": []
+      },
+      "trackedIssues": {
+        "nodes": []
+      },
+      "trackedInIssues": {
+        "nodes": []
+      },
+      "blockedBy": [
+        {
+          "number": 2,
+          "title": "Inventory Folio and KitchenMemory undo requirements and integration seams",
+          "url": "https://github.com/ctwelve/UndoKit/issues/2",
+          "state": "CLOSED"
+        },
+        {
+          "number": 5,
+          "title": "Define shared history vocabulary and ownership boundaries",
+          "url": "https://github.com/ctwelve/UndoKit/issues/5",
+          "state": "CLOSED"
+        }
+      ],
+      "blocking": [
+        {
+          "number": 12,
+          "title": "Set acceptance scenarios, scale budgets, and design proof gates",
+          "url": "https://github.com/ctwelve/UndoKit/issues/12",
+          "state": "OPEN"
+        },
+        {
+          "number": 10,
+          "title": "Define history store lifecycle, package operations, and compatibility",
+          "url": "https://github.com/ctwelve/UndoKit/issues/10",
+          "state": "OPEN"
+        },
+        {
+          "number": 9,
+          "title": "Define native undo routing and restored availability",
+          "url": "https://github.com/ctwelve/UndoKit/issues/9",
+          "state": "OPEN"
+        }
+      ]
+    },
+    {
+      "number": 8,
+      "title": "Define typed payloads and the Swift and Objective-C interfaces",
+      "url": "https://github.com/ctwelve/UndoKit/issues/8",
+      "state": "OPEN",
+      "body": "## Question\n\nWhat public contract preserves app-defined data in its useful typed form while providing idiomatic Swift and independently usable Objective-C APIs over the agreed recovery protocol?\n\nAgree registration, compensation/outcome/recovery hooks, isolation and completion semantics, payload identity/versioning/encoding, unknown or incompatible payload behavior, external-resource ownership, and migration responsibilities. Decide how Swift Collections and Algorithms participate and what consumer dependency obligations are acceptable.\n\nCompare small concrete Swift and Objective-C call-site sketches for each consumer before choosing the interface. The shared framework must not absorb domain interpretation or force Swift callers to manually decompose their data into lower-level objects. Keep any sketches disposable until the live design exchange resolves this decision.\n",
+      "createdAt": "2026-09-26T03:23:05Z",
+      "updatedAt": "2026-09-26T03:23:05Z",
+      "closedAt": null,
+      "labels": {
+        "nodes": [
+          {
+            "name": "wayfinder:grilling"
+          }
+        ]
+      },
+      "comments": {
+        "nodes": []
+      },
+      "trackedIssues": {
+        "nodes": []
+      },
+      "trackedInIssues": {
+        "nodes": []
+      },
+      "blockedBy": [
+        {
+          "number": 4,
+          "title": "Establish typed Swift, Objective-C, and XCFramework compatibility",
+          "url": "https://github.com/ctwelve/UndoKit/issues/4",
+          "state": "CLOSED"
+        },
+        {
+          "number": 6,
+          "title": "Define durable acceptance, compensation, and interruption recovery",
+          "url": "https://github.com/ctwelve/UndoKit/issues/6",
+          "state": "OPEN"
+        },
+        {
+          "number": 5,
+          "title": "Define shared history vocabulary and ownership boundaries",
+          "url": "https://github.com/ctwelve/UndoKit/issues/5",
+          "state": "CLOSED"
+        }
+      ],
+      "blocking": [
+        {
+          "number": 12,
+          "title": "Set acceptance scenarios, scale budgets, and design proof gates",
+          "url": "https://github.com/ctwelve/UndoKit/issues/12",
+          "state": "OPEN"
+        },
+        {
+          "number": 11,
+          "title": "Define XCFramework distribution and consumer adoption contracts",
+          "url": "https://github.com/ctwelve/UndoKit/issues/11",
+          "state": "OPEN"
+        },
+        {
+          "number": 10,
+          "title": "Define history store lifecycle, package operations, and compatibility",
+          "url": "https://github.com/ctwelve/UndoKit/issues/10",
+          "state": "OPEN"
+        }
+      ]
+    },
+    {
+      "number": 9,
+      "title": "Define native undo routing and restored availability",
+      "url": "https://github.com/ctwelve/UndoKit/issues/9",
+      "state": "OPEN",
+      "body": "## Question\n\nHow should UndoKit project eligible persisted history into native Undo/Redo while preserving host-specific ownership, focused text behavior and trustworthy success/failure semantics?\n\nAgree document and scene attachment/detachment, group ordering, localized action names, ordinary Redo abandonment, connected editing contexts, asynchronous versus synchronous host behavior, failure reporting, interference, and restoration/disposal transitions. Rebuilding native availability must not reapply domain edits or claim acceptance prematurely.\n\nDefine the responsibilities of framework adapters and host UI, plus native Mac/mobile/watch proof cases appropriate to actual platform facilities. Shared history-browser UI is outside this initial scope.\n",
+      "createdAt": "2026-09-26T03:23:06Z",
+      "updatedAt": "2026-09-26T03:23:06Z",
+      "closedAt": null,
+      "labels": {
+        "nodes": [
+          {
+            "name": "wayfinder:grilling"
+          }
+        ]
+      },
+      "comments": {
+        "nodes": []
+      },
+      "trackedIssues": {
+        "nodes": []
+      },
+      "trackedInIssues": {
+        "nodes": []
+      },
+      "blockedBy": [
+        {
+          "number": 3,
+          "title": "Establish Core Data, native undo, and lifecycle constraints",
+          "url": "https://github.com/ctwelve/UndoKit/issues/3",
+          "state": "CLOSED"
+        },
+        {
+          "number": 7,
+          "title": "Define branching, checkpoints, and bounded retention",
+          "url": "https://github.com/ctwelve/UndoKit/issues/7",
+          "state": "OPEN"
+        },
+        {
+          "number": 6,
+          "title": "Define durable acceptance, compensation, and interruption recovery",
+          "url": "https://github.com/ctwelve/UndoKit/issues/6",
+          "state": "OPEN"
+        }
+      ],
+      "blocking": [
+        {
+          "number": 12,
+          "title": "Set acceptance scenarios, scale budgets, and design proof gates",
+          "url": "https://github.com/ctwelve/UndoKit/issues/12",
+          "state": "OPEN"
+        }
+      ]
+    },
+    {
+      "number": 10,
+      "title": "Define history store lifecycle, package operations, and compatibility",
+      "url": "https://github.com/ctwelve/UndoKit/issues/10",
+      "state": "OPEN",
+      "body": "## Question\n\nWhat store lifecycle and compatibility contract safely supports app-local history and a separate history database within each Folio document package?\n\nAgree stable store/scope identity, opening and coordinated ownership, Core Data model evolution, unsupported/corrupt stores, recovery evidence preservation, package save/copy/restore, journal consistency, recording Off and named checkpoints, explicit removal and one-time omission. Define how host-owned current content and required resources stay coherent across success and failure.\n\nState the guarantees, host obligations, and required migration/package prototypes. Preserve Folio's existing distinction between ordinary history preservation and explicit omission; do not assume history data is authoritative current content.\n\nBuilding on [Define shared history vocabulary and ownership boundaries](https://github.com/ctwelve/UndoKit/issues/5#issuecomment-5843165699), define a validated safe operating envelope for the chosen Core Data configuration, accounting for the complete owned footprint, journals, retained payloads and working headroom. Specify capacity reporting and policy-authorized reclamation, and the host/framework boundary for any chosen archival or truncation response. Preserve current content, protected history and pending recovery data; do not substitute SQLite theoretical limits or a group-count limit for supported capacity.\n",
+      "createdAt": "2026-09-26T03:23:08Z",
+      "updatedAt": "2026-09-26T04:28:58Z",
+      "closedAt": null,
+      "labels": {
+        "nodes": [
+          {
+            "name": "wayfinder:grilling"
+          }
+        ]
+      },
+      "comments": {
+        "nodes": []
+      },
+      "trackedIssues": {
+        "nodes": []
+      },
+      "trackedInIssues": {
+        "nodes": []
+      },
+      "blockedBy": [
+        {
+          "number": 8,
+          "title": "Define typed payloads and the Swift and Objective-C interfaces",
+          "url": "https://github.com/ctwelve/UndoKit/issues/8",
+          "state": "OPEN"
+        },
+        {
+          "number": 7,
+          "title": "Define branching, checkpoints, and bounded retention",
+          "url": "https://github.com/ctwelve/UndoKit/issues/7",
+          "state": "OPEN"
+        },
+        {
+          "number": 6,
+          "title": "Define durable acceptance, compensation, and interruption recovery",
+          "url": "https://github.com/ctwelve/UndoKit/issues/6",
+          "state": "OPEN"
+        }
+      ],
+      "blocking": [
+        {
+          "number": 12,
+          "title": "Set acceptance scenarios, scale budgets, and design proof gates",
+          "url": "https://github.com/ctwelve/UndoKit/issues/12",
+          "state": "OPEN"
+        }
+      ]
+    },
+    {
+      "number": 11,
+      "title": "Define XCFramework distribution and consumer adoption contracts",
+      "url": "https://github.com/ctwelve/UndoKit/issues/11",
+      "state": "OPEN",
+      "body": "## Question\n\nWhat distribution and compatibility contract makes the chosen Swift/Objective-C interface straightforward to adopt from both apps?\n\nStarting with the checked-in project, decide the delivered XCFramework slices, effective deployment and toolchain support, dependency/module linkage, Core Data model and other resource discovery, symbols and documentation, API/ABI/payload compatibility expectations, versioning and consumer integration instructions. Account for the selected Collections/Algorithms arrangement and Objective-C usability.\n\nDefine acceptance checks using minimal consumers in both languages and each declared platform family. This decision specifies delivery; it does not build or ship the production framework or amend either consumer project.\n",
+      "createdAt": "2026-09-26T03:23:10Z",
+      "updatedAt": "2026-09-26T03:23:10Z",
+      "closedAt": null,
+      "labels": {
+        "nodes": [
+          {
+            "name": "wayfinder:grilling"
+          }
+        ]
+      },
+      "comments": {
+        "nodes": []
+      },
+      "trackedIssues": {
+        "nodes": []
+      },
+      "trackedInIssues": {
+        "nodes": []
+      },
+      "blockedBy": [
+        {
+          "number": 4,
+          "title": "Establish typed Swift, Objective-C, and XCFramework compatibility",
+          "url": "https://github.com/ctwelve/UndoKit/issues/4",
+          "state": "CLOSED"
+        },
+        {
+          "number": 8,
+          "title": "Define typed payloads and the Swift and Objective-C interfaces",
+          "url": "https://github.com/ctwelve/UndoKit/issues/8",
+          "state": "OPEN"
+        }
+      ],
+      "blocking": [
+        {
+          "number": 12,
+          "title": "Set acceptance scenarios, scale budgets, and design proof gates",
+          "url": "https://github.com/ctwelve/UndoKit/issues/12",
+          "state": "OPEN"
+        }
+      ]
+    },
+    {
+      "number": 12,
+      "title": "Set acceptance scenarios, scale budgets, and design proof gates",
+      "url": "https://github.com/ctwelve/UndoKit/issues/12",
+      "state": "OPEN",
+      "body": "## Question\n\nWhat observable evidence and performance/storage budgets must the shared design satisfy before production implementation can proceed confidently?\n\nTurn the agreed contracts into a traceable scenario matrix covering both consumers, interruption at each protocol stage, failed inverse/invalidation, repeated reopening, scope/interference, typed payload evolution, package save/copy/restore/omission, native responder behavior, and large branching versus bounded history. Agree representative history sizes, payload sizes, latency/memory/disk budgets and supported-platform evidence.\n\nReview the existing prototype children and select/refine their exact setups and gates; chart additional child tickets only for newly discovered proof questions. Rule out a prototype explicitly if the agreed design no longer needs it. Distinguish compilation, automated behavioral checks, real native observations and human acceptance. No unrun proof may be reported as passing.\n\nBuilding on [Define shared history vocabulary and ownership boundaries](https://github.com/ctwelve/UndoKit/issues/5#issuecomment-5843165699), choose measured Core Data capacity limits and admission/maintenance proof gates using the complete owned storage footprint, including journals, retained payloads and working headroom. Include large-payload bounded histories, refusal before host acceptance, failed writes after a successful preflight, atomic group outcomes, and branch-jump availability in the scenario matrix. KitchenMemory's 100-group policy is not itself a byte or performance budget.\n",
+      "createdAt": "2026-09-26T03:23:12Z",
+      "updatedAt": "2026-09-26T04:29:00Z",
+      "closedAt": null,
+      "labels": {
+        "nodes": [
+          {
+            "name": "wayfinder:grilling"
+          }
+        ]
+      },
+      "comments": {
+        "nodes": []
+      },
+      "trackedIssues": {
+        "nodes": []
+      },
+      "trackedInIssues": {
+        "nodes": []
+      },
+      "blockedBy": [
+        {
+          "number": 11,
+          "title": "Define XCFramework distribution and consumer adoption contracts",
+          "url": "https://github.com/ctwelve/UndoKit/issues/11",
+          "state": "OPEN"
+        },
+        {
+          "number": 10,
+          "title": "Define history store lifecycle, package operations, and compatibility",
+          "url": "https://github.com/ctwelve/UndoKit/issues/10",
+          "state": "OPEN"
+        },
+        {
+          "number": 9,
+          "title": "Define native undo routing and restored availability",
+          "url": "https://github.com/ctwelve/UndoKit/issues/9",
+          "state": "OPEN"
+        },
+        {
+          "number": 8,
+          "title": "Define typed payloads and the Swift and Objective-C interfaces",
+          "url": "https://github.com/ctwelve/UndoKit/issues/8",
+          "state": "OPEN"
+        },
+        {
+          "number": 7,
+          "title": "Define branching, checkpoints, and bounded retention",
+          "url": "https://github.com/ctwelve/UndoKit/issues/7",
+          "state": "OPEN"
+        },
+        {
+          "number": 6,
+          "title": "Define durable acceptance, compensation, and interruption recovery",
+          "url": "https://github.com/ctwelve/UndoKit/issues/6",
+          "state": "OPEN"
+        }
+      ],
+      "blocking": [
+        {
+          "number": 18,
+          "title": "Prove branching and retention at the agreed scale",
+          "url": "https://github.com/ctwelve/UndoKit/issues/18",
+          "state": "OPEN"
+        },
+        {
+          "number": 17,
+          "title": "Prove typed Swift and Objective-C XCFramework adoption",
+          "url": "https://github.com/ctwelve/UndoKit/issues/17",
+          "state": "OPEN"
+        },
+        {
+          "number": 16,
+          "title": "Prove package operations and compatibility failure preservation",
+          "url": "https://github.com/ctwelve/UndoKit/issues/16",
+          "state": "OPEN"
+        },
+        {
+          "number": 15,
+          "title": "Prove native restoration, focus, and lifecycle behavior",
+          "url": "https://github.com/ctwelve/UndoKit/issues/15",
+          "state": "OPEN"
+        },
+        {
+          "number": 14,
+          "title": "Prove interruption recovery and durable invalidation",
+          "url": "https://github.com/ctwelve/UndoKit/issues/14",
+          "state": "OPEN"
+        },
+        {
+          "number": 13,
+          "title": "Confirm the shared design is ready for implementation",
+          "url": "https://github.com/ctwelve/UndoKit/issues/13",
+          "state": "OPEN"
+        }
+      ]
+    },
+    {
+      "number": 13,
+      "title": "Confirm the shared design is ready for implementation",
+      "url": "https://github.com/ctwelve/UndoKit/issues/13",
+      "state": "OPEN",
+      "body": "## Question\n\nDo the resolved contracts and required design proofs fully cover both consumers' established needs, with no unresolved prerequisite that would force an implementation agent to invent architecture?\n\nReview the linked decisions and evidence with the maintainer, reconcile cross-ticket contradictions, verify the prototype gates scoped by the acceptance decision, and identify the approved implementation handoff boundary. Confirm the agreed requirements, ownership, public API, persistence/recovery guarantees, adoption contract and acceptance criteria form a coherent design.\n\nIf necessary evidence or decisions remain, chart and wire them before resolving this ticket. Close the map only when the way is clear; production implementation remains a separate effort.\n",
+      "createdAt": "2026-09-26T03:23:14Z",
+      "updatedAt": "2026-09-26T03:37:10Z",
+      "closedAt": null,
+      "labels": {
+        "nodes": [
+          {
+            "name": "wayfinder:grilling"
+          }
+        ]
+      },
+      "comments": {
+        "nodes": []
+      },
+      "trackedIssues": {
+        "nodes": []
+      },
+      "trackedInIssues": {
+        "nodes": []
+      },
+      "blockedBy": [
+        {
+          "number": 18,
+          "title": "Prove branching and retention at the agreed scale",
+          "url": "https://github.com/ctwelve/UndoKit/issues/18",
+          "state": "OPEN"
+        },
+        {
+          "number": 17,
+          "title": "Prove typed Swift and Objective-C XCFramework adoption",
+          "url": "https://github.com/ctwelve/UndoKit/issues/17",
+          "state": "OPEN"
+        },
+        {
+          "number": 16,
+          "title": "Prove package operations and compatibility failure preservation",
+          "url": "https://github.com/ctwelve/UndoKit/issues/16",
+          "state": "OPEN"
+        },
+        {
+          "number": 15,
+          "title": "Prove native restoration, focus, and lifecycle behavior",
+          "url": "https://github.com/ctwelve/UndoKit/issues/15",
+          "state": "OPEN"
+        },
+        {
+          "number": 14,
+          "title": "Prove interruption recovery and durable invalidation",
+          "url": "https://github.com/ctwelve/UndoKit/issues/14",
+          "state": "OPEN"
+        },
+        {
+          "number": 12,
+          "title": "Set acceptance scenarios, scale budgets, and design proof gates",
+          "url": "https://github.com/ctwelve/UndoKit/issues/12",
+          "state": "OPEN"
+        }
+      ],
+      "blocking": []
+    },
+    {
+      "number": 14,
+      "title": "Prove interruption recovery and durable invalidation",
+      "url": "https://github.com/ctwelve/UndoKit/issues/14",
+      "state": "OPEN",
+      "body": "## Question\n\nCan the selected host/history protocol recover each interrupted or failed transition without duplicate domain effects, false Redo, or resurrected invalidation?\n\nAfter the acceptance decision selects the concrete setup, build a disposable on-disk host/history probe with stable identities and authoritative outcome lookup. Interrupt before/after preparation, domain acceptance, finalization, inverse acceptance and retry. Inject failed history saves and invalidation writes, including unavailable evidence. Reopen repeatedly and observe exactly-once accepted effects, correct actionable history and explicit unresolved states.\n\nThis question follows [Establish Core Data, native undo, and lifecycle constraints](https://github.com/ctwelve/UndoKit/issues/3). It is a HITL design proof: demonstrate results to the maintainer and use failures to revise the protocol. Link the throwaway artifact and actual observations; production implementation is outside scope.\n",
+      "createdAt": "2026-09-26T03:34:35Z",
+      "updatedAt": "2026-09-26T03:34:35Z",
+      "closedAt": null,
+      "labels": {
+        "nodes": [
+          {
+            "name": "wayfinder:prototype"
+          }
+        ]
+      },
+      "comments": {
+        "nodes": []
+      },
+      "trackedIssues": {
+        "nodes": []
+      },
+      "trackedInIssues": {
+        "nodes": []
+      },
+      "blockedBy": [
+        {
+          "number": 12,
+          "title": "Set acceptance scenarios, scale budgets, and design proof gates",
+          "url": "https://github.com/ctwelve/UndoKit/issues/12",
+          "state": "OPEN"
+        }
+      ],
+      "blocking": [
+        {
+          "number": 13,
+          "title": "Confirm the shared design is ready for implementation",
+          "url": "https://github.com/ctwelve/UndoKit/issues/13",
+          "state": "OPEN"
+        }
+      ]
+    },
+    {
+      "number": 15,
+      "title": "Prove native restoration, focus, and lifecycle behavior",
+      "url": "https://github.com/ctwelve/UndoKit/issues/15",
+      "state": "OPEN",
+      "body": "## Question\n\nCan the selected native adapter restore both Undo and Redo without replaying domain edits or spuriously dirtying a document, while preserving each consumer's focus and lifecycle policy?\n\nUse disposable native hosts under the setup selected by the acceptance decision. Include a persisted position with both directions available; successful, rejected and deferred compensation; focused text versus app history; two document contexts/scenes; logical scene restoration versus disposal; and actual controls appropriate to macOS, iOS/iPadOS and watchOS. Observe names, grouping, change counts, scope and native availability. Exercise interruption/relaunch and device-lock cases where applicable.\n\nKeep Folio's shared document order and KitchenMemory's native-text priority/no-automatic-navigation policy distinct. This is a HITL prototype, not production adapters. Record real native observations separately from direct method calls and distinguish simulator/device evidence. Source questions: [Apple platform constraints](https://github.com/ctwelve/UndoKit/issues/3) and [consumer requirements](https://github.com/ctwelve/UndoKit/issues/2).\n",
+      "createdAt": "2026-09-26T03:34:37Z",
+      "updatedAt": "2026-09-26T03:34:37Z",
+      "closedAt": null,
+      "labels": {
+        "nodes": [
+          {
+            "name": "wayfinder:prototype"
+          }
+        ]
+      },
+      "comments": {
+        "nodes": []
+      },
+      "trackedIssues": {
+        "nodes": []
+      },
+      "trackedInIssues": {
+        "nodes": []
+      },
+      "blockedBy": [
+        {
+          "number": 12,
+          "title": "Set acceptance scenarios, scale budgets, and design proof gates",
+          "url": "https://github.com/ctwelve/UndoKit/issues/12",
+          "state": "OPEN"
+        }
+      ],
+      "blocking": [
+        {
+          "number": 13,
+          "title": "Confirm the shared design is ready for implementation",
+          "url": "https://github.com/ctwelve/UndoKit/issues/13",
+          "state": "OPEN"
+        }
+      ]
+    },
+    {
+      "number": 16,
+      "title": "Prove package operations and compatibility failure preservation",
+      "url": "https://github.com/ctwelve/UndoKit/issues/16",
+      "state": "OPEN",
+      "body": "## Question\n\nCan the selected history-store lifecycle preserve coherent content/history/resources through document operations and preserve recoverable originals when schemas, payloads or storage are unavailable?\n\nUse a disposable document-package host, the selected model/payload fixtures and an active SQLite journal. Exercise coordinated save, copy, move/Save As, restoration, recording Off/checkpoints/On and successful versus failed omission. Verify matching generations, displaced branches, live store identity and current resources. Inject interrupted migration, unknown schema/codec, corrupted or protected-data-unavailable stores; distinguish unavailable history from an empty history.\n\nThe acceptance decision will select precise fixtures and observable gates. This is a HITL design proof, not a Folio package migration or production storage implementation. Link artifacts and results, and reopen contract decisions when a required invariant fails. Source questions: [Apple platform constraints](https://github.com/ctwelve/UndoKit/issues/3) and [consumer integration gaps](https://github.com/ctwelve/UndoKit/issues/2).\n",
+      "createdAt": "2026-09-26T03:34:39Z",
+      "updatedAt": "2026-09-26T03:34:39Z",
+      "closedAt": null,
+      "labels": {
+        "nodes": [
+          {
+            "name": "wayfinder:prototype"
+          }
+        ]
+      },
+      "comments": {
+        "nodes": []
+      },
+      "trackedIssues": {
+        "nodes": []
+      },
+      "trackedInIssues": {
+        "nodes": []
+      },
+      "blockedBy": [
+        {
+          "number": 12,
+          "title": "Set acceptance scenarios, scale budgets, and design proof gates",
+          "url": "https://github.com/ctwelve/UndoKit/issues/12",
+          "state": "OPEN"
+        }
+      ],
+      "blocking": [
+        {
+          "number": 13,
+          "title": "Confirm the shared design is ready for implementation",
+          "url": "https://github.com/ctwelve/UndoKit/issues/13",
+          "state": "OPEN"
+        }
+      ]
+    },
+    {
+      "number": 17,
+      "title": "Prove typed Swift and Objective-C XCFramework adoption",
+      "url": "https://github.com/ctwelve/UndoKit/issues/17",
+      "state": "OPEN",
+      "body": "## Question\n\nCan a disposable XCFramework built with the selected interface and dependency arrangement be consumed naturally by both languages on the declared platform families, with models/resources and payload round trips working?\n\nUse minimal Swift and Objective-C consumers under the compatibility matrix selected by the acceptance decision. Include a representative typed KitchenMemory command, actual supported Swift Collections payloads, and an Objective-C immutable model through its agreed codec. Verify command/payload identity and semantics after close/reopen, unsupported payload handling, package-version/linkage behavior, framework model/resource discovery, and representative archive/import/link/runtime checks.\n\nThe probe must expose any manual object-graph decomposition or accidental package dependency obligations at the call site. Record which checks actually ran; a built slice is not a supported-runtime proof. This is a HITL interface/distribution experiment, not release packaging. Source investigation: [Establish typed Swift, Objective-C, and XCFramework compatibility](https://github.com/ctwelve/UndoKit/issues/4).\n",
+      "createdAt": "2026-09-26T03:34:41Z",
+      "updatedAt": "2026-09-26T03:34:41Z",
+      "closedAt": null,
+      "labels": {
+        "nodes": [
+          {
+            "name": "wayfinder:prototype"
+          }
+        ]
+      },
+      "comments": {
+        "nodes": []
+      },
+      "trackedIssues": {
+        "nodes": []
+      },
+      "trackedInIssues": {
+        "nodes": []
+      },
+      "blockedBy": [
+        {
+          "number": 12,
+          "title": "Set acceptance scenarios, scale budgets, and design proof gates",
+          "url": "https://github.com/ctwelve/UndoKit/issues/12",
+          "state": "OPEN"
+        }
+      ],
+      "blocking": [
+        {
+          "number": 13,
+          "title": "Confirm the shared design is ready for implementation",
+          "url": "https://github.com/ctwelve/UndoKit/issues/13",
+          "state": "OPEN"
+        }
+      ]
+    },
+    {
+      "number": 18,
+      "title": "Prove branching and retention at the agreed scale",
+      "url": "https://github.com/ctwelve/UndoKit/issues/18",
+      "state": "OPEN",
+      "body": "## Question\n\nDoes the selected history representation preserve branch/checkpoint/resource invariants and remain within the agreed time, memory and storage budgets for both consumer profiles?\n\nAfter history semantics and acceptance workloads are agreed, construct a disposable representative history model. Exercise abandoned futures, restoration retaining displaced work, selected-material recovery, checkpoints, consolidation/pruning, and KitchenMemory's 100-group cap while preserving still-needed recovery evidence and resources.\n\nMeasure the agreed large Folio workloads and bounded KitchenMemory workloads using the agreed observation methods; include reopen and traversal costs. Explain any simplified parts of the prototype and what the evidence does not establish. This is a HITL algorithm/representation proof, not the production model. Failed budgets or invariants return to the history/retention decision.\n",
+      "createdAt": "2026-09-26T03:34:43Z",
+      "updatedAt": "2026-09-26T03:34:43Z",
+      "closedAt": null,
+      "labels": {
+        "nodes": [
+          {
+            "name": "wayfinder:prototype"
+          }
+        ]
+      },
+      "comments": {
+        "nodes": []
+      },
+      "trackedIssues": {
+        "nodes": []
+      },
+      "trackedInIssues": {
+        "nodes": []
+      },
+      "blockedBy": [
+        {
+          "number": 12,
+          "title": "Set acceptance scenarios, scale budgets, and design proof gates",
+          "url": "https://github.com/ctwelve/UndoKit/issues/12",
+          "state": "OPEN"
+        }
+      ],
+      "blocking": [
+        {
+          "number": 13,
+          "title": "Confirm the shared design is ready for implementation",
+          "url": "https://github.com/ctwelve/UndoKit/issues/13",
+          "state": "OPEN"
+        }
+      ]
+    }
+  ]
+}

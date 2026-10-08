@@ -1,0 +1,248 @@
+// SPDX-FileCopyrightText: 2026 the Folio Project
+// SPDX-License-Identifier: MIT
+import Foundation
+import Testing
+import ScaleProbe
+
+@MainActor @Suite(.serialized) struct StoreTests {
+@Test func restorationRetainsDisplacedContinuationAndRoundTrips() throws {
+    let store = try HistoryStore.temporary()
+    defer { try? store.close(); if ProcessInfo.processInfo.environment["KEEP_FIXTURES"] != "1" { try? FileManager.default.removeItem(at: store.url.deletingLastPathComponent()) } }
+    let a = try store.append(scope: "folio", actions: [.set("text", "A")])
+    let b = try store.append(scope: "folio", actions: [.set("text", "B")])
+    let c = try store.append(scope: "folio", actions: [.set("text", "C")])
+    let restored = try store.restore(scope: "folio", target: a)
+    #expect(try store.reconstruct(scope: "folio", node: restored).state == ["text": "A"])
+    #expect(try store.reconstruct(scope: "folio", node: c).state == ["text": "C"])
+    #expect(try store.node(b) != nil)
+    #expect(try store.node(restored)?.origin == a)
+    try store.undo(scope: "folio")
+    #expect(try store.currentState(scope: "folio") == ["text": "C"])
+    try store.redo(scope: "folio")
+    #expect(try store.currentState(scope: "folio") == ["text": "A"])
+}
+
+@Test func checkpointGapAndIndependentProtection() throws {
+    let store = try HistoryStore.temporary()
+    defer { try? store.close(); if ProcessInfo.processInfo.environment["KEEP_FIXTURES"] != "1" { try? FileManager.default.removeItem(at: store.url.deletingLastPathComponent()) } }
+    let shared = Resource(store: "images", key: "shared", version: "v1")
+    let a = try store.append(scope: "folio", actions: [.set("text", "A")], resources: [shared])
+    let b = try store.append(scope: "folio", actions: [.set("text", "B")])
+    let c = try store.append(scope: "folio", actions: [.set("text", "C")])
+    let hold = try store.hold(node: a, kind: "history")
+    _ = try store.checkpoint(scope: "folio", node: b, resources: [shared])
+    let plan = try store.beginPlan(scope: "folio", target: c)
+    let first = try store.planPage(plan, offset: 0, maxEntries: 1)
+    #expect(first.nodeIDs == [c])
+    #expect(try store.prune(targetGroups: 1).unmetTarget)
+    #expect(try store.node(a) != nil)
+    try store.releaseHold(hold)
+    try store.releasePlan(plan)
+    let result = try store.prune(targetGroups: 1)
+    #expect(result.removedGroups > 0)
+    #expect(try store.reconstruct(scope: "folio", node: c).state == ["text": "C"])
+    #expect(try store.reconstruct(scope: "folio", node: c).baseline == b)
+    #expect(try store.references(store: "images").contains(shared))
+}
+
+@Test func boundedRefusalPrecedesNewHistory() throws {
+    var limits = Limits(); limits.maxPayload = 4; limits.maxGroupBytes = 6
+    let store = try HistoryStore.temporary(limits: limits)
+    defer { try? store.close(); if ProcessInfo.processInfo.environment["KEEP_FIXTURES"] != "1" { try? FileManager.default.removeItem(at: store.url.deletingLastPathComponent()) } }
+    #expect(throws: ProofError.refused("payload bytes")) {
+        _ = try store.append(scope: "folio", actions: [.set("x", "12345")])
+    }
+    #expect(try store.head(scope: "folio") == nil)
+    let id = try store.append(scope: "folio", actions: [Effect(key: "x", value: Data("1".utf8), command: Data("cmd".utf8))])
+    #expect(try store.node(id) != nil)
+}
+
+@Test func selectedRecoveryRestoresAbsentMaterialAndScopeIsolated() throws {
+    let store = try HistoryStore.temporary()
+    defer { try? store.close(); if ProcessInfo.processInfo.environment["KEEP_FIXTURES"] != "1" { try? FileManager.default.removeItem(at: store.url.deletingLastPathComponent()) } }
+    let empty = try store.append(scope: "one", actions: [.set("other", "v")])
+    _ = try store.append(scope: "one", actions: [.set("selected", "new")])
+    let selected = try store.recoverSelected(scope: "one", target: empty, keys: ["selected"])
+    #expect(try store.reconstruct(scope: "one", node: selected).state == ["other": "v"])
+    #expect(throws: ProofError.missing(empty)) {
+        _ = try store.reconstruct(scope: "two", node: empty)
+    }
+}
+
+@Test func releasingStateHoldAllowsConsolidatedStateToPrune() throws {
+    let store = try HistoryStore.temporary()
+    defer { try? store.close(); if ProcessInfo.processInfo.environment["KEEP_FIXTURES"] != "1" { try? FileManager.default.removeItem(at: store.url.deletingLastPathComponent()) } }
+    let a = try store.append(scope: "one", actions: [.set("x", "a")])
+    let b = try store.append(scope: "one", actions: [.set("x", "b")])
+    _ = try store.checkpoint(scope: "one", node: b)
+    let held = try store.hold(node: a, kind: "state")
+    #expect(try store.prune(targetGroups: 1).unmetTarget)
+    try store.releaseHold(held)
+    #expect(try store.prune(targetGroups: 1).removedGroups == 1)
+    #expect(try store.node(a) == nil)
+}
+
+
+@Test func historyHoldCrossesCheckpointAndOverlappingCurrentPath() throws {
+    let store = try HistoryStore.temporary()
+    defer { try? store.close(); if ProcessInfo.processInfo.environment["KEEP_FIXTURES"] != "1" { try? FileManager.default.removeItem(at: store.url.deletingLastPathComponent()) } }
+    let a = try store.append(scope: "folio", actions: [.set("x", "a")])
+    let b = try store.append(scope: "folio", actions: [.set("x", "b")])
+    _ = try store.checkpoint(scope: "folio", node: b)
+    _ = try store.append(scope: "folio", actions: [.set("x", "c")])
+    let d = try store.append(scope: "folio", actions: [.set("x", "d")])
+    let hold = try store.hold(node: d, kind: "history", until: a)
+    let protected = try store.prune(targetGroups: 1)
+    #expect(protected.retainedGroups == 4)
+    #expect(try store.node(a) != nil)
+    try store.releaseHold(hold)
+    let afterRelease = try store.prune(targetGroups: 1)
+    #expect(afterRelease.removedGroups == 1)
+    #expect(try store.node(a) == nil)
+}
+
+
+@Test func interruptedSessionPlanExpiresButCheckpointSurvives() throws {
+    let store = try HistoryStore.temporary()
+    let url = store.url
+    defer { try? store.close(); if ProcessInfo.processInfo.environment["KEEP_FIXTURES"] != "1" { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) } }
+    let a = try store.append(scope: "folio", actions: [.set("x", "a")])
+    let b = try store.append(scope: "folio", actions: [.set("x", "b")])
+    _ = try store.checkpoint(scope: "folio", node: b)
+    let plan = try store.beginPlan(scope: "folio", target: a)
+    try store.close()
+    let reopened = try HistoryStore(url: url)
+    defer { try? reopened.close() }
+    #expect(throws: ProofError.missing(plan)) { try reopened.releasePlan(plan) }
+    #expect(try reopened.prune(targetGroups: 1).removedGroups == 1)
+    #expect(try reopened.reconstruct(scope: "folio", node: b).state == ["x": "b"])
+}
+
+
+@Test func ordinaryWindowKeepsCompleteGroupsAcrossCheckpoint() throws {
+    let store = try HistoryStore.temporary()
+    defer { try? store.close(); if ProcessInfo.processInfo.environment["KEEP_FIXTURES"] != "1" { try? FileManager.default.removeItem(at: store.url.deletingLastPathComponent()) } }
+    let a = try store.append(scope: "folio", actions: [.set("x", "a")])
+    let b = try store.append(scope: "folio", actions: [.set("x", "b")])
+    let c = try store.append(scope: "folio", actions: [.set("x", "c"), .set("y", "group")])
+    _ = try store.checkpoint(scope: "folio", node: c)
+    _ = try store.append(scope: "folio", actions: [.set("x", "d")])
+    _ = try store.append(scope: "folio", actions: [.set("x", "e")])
+    try store.configureUndoDepth(scope: "folio", groups: 3)
+    let result = try store.prune(targetGroups: 1)
+    #expect(result.retainedGroups == 4)
+    #expect(try store.node(a) == nil)
+    #expect(try store.node(b) != nil)
+    try store.undo(scope: "folio")
+    try store.undo(scope: "folio")
+    try store.undo(scope: "folio")
+    #expect(try store.currentState(scope: "folio") == ["x": "b"])
+    #expect(throws: ProofError.noUndo) { try store.undo(scope: "folio") }
+    try store.redo(scope: "folio")
+    try store.redo(scope: "folio")
+    try store.redo(scope: "folio")
+    #expect(try store.currentState(scope: "folio") == ["x": "e", "y": "group"])
+}
+
+@Test func heldStateKeepsAncestorOnlyResourceAfterPruning() throws {
+    let store = try HistoryStore.temporary()
+    defer { try? store.close(); if ProcessInfo.processInfo.environment["KEEP_FIXTURES"] != "1" { try? FileManager.default.removeItem(at: store.url.deletingLastPathComponent()) } }
+    let resource = Resource(store: "assets", key: "only-on-ancestor", version: "v1")
+    let a = try store.append(scope: "folio", actions: [.set("x", "a")], resources: [resource])
+    let b = try store.append(scope: "folio", actions: [.set("x", "b")])
+    _ = try store.hold(node: b, kind: "state")
+    _ = try store.append(scope: "folio", actions: [.set("x", "c")])
+    #expect(try store.prune(targetGroups: 1).removedGroups == 1)
+    #expect(try store.node(a) == nil)
+    #expect(try store.references(store: "assets").contains(resource))
+    #expect(try store.reconstruct(scope: "folio", node: b).state == ["x": "b"])
+}
+
+@Test func hardCapRefusalPreservesActiveHoldsAcrossReopenAndPrune() throws {
+    let store = try HistoryStore.temporary()
+    let url = store.url
+    defer { try? store.close(); if ProcessInfo.processInfo.environment["KEEP_FIXTURES"] != "1" { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) } }
+    let resource = Resource(store: "assets", key: "held", version: "v1")
+    let a = try store.append(scope: "folio", actions: [.set("x", "a")], resources: [resource])
+    let b = try store.append(scope: "folio", actions: [.set("x", "b")])
+    _ = try store.checkpoint(scope: "folio", node: b)
+    let c = try store.append(scope: "folio", actions: [.set("x", "c")])
+    let stateHold = try store.hold(node: a, kind: "state")
+    let historyHold = try store.hold(node: c, kind: "history", until: b)
+    try store.forkFixture(scope: "folio", from: a)
+    let side = try store.append(scope: "folio", actions: [.set("x", "side")])
+    try store.forkFixture(scope: "folio", from: c)
+    var limits = store.limits
+    limits.hardStoreBytes = try store.fileFootprint() + 100_000
+    store.limits = limits
+    #expect(throws: ProofError.refused("store capacity")) {
+        _ = try store.append(scope: "folio", actions: [.set("x", "refused")])
+    }
+    #expect(try store.head(scope: "folio") == c)
+    #expect(try store.node(side) != nil)
+    try store.close()
+
+    let reopened = try HistoryStore(url: url)
+    defer { try? reopened.close() }
+    let result = try reopened.prune(targetGroups: 0)
+    #expect(result.removedGroups == 1)
+    #expect(result.retainedGroups == 3)
+    #expect(result.unmetTarget)
+    #expect(try reopened.node(side) == nil)
+    #expect(try reopened.node(a) != nil)
+    #expect(try reopened.node(b) != nil)
+    #expect(try reopened.node(c) != nil)
+    #expect(try reopened.reconstruct(scope: "folio", node: a).state == ["x": "a"])
+    #expect(try reopened.references(store: "assets").contains(resource))
+    try reopened.releaseHold(stateHold)
+    try reopened.releaseHold(historyHold)
+}
+
+@Test func conservativeCapacityRefusesBeforeMutation() throws {
+    let store = try HistoryStore.temporary()
+    defer { try? store.close(); if ProcessInfo.processInfo.environment["KEEP_FIXTURES"] != "1" { try? FileManager.default.removeItem(at: store.url.deletingLastPathComponent()) } }
+    var limits = store.limits
+    limits.hardStoreBytes = try store.fileFootprint() + 100_000
+    store.limits = limits
+    #expect(throws: ProofError.refused("store capacity")) {
+        _ = try store.append(scope: "folio", actions: [.set("x", "tiny")])
+    }
+    #expect(try store.head(scope: "folio") == nil)
+}
+
+
+@Test func firstGroupUndoReachesEmptyAndRedoSurvivesReopen() throws {
+    let store = try HistoryStore.temporary()
+    let url = store.url
+    defer { try? store.close(); if ProcessInfo.processInfo.environment["KEEP_FIXTURES"] != "1" { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) } }
+    try store.configureUndoDepth(scope: "folio", groups: 1)
+    let first = try store.append(scope: "folio", actions: [.set("x", "first")])
+    try store.undo(scope: "folio")
+    #expect(try store.currentState(scope: "folio").isEmpty)
+    #expect(throws: ProofError.noUndo) { try store.undo(scope: "folio") }
+    try store.close()
+    let reopened = try HistoryStore(url: url)
+    defer { try? reopened.close() }
+    let beforeRedo = try reopened.prune(targetGroups: 0)
+    #expect(beforeRedo.retainedGroups == 1)
+    #expect(try reopened.node(first) != nil)
+    try reopened.redo(scope: "folio")
+    #expect(try reopened.currentState(scope: "folio") == ["x": "first"])
+    try reopened.undo(scope: "folio")
+    #expect(try reopened.currentState(scope: "folio").isEmpty)
+}
+
+
+@Test func missingPrimaryDatabaseCannotReportZeroFootprint() throws {
+    let store = try HistoryStore.temporary()
+    let url = store.url
+    defer { try? store.close(); if ProcessInfo.processInfo.environment["KEEP_FIXTURES"] != "1" { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) } }
+    try store.close()
+    try FileManager.default.removeItem(at: url)
+    var didThrow = false
+    do { _ = try store.fileFootprint() }
+    catch { didThrow = true }
+    #expect(didThrow)
+}
+
+}

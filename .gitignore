@@ -1,0 +1,89 @@
+# SPDX-FileCopyrightText: 2026 the Folio Project
+# SPDX-License-Identifier: MIT
+
+# Shared ignore rules for the standalone UndoKit repository.
+# Keep source, project/workspace files, shared schemes, .xcconfig files, and
+# dependency lockfiles (Package.resolved, Gemfile.lock, etc.) in version control.
+
+# macOS metadata
+.DS_Store
+.AppleDouble/
+.LSOverride
+._*
+.Spotlight-V100/
+.Trashes/
+.fseventsd/
+
+# Xcode: build output, personal settings, and generated results
+build/
+/Build/
+DerivedData/
+/.derived-data-log-*
+xcuserdata/
+*.xcuserstate
+*.xccheckout
+*.xcscmblueprint
+*.xcactivitylog
+*.xcresult/
+*.xcarchive/
+
+# Compiler and coverage output; .pch source headers remain trackable.
+*.o
+*.hmap
+*.gch
+*.gcda
+*.gcno
+*.profraw
+*.profdata
+
+# Dependency build products; keep manifests, pins, shared .swiftpm configuration,
+# and intentionally vendored sources or binary frameworks trackable.
+.build/
+**/Carthage/Build/
+
+# Distribution output and root-level packages.
+# Keep installer sources under packaging/ and fixtures outside output directories.
+/dist/
+/pkg/
+/*.app/
+/*.ipa
+/*.pkg
+/*.dmg
+/*.gem
+*.dSYM/
+*.dSYM.zip
+
+# Ruby/Bundler: machine-local configuration, installed gems, and caches.
+# Keep Gemfile, Gemfile.lock, gemspecs, Rakefile, .ruby-version, and vendor/cache/.
+.bundle/
+**/vendor/bundle/
+**/vendor/ruby/
+.ruby-lsp/
+.yardoc/
+_yardoc/
+.rspec_status
+.byebug_history
+.irb_history
+.pry_history
+mkmf.log
+
+# Root-level tooling scratch space and reports; keep documentation directories.
+/tmp/
+/log/
+/coverage/
+
+# Local environment settings; .env.example and other shared templates stay visible.
+.env
+.env.local
+.env.*.local
+
+# fastlane-generated output; keep Fastfile, Appfile, Matchfile, and metadata.
+/fastlane/report.xml
+/fastlane/Preview.html
+/fastlane/screenshots/
+/fastlane/test_output/
+
+# Editor swap and backup files; shared editor configuration stays visible.
+*.swp
+*.swo
+*~

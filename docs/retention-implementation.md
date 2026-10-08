@@ -52,5 +52,5 @@ The fixture verified unchanged current state, checkpoint recovery, and accepted
 retry identity after pruning. The later missing-transition integrity and empty
 version-key corrections are covered by focused tests. This measurement predates
 those corrections and does not qualify 100,000 production groups or large host
-payloads. Run `ruby scripts/check-scale.rb 10000` to reproduce under the
+payloads. Run `ruby scripts/check-undokit-scale.rb 10000` to reproduce under the
 same 2 GiB memory, 12 GiB temporary storage, 20 GiB free-disk and ten-minute guards.

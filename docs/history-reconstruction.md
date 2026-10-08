@@ -60,7 +60,7 @@ The ordinary tests cover divergent reconstruction, restoration followed by Undo,
 checkpoint baselines, paging, metadata, missing targets, cancellation and plan
 lifetime. Retention adds tests for explicit gaps and active-plan preservation.
 
-Run `ruby scripts/check-scale.rb 10000` for an opt-in production-engine
+Run `ruby scripts/check-undokit-scale.rb 10000` for an opt-in production-engine
 fixture; 100,000 is the upper supported runner size. The runner enforces the
 accepted laptop safeguards: 2 GiB combined descendant RSS, 12 GiB owned temporary
 storage, 20 GiB free disk, and ten minutes including fixture construction. One

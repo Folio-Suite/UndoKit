@@ -138,7 +138,7 @@ the bundled Core Data model. CI runs package tests and the consumer check on
 macOS with Xcode 27.
 
 The guarded production-scale case can be measured with
-`scripts/check-scale.rb [groups]`. It defaults to 10,000 groups and accepts
+`scripts/check-undokit-scale.rb [groups]`. It defaults to 10,000 groups and accepts
 100–100,000; the runner enforces disk, resource and time bounds and retains its
 report and log in a temporary directory. It is not part of routine CI.
 

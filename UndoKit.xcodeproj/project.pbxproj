@@ -7,13 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		0DC102BA675746A4EC039F34 /* Collections in Frameworks */ = {isa = PBXBuildFile; productRef = 47410F255C9D1AB799521CB0 /* Collections */; };
-		61460B1F53B3AC2E379B647F /* Algorithms in Frameworks */ = {isa = PBXBuildFile; productRef = 613C9292406B67FA6D5E095C /* Algorithms */; };
-		A120CDEA306A0D9F0097A0D5 /* Project.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = A120CDE9306A0D9F0097A0D5 /* Project.xcconfig */; };
 		A181938E306767B700D3F601 /* UndoKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A1819382306767B600D3F601 /* UndoKit.framework */; };
 		A18193A63067681900D3F601 /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = A18193A43067681900D3F601 /* LICENSE */; };
 		A18193A73067681900D3F601 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = A18193A53067681900D3F601 /* README.md */; };
-		FB10143AAEEC910C8409EAF0 /* Defaults in Frameworks */ = {isa = PBXBuildFile; productRef = E028F02C28AD325AD9497000 /* Defaults */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -53,9 +49,6 @@
 		A181937F306767B600D3F601 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
-				FB10143AAEEC910C8409EAF0 /* Defaults in Frameworks */,
-				0DC102BA675746A4EC039F34 /* Collections in Frameworks */,
-				61460B1F53B3AC2E379B647F /* Algorithms in Frameworks */,
 			);
 		};
 		A181938A306767B700D3F601 /* Frameworks */ = {
@@ -120,9 +113,6 @@
 			);
 			name = UndoKit;
 			packageProductDependencies = (
-				E028F02C28AD325AD9497000 /* Defaults */,
-				47410F255C9D1AB799521CB0 /* Collections */,
-				613C9292406B67FA6D5E095C /* Algorithms */,
 			);
 			productName = UndoKit;
 			productReference = A1819382306767B600D3F601 /* UndoKit.framework */;
@@ -178,9 +168,6 @@
 			mainGroup = A1819378306767B600D3F601;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				8840E7303BFF30ECF81EBBB2 /* XCRemoteSwiftPackageReference "Defaults" */,
-				5325B1215BE6F97D2177BCA9 /* XCRemoteSwiftPackageReference "swift-collections" */,
-				6948A5714736CDFFD6F9045B /* XCRemoteSwiftPackageReference "swift-algorithms" */,
 				021B629ED4FAEF4DAECE0712 /* XCRemoteSwiftPackageReference "SwiftLintPlugins" */,
 			);
 			preferredProjectObjectVersion = 110;
@@ -199,7 +186,6 @@
 			isa = PBXResourcesBuildPhase;
 			files = (
 				A18193A63067681900D3F601 /* LICENSE in Resources */,
-				A120CDEA306A0D9F0097A0D5 /* Project.xcconfig in Resources */,
 				A18193A73067681900D3F601 /* README.md in Resources */,
 			);
 		};
@@ -519,43 +505,9 @@
 				minimumVersion = 0.65.1;
 			};
 		};
-		5325B1215BE6F97D2177BCA9 /* XCRemoteSwiftPackageReference "swift-collections" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/apple/swift-collections";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 1.7.1;
-			};
-		};
-		6948A5714736CDFFD6F9045B /* XCRemoteSwiftPackageReference "swift-algorithms" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/apple/swift-algorithms";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 1.2.1;
-			};
-		};
-		8840E7303BFF30ECF81EBBB2 /* XCRemoteSwiftPackageReference "Defaults" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/sindresorhus/Defaults";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 9.0.9;
-			};
-		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		47410F255C9D1AB799521CB0 /* Collections */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 5325B1215BE6F97D2177BCA9 /* XCRemoteSwiftPackageReference "swift-collections" */;
-			productName = Collections;
-		};
-		613C9292406B67FA6D5E095C /* Algorithms */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 6948A5714736CDFFD6F9045B /* XCRemoteSwiftPackageReference "swift-algorithms" */;
-			productName = Algorithms;
-		};
 		86D29266179CEA3AF4457BDA /* SwiftLintBuildToolPlugin */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 021B629ED4FAEF4DAECE0712 /* XCRemoteSwiftPackageReference "SwiftLintPlugins" */;
@@ -565,11 +517,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 021B629ED4FAEF4DAECE0712 /* XCRemoteSwiftPackageReference "SwiftLintPlugins" */;
 			productName = "plugin:SwiftLintBuildToolPlugin";
-		};
-		E028F02C28AD325AD9497000 /* Defaults */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 8840E7303BFF30ECF81EBBB2 /* XCRemoteSwiftPackageReference "Defaults" */;
-			productName = Defaults;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

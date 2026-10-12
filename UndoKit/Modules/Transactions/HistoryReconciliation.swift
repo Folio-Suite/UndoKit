@@ -73,7 +73,9 @@ extension HistoryTransactionCoordinator {
                 "\(#keyPath(HistoryTransactionRecord.stage)) != %@ AND " +
                 "\(#keyPath(HistoryTransactionRecord.stage)) != %@",
                                             scope.uuidString, "accepted", "rejected", "cancelled")
-            request.sortDescriptors = [NSSortDescriptor(key: #keyPath(HistoryTransactionRecord.sequence), ascending: true)]
+            request.sortDescriptors = [
+                NSSortDescriptor(key: #keyPath(HistoryTransactionRecord.sequence), ascending: true),
+            ]
             for row in try context.fetch(request) { _ = await reconcile(row) }
             let remaining = try context.fetch(request)
             if remaining.isEmpty { unsuspend() }
@@ -100,7 +102,9 @@ extension HistoryTransactionCoordinator {
                 "\(#keyPath(HistoryTransactionRecord.stage)) != %@ AND " +
                 "\(#keyPath(HistoryTransactionRecord.stage)) != %@",
                                             scope.uuidString, "accepted", "rejected", "cancelled")
-            request.sortDescriptors = [NSSortDescriptor(key: #keyPath(HistoryTransactionRecord.sequence), ascending: true)]
+            request.sortDescriptors = [
+                NSSortDescriptor(key: #keyPath(HistoryTransactionRecord.sequence), ascending: true),
+            ]
             guard let row = try context.fetch(request).first else {
                 unsuspend()
                 if sessionGroups.isEmpty { try releaseSessionReferences() }

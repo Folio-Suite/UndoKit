@@ -29,7 +29,9 @@ extension RetainedHistory {
         var expected = plan.baselineAcceptedSequence
         if let cursor {
             let request = HistoryGroupRecord.fetchRequest()
-            request.predicate = NSPredicate(format: "\(#keyPath(HistoryGroupRecord.scopeKey)) == %@ AND \(#keyPath(HistoryGroupRecord.sequence)) == %@",
+            request.predicate = NSPredicate(
+                format: "\(#keyPath(HistoryGroupRecord.scopeKey)) == %@ AND " +
+                    "\(#keyPath(HistoryGroupRecord.sequence)) == %@",
                 scope.uuidString, NSNumber(value: cursor))
             request.fetchLimit = 1
             guard let row = try context.fetch(request).first else { throw brokenRecoveryChain() }

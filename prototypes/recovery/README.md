@@ -9,8 +9,8 @@ This is the bounded on-disk acceptance and recovery probe for
 [#47](https://github.com/Folio-Suite/Folio/issues/47). It is throwaway evidence,
 not the production UndoKit engine or a proposed public API. Its baseline is
 `52c498fcf7dc50b5c060820f217c957db74355f7`, containing the accepted #41–#46
-contracts. Keep this prototype on its evidence branch rather than merging it
-into the shipping framework.
+contracts. The accepted proof is retained as an isolated reference fixture;
+it is excluded from the shipping framework.
 
 The question is whether separate host and history stores can preserve exactly
 one accepted effect, correct Undo/Redo availability and recovery evidence when
@@ -19,7 +19,7 @@ execution stops between their commits.
 ## Run
 
 ```sh
-ruby UndoKit/prototypes/recovery/run.rb
+ruby prototypes/recovery/run.rb
 ```
 
 Run from the repository checkout on macOS with Xcode selected. The runner builds
@@ -84,11 +84,9 @@ macOS 14, Intel, power-loss behavior or every possible filesystem failure.
 A passing crash fixture on this host establishes only the recorded process-
 interruption behavior using the operating system's storage APIs.
 
-The implementation workflow uses the globally installed `workflow`, `implement`,
-`tdd`, `prototype` and `code-review` skills. The accepted #47 requirement for
-native persistence, automated assertions and failure handling takes precedence
-over the prototype skill's generic HTML-only and no-test suggestions. See
-[skill attribution](../../../docs/ai-skills.md).
+The original proof used contributor-managed agent skills. Current contribution
+and attribution guidance lives in [CONTRIBUTING.md](../../CONTRIBUTING.md).
 
-Maintainer review remains required before closing #47. Compile/test success alone
-does not accept the design or implement durable history in Folio.
+The maintainer accepted the bounded proof and closed #47; see the
+[implementation handoff](../../docs/implementation-handoff.md). Its historical
+results do not establish production-engine acceptance.

@@ -63,7 +63,8 @@ extension HistoryStore {
 
     func isRetentionCleanupPending(for retentionStore: UUID) throws -> Bool {
         let request = HistoryCleanupRecord.fetchRequest()
-        request.predicate = NSPredicate(format: "\(#keyPath(HistoryCleanupRecord.key)) == %@", retentionStore.uuidString)
+        request.predicate = NSPredicate(
+            format: "\(#keyPath(HistoryCleanupRecord.key)) == %@", retentionStore.uuidString)
         request.fetchLimit = 1
         return try !context.fetch(request).isEmpty
     }
@@ -84,7 +85,8 @@ extension HistoryStore {
             }
             try await cleanup(self)
             let request = HistoryCleanupRecord.fetchRequest()
-            request.predicate = NSPredicate(format: "\(#keyPath(HistoryCleanupRecord.key)) == %@", retentionStore.uuidString)
+            request.predicate = NSPredicate(
+                format: "\(#keyPath(HistoryCleanupRecord.key)) == %@", retentionStore.uuidString)
             for row in try context.fetch(request) { context.delete(row) }
             do { try context.save() } catch {
                 context.rollback()

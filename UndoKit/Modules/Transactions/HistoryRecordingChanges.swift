@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: 2026 the Folio Project
 // SPDX-License-Identifier: MIT
 
-import Foundation
 import CoreData
+import Foundation
 
 extension HistoryTransactionCoordinator {
     /// Session-only inverse effects release their resource protection after a
@@ -10,7 +10,8 @@ extension HistoryTransactionCoordinator {
     func releaseSessionReferences(save: Bool = true) throws {
         guard !snapshot.isSuspended else { return }
         let rows = try history.fetch(HistoryResourceRecord.self, predicate: NSPredicate(
-            format: "\(#keyPath(HistoryResourceRecord.ownerType)) == %@ AND \(#keyPath(HistoryResourceRecord.ownerKey)) BEGINSWITH %@", "session", scope.uuidString + ":"))
+            format: "\(#keyPath(HistoryResourceRecord.ownerType)) == %@ AND " +
+                "\(#keyPath(HistoryResourceRecord.ownerKey)) BEGINSWITH %@", "session", scope.uuidString + ":"))
         for row in rows {
             try history.removeResourceReferences(ownerType: "session", ownerKey: row.ownerKey ?? "")
         }

@@ -36,7 +36,8 @@ extension RetainedHistory {
             if case .checkpoint(let id) = plan.target { keptCheckpoints.insert(id) }
         }
         let checkpoints = try history.fetch(HistoryCheckpointRecord.self, predicate: NSPredicate(
-            format: "\(#keyPath(HistoryCheckpointRecord.scopeKey)) == %@ AND \(#keyPath(HistoryCheckpointRecord.sequence)) < %@", scope.uuidString,
+            format: "\(#keyPath(HistoryCheckpointRecord.scopeKey)) == %@ AND " +
+                "\(#keyPath(HistoryCheckpointRecord.sequence)) < %@", scope.uuidString,
             NSNumber(value: boundary.info.sequence)))
         let removableCheckpoints = checkpoints.filter {
             guard let id = $0.key.flatMap(UUID.init(uuidString:)) else { return false }

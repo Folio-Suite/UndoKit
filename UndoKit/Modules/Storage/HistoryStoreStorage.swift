@@ -91,7 +91,7 @@ extension HistoryStore {
         // Store loading must complete before register(mode:) inspects durable identity.
         // The local loadError below relies on synchronous store addition; async public
         // opening does not make this Core Data configuration callback asynchronous.
-        // Apple: https://developer.apple.com/documentation/coredata/nspersistentstoredescription/shouldaddstoreasynchronously
+        // https://developer.apple.com/documentation/coredata/nspersistentstoredescription/shouldaddstoreasynchronously
         description.shouldAddStoreAsynchronously = false
         description.shouldMigrateStoreAutomatically = false
         description.shouldInferMappingModelAutomatically = false

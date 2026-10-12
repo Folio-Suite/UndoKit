@@ -15,11 +15,35 @@ Accepted by the maintainer on 2026-09-29 through
 [storage](store-lifecycle-contract.md) contracts into bounded proof work.
 No new runtime evidence or production limits are established by accepting it.
 
+## Public-preview scope adjustment
+
+For the standalone `0.2.0` preview, the maintainer's
+[#8 resolution](https://github.com/Folio-Suite/UndoKit/issues/8#issuecomment-6104499789)
+is authoritative where it narrows this inherited plan. A current production
+10,000-group workload on a representative Mac and a representative physical iOS
+device is mandatory: far-back/divergent reconstruction, retention, independent
+state/preservation checks, three deterministic repetitions and ten fresh-process
+reopen samples per repetition. Timing and efficiency numbers remain advisory;
+correctness, controlled resource-limit refusal and ordinary responsiveness remain
+mandatory. The 100,000-group and approximately 800 MiB fixtures below are advisory
+stretch investigations for this preview. They are not qualified by declarations
+or historical prototype evidence. Physical qualification is owned by
+[#27](https://github.com/Folio-Suite/UndoKit/issues/27).
+
+Injected persistence failures and graceful close/reopen cover the preview's
+selected failure scope. Actual abrupt termination/relaunch is explicitly deferred;
+fresh-process measurements establish neither abrupt-termination recovery nor cold
+filesystem caches. The original broader scenario matrix below remains historical
+planning context. See [the production scale protocol](production-scale.md) for the
+implemented fixture, predeclared platform guards and current evidence limits.
+
 ## Acceptance rules
 
-Correctness and preservation are mandatory. The ordinary Folio, bounded
-KitchenMemory and large-payload workloads must behave correctly, including
-rejection and recovery. Multi-GiB payloads are exploratory stretch cases.
+Correctness and preservation are mandatory for the preview's production
+10,000-group workload. The inherited ordinary Folio, bounded KitchenMemory and
+large-payload profiles must behave correctly whenever run, including rejection
+and recovery; an unrun advisory profile is not a failed mandatory preview gate.
+Multi-GiB payloads are exploratory stretch cases.
 
 Timing figures below are initial measurement targets, not binding pass/fail
 thresholds. Missing them prompts investigation; meeting them does not excuse
@@ -54,21 +78,21 @@ is observable work, with its costs recorded separately from steady-state work.
 No existing production scale benchmark is inherited: #43's 4096-byte fixture
 ceiling and tiny codec-size examples were interface evidence only.
 
-## Mandatory workloads
+## Inherited workload profiles
 
-| Fixture | Accepted starting workload |
-| --- | --- |
-| Ordinary Folio editing | 10,000 retained groups; roughly 1 KiB encoded data per group with occasional groups up to 1 MiB |
-| Large Folio history | 100,000 retained groups across 100 branches, 100 checkpoints, mixed small text and larger structural operations |
-| KitchenMemory-style history | 10,000 successive submissions, a 100-group ordinary Undo/Redo allowance, several independent scopes |
-| Large-payload bounded history | 100 retained groups averaging 8 MiB encoded data each, approximately 800 MiB before database overhead |
+| Fixture | Accepted starting workload | Preview status |
+| --- | --- | --- |
+| Ordinary Folio editing | 10,000 retained groups; roughly 1 KiB encoded data per group with occasional groups up to 1 MiB | Production 10,000-group proof mandatory; implemented topology documented separately |
+| Large Folio history | 100,000 retained groups across 100 branches, 100 checkpoints, mixed small text and larger structural operations | Advisory stretch |
+| KitchenMemory-style history | 10,000 successive submissions, a 100-group ordinary Undo/Redo allowance, several independent scopes | Historical host profile; no separate heavy preview fixture |
+| Large-payload bounded history | 100 retained groups averaging 8 MiB encoded data each, approximately 800 MiB before database overhead | Advisory stretch |
 
 Count all encoded Command and accepted-effect data in group sizes. Include
 multi-Action groups, protected history and shared retained-resource references.
 Bulk attachments remain in host-owned resource stores. The bounded app-local
 case must exercise turnover and pruning. The large history case exercises
-traversal and reconstruction rather than insertion alone. 100,000 groups is a
-mandatory test size, not a supported-history maximum.
+traversal and reconstruction rather than insertion alone. 100,000 groups is an
+advisory preview test size, not a supported-history maximum.
 
 The large history fixture must reconstruct a state near the beginning from near
 the end and a distant state on a divergent branch whose common ancestor is near
@@ -161,7 +185,7 @@ stopping preparation from acceptance already underway.
 
 Additional peak memory above the initialized fixture host should remain within
 256 MiB for ordinary Folio, bounded KitchenMemory and large-history fixtures,
-and within 512 MiB for the mandatory 800 MiB payload fixture.
+and within 512 MiB for the advisory 800 MiB payload fixture.
 
 After maintenance, target owned history storage of at most twice the retained
 encoded payload bytes, plus 4 KiB per retained Action and 32 MiB fixed allowance.
@@ -203,8 +227,8 @@ or recovery safeguards. Adapter decoding limits remain adapter responsibilities.
 | Branches and reconstruction | Abandoned futures, distant divergent restoration and return, selected-material recovery and exact expected states | #50 |
 | Retention and scale | Checkpoints, holds, complete groups, consolidation, gaps, pruning, protected recovery/resources, plan release and full-footprint measurements | #50, lifecycle cases in #49 |
 
-Use deterministic injected failures at every agreed transaction boundary, plus
-actual process termination and reopening for representative cases. Include host
+Use deterministic injected failures at the selected preview transaction boundaries
+and graceful close/reopen. Actual process termination is deferred by #8. Include host
 acceptance before finalization and failed invalidation. Reopen repeatedly to
 verify stable recovery. Exceptions alone do not prove process-interruption
 behavior. An independent expected-state model checks no duplicate effects, false
@@ -224,9 +248,11 @@ The four proofs may share small disposable utilities, with separate evidence:
   representation, deterministic workload generator and independent expected-state
   model for branching, restoration and pruning.
 
-## Closure evidence
+## Historical Folio closure evidence
 
-All four proofs remain required. No proof is retired by this agreement. Every
+Under the original Folio agreement, all four proofs remain required. No proof
+was retired by that agreement. The standalone preview uses #8's adjusted gates.
+Every
 report retains setup, source revision, exact scenarios, actual results, artifacts,
 limitations and authorized resource overrides. Keep compilation, automated
 behavioral tests, native observations and maintainer acceptance distinct.

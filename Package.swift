@@ -10,7 +10,9 @@ let package = Package(
     products: [.library(name: "UndoKit", type: .dynamic, targets: ["UndoKit"])],
     targets: [
         .target(name: "UndoKit", path: "UndoKit", resources: [.process("Resources")]),
-        .testTarget(name: "UndoKitTests", dependencies: ["UndoKit"], path: "UndoKitTests",
+        .target(name: "ScaleWorkload", dependencies: ["UndoKit"], path: "scripts/scale/Workload"),
+        .executableTarget(name: "ScaleProbe", dependencies: ["ScaleWorkload"], path: "scripts/scale/Probe"),
+        .testTarget(name: "UndoKitTests", dependencies: ["UndoKit", "ScaleWorkload"], path: "UndoKitTests",
                     resources: [.copy("Fixtures")])
     ],
     swiftLanguageModes: [.v6]

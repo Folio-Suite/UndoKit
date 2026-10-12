@@ -49,6 +49,58 @@ resources. It includes the corrected pre-delivery failure classification and
 copy refusal when destination sidecars already exist. Local full-suite logs are
 `DerivedData/PreviewEvidence/package-debug.log` and `package-release.log`.
 
+After a lint-only split of the persistence test class into same-file extensions,
+focused rediscovery passed all nine Debug and two Release persistence tests.
+SwiftLint completed with zero errors and 42 warnings, including existing
+warnings and new long preservation-test bodies/files. No lint rules were disabled.
+
+## Independent consumer results
+
+The source-package and native-project routes both completed the grouped
+Command → Undo → Redo → close/reopen workload on macOS 27.0.1 arm64 and
+iOS 27.0 (24A434) arm64 Simulator in Debug and Release. Each fresh host loaded
+three durable receipts and six member applications, ending at `alpha-beta`
+with Undo available and Redo unavailable. Native macOS and simulator framework
+products contain arm64 and x86_64; runtime evidence here covers arm64.
+
+Checks locate compiled `HistoryV1.mom` and the privacy manifest in the package
+resource bundle or embedded native framework, compare privacy declarations to
+source, and record SHA-256 artifact identities. Generated apps are checked for
+an embedded runtime, the correct loader search path, Mach-O platform and exact
+deployment floor before launch. The retained JSON summaries include producer,
+source revision/dirty paths, runtime setup and results. Reproduce with:
+
+```sh
+scripts/check-consumer.sh --route both --platform both --configuration Debug --keep
+scripts/check-consumer.sh --route both --platform both --configuration Release --keep
+```
+
+The complete Release result is retained locally at
+`DerivedData/Consumers/kept-20261012T050326Z-052464/ConsumerEvidence.json`.
+Current-source Debug evidence is retained under the same parent in
+`kept-20261012T050630Z-02731f` (native macOS and simulator),
+`kept-20261012T050650Z-0eb915` (package macOS), and
+`kept-20261012T050428Z-0c1e1d` (package simulator), each with its own
+`ConsumerEvidence.json`. Earlier Debug attempts are superseded by these runs.
+Those development artifacts identify the source snapshot and are not a
+clean-tree release seal. The initial Release package simulator attempt failed
+at dynamic loading: the generated project lacked a runtime search path and
+its package embed reference was incorrect. Correcting the generator and adding
+prelaunch checks produced the successful runtime result; an earlier build-only
+success was not counted as a runtime pass.
+
+## Review
+
+Separate standards and spec reviews compared
+`6c8eb91c5d3fdf7d89473a6ce0bf769bbee1f295` with
+`1fee2c3fb8af9a8f6dbe3f134e1d431042f8f481`.
+Standards: zero hard violations, one optional duplication refactor around
+independent-copy binding validation. Both preflight and live-context checks
+remain in place; sharing their predicate is deferred. Spec: zero actionable
+findings against issues 13–15 and accepted decisions 5–8. The subsequent
+same-file test extension split changes layout only and has focused Debug/Release
+validation above.
+
 ## Qualification boundary
 
 These checks do not qualify a published release, XCFramework, Intel execution,

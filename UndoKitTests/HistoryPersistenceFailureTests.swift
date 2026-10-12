@@ -200,6 +200,11 @@ import XCTest
         XCTAssertEqual(freshHost.applicationCount, 1)
         try await reopened.close()
     }
+    #endif
+}
+
+extension HistoryPersistenceFailureTests {
+    #if DEBUG
     func testUnavailableCodecOrResourceProtectsPendingEvidenceUntilRestored() async throws {
         for missingCodec in [true, false] {
             let fixture = try await makeFixture()

@@ -63,6 +63,13 @@ projects and reports, without duplicating the shared build caches. Build-product
 paths in reports describe that run and may be overwritten by the next run.
 Use Xcode's default Derived Data location in workspace settings. Avoid
 checkout-local build caches and retain large consumer artifacts only when needed.
+To use a particular installed iOS runtime, add `--device UDID` with `--platform
+both` or `ios-simulator`. The consumer runner refuses other booted simulators,
+boots the selected device only when needed, and shuts it down on exit only if
+it booted it. It never deletes a supplied device. Each launch uses fresh isolated
+stores and reports. Without `--device`, CI retains its latest-runtime selection
+and creates and deletes its own simulator. For the tracked iPadOS 27 simulator
+failure (FB25165352), use the available 26.5 device for local runtime checks.
 CI repeats both configurations. Debug-only injected failure cases do not exist
 in Release; all ordinary durability and consumer cases run in both. Floor-OS,
 Intel runtime, physical device and binary distribution acceptance remain later

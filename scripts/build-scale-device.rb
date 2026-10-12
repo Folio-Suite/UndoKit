@@ -73,7 +73,7 @@ FileUtils.mkdir_p(project_path)
 File.write(File.join(project_path, 'project.pbxproj'), project)
 command = ['xcodebuild', '-project', project_path, '-scheme', 'ScaleDevice', '-configuration', options[:configuration],
            '-sdk', options[:sdk], '-destination', options[:sdk] == 'iphoneos' ? 'generic/platform=iOS' : 'generic/platform=iOS Simulator',
-           '-derivedDataPath', build_root, '-skipPackagePluginValidation', 'build']
+           '-derivedDataPath', build_root, 'build']
 command += ['-allowProvisioningUpdates'] if options[:sdk] == 'iphoneos'
 log = File.join(project_root, 'build.log')
 success = system(*command, out: log, err: log)

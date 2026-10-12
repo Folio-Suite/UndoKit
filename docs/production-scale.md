@@ -57,6 +57,12 @@ complete host state, then synchronizes it before returning acceptance. Reopen
 parses complete records and refuses malformed data. Host.json is a close-time
 diagnostic snapshot, not a second acceptance authority. This deterministic host
 is not a benchmark of a real host database or a host crash-recovery certification.
+If an append or synchronization fails after writing may have begun, the host
+retains an unresolved outcome and blocks further delivery until a fresh process
+validates the authoritative journal. Absence from the in-memory receipt map does
+not establish rejection. The focused command proof closes the file after a
+successful append, exercises an actual synchronization error, then verifies
+reconciliation stays unresolved and fresh-process recovery accepts exactly once.
 
 ## Declared guards and measurement ownership
 
@@ -148,6 +154,13 @@ The second command uses automatic signing/provisioning for the supplied developm
 team. Open the printed project in Xcode and install on the selected physical device.
 The signed app embeds the prebuild source/toolchain/configuration manifest; the
 external `Scale/DeviceProject/BuildManifest.json` records exact signed artifacts.
+Every creation and reopen inventories SHA-256 for all actual installed app files,
+including its executable, compiled model, privacy manifest, embedded build
+manifest and signing files. Hashing streams bounded chunks; its measurement time
+is reported separately. Each reopen refuses a different inventory from fixture
+creation. The physical evidence checker compares every inventory to the exact
+external build manifest. Installation/signing changes are failures to investigate,
+not files to exclude from the inventory.
 Keep that manifest with the exported app/container and physical observations.
 The build command leaves signed products intact after hashing.
 
@@ -188,3 +201,14 @@ failed artifacts, changed expected state and declared budget overruns. Its
 `physical_evidence_complete_for_review` result still requires maintainer review;
 observations are human evidence, not inferred from a nonempty file. Actual physical
 qualification remains deferred to #27 until that work is performed.
+
+Inspect one actual runtime inventory, including simulator smoke, without claiming
+physical qualification:
+
+```sh
+ruby scripts/check-scale-device-evidence.rb --build-manifest EXACT_BUILD_MANIFEST.json \
+  --artifact-report WORKLOAD_OR_REOPEN_REPORT.json
+```
+
+`artifact_identity_matched_for_inspection` explicitly reports physical qualification
+as false. A changed or missing executable/resource inventory fails this inspection.

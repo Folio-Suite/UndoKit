@@ -30,6 +30,12 @@ import ScaleWorkload
         } else if arguments[1] == "reopen" {
             let report = try await ScaleWorkload.reopen(directory: directory)
             try encoder.encode(report).write(to: output, options: .atomic)
+        } else if arguments[1] == "artifact" {
+            try encoder.encode(ScaleArtifact.inventory(directory: directory)).write(to: output, options: .atomic)
+        } else if arguments[1] == "receipt-write-failure" || arguments[1] == "receipt-write-readback" {
+            let report = try await ScaleWorkload.receiptWriteFailure(directory: directory,
+                readback: arguments[1] == "receipt-write-readback")
+            try encoder.encode(report).write(to: output, options: .atomic)
         } else { throw ScaleFailure.assertion("Unknown scale operation") }
     }
 }

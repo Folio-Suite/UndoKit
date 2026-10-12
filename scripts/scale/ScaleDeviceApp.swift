@@ -55,14 +55,19 @@ struct ScaleDeviceView: View {
                     appropriateFor: nil, create: true).appendingPathComponent("UndoKitScaleEvidence")
                 let fixture = root.appendingPathComponent("seed-\(seed)"); directory = fixture
                 let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+                let inventoryStart = ProcessInfo.processInfo.systemUptime
+                let installedArtifact = try ScaleArtifact.inventory(directory: Bundle.main.bundleURL)
+                let inventorySeconds = ProcessInfo.processInfo.systemUptime - inventoryStart
                 if operation == "create" {
                     guard !FileManager.default.fileExists(atPath: fixture.appendingPathComponent("History.sqlite").path) else {
                         throw ScaleFailure.assertion("Fixture exists. Export its evidence, then delete app data before recreating this seed.")
                     }
-                    let report = try await ScaleWorkload.create(directory: fixture, groups: count, seed: seed, budgets: .device) { phase in
+                    var report = try await ScaleWorkload.create(directory: fixture, groups: count, seed: seed, budgets: .device) { phase in
                         status = phase
                         try? Data(phase.utf8).write(to: fixture.appendingPathComponent("Phase.txt"), options: .atomic)
                     }
+                    report.installedArtifactSHA256 = installedArtifact
+                    report.artifactInventorySeconds = inventorySeconds
                     if let manifest = Bundle.main.url(forResource: "BuildManifest", withExtension: "json") {
                         try Data(contentsOf: manifest).write(to: fixture.appendingPathComponent("BuildManifest.json"), options: .atomic)
                     }
@@ -72,7 +77,14 @@ struct ScaleDeviceView: View {
                     guard (0...10).contains(sample) else { throw ScaleFailure.assertion("Reopen sample must be 1–10 (0 = in-process diagnostic)") }
                     let path = fixture.appendingPathComponent("Reopen-\(sample).json")
                     guard !FileManager.default.fileExists(atPath: path.path) else { throw ScaleFailure.assertion("Sample already exists; evidence cannot be overwritten") }
-                    let report = try await ScaleWorkload.reopen(directory: fixture, budgets: .device)
+                    let creation = try JSONDecoder().decode(ScaleWorkloadReport.self,
+                        from: Data(contentsOf: fixture.appendingPathComponent("WorkloadReport.json")))
+                    guard creation.installedArtifactSHA256 == installedArtifact else {
+                        throw ScaleFailure.assertion("Installed artifact differs from the fixture's creation process")
+                    }
+                    var report = try await ScaleWorkload.reopen(directory: fixture, budgets: .device)
+                    report.installedArtifactSHA256 = installedArtifact
+                    report.artifactInventorySeconds = inventorySeconds
                     try encoder.encode(report).write(to: path, options: .atomic)
                     status = "Readback \(sample) completed; process \(report.processID), value \(report.hostValue)."
                 } else { throw ScaleFailure.assertion("Unknown operation") }

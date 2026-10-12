@@ -5,6 +5,46 @@ import UndoKit
 
 /// A public host workload boundary used by the command, device host and bounded test.
 @MainActor public enum ScaleWorkload {
+    /// Command-seam proof of uncertain host acceptance, separate from scale timings.
+    public static func receiptWriteFailure(directory: URL, readback: Bool) async throws -> ScaleReceiptFailureReport {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let host = try ScaleHost(directory: directory, seed: 11, closeBeforeFirstSynchronization: !readback)
+        let engine = try await HistoryEngine.open(at: directory.appendingPathComponent("History.sqlite"),
+            scope: identifier(11, 1, 1), workingIdentity: identifier(11, 1, 0),
+            mode: readback ? .existing : .create, host: host)
+        let command = HistoryCommand(id: identifier(11, 2, 11_111),
+            fingerprint: Data("receipt-sync-failure".utf8), payload: scalePayload(17))
+        if readback {
+            guard case .accepted = await engine.submit(command) else {
+                throw ScaleFailure.assertion("Fresh-process uncertain receipt was not reconciled")
+            }
+            let state = await host.snapshot()
+            try require(state.value == 17 && state.deliveries == 1 && state.members == 1,
+                        "Fresh-process uncertain receipt duplicated or lost host effects")
+            try require(try engine.historyPage(limit: 10).count == 1 && !engine.snapshot.isSuspended,
+                        "Fresh-process uncertain receipt did not finalize exactly one group")
+            try await engine.close(); try await host.close()
+            return ScaleReceiptFailureReport(initialResult: "accepted", retryResult: "accepted", reconciliationResult: "accepted", suspended: false,
+                hostValue: state.value, deliveries: state.deliveries, members: state.members,
+                processID: ProcessInfo.processInfo.processIdentifier)
+        }
+        guard case .failure(let initial) = await engine.submit(command), initial.cause == .unresolved else {
+            throw ScaleFailure.assertion("Receipt synchronization fault did not leave an unresolved outcome")
+        }
+        guard case .failure(let reconciliation)? = await engine.reconcile(), reconciliation.cause == .unresolved else {
+            throw ScaleFailure.assertion("Uncertain receipt lookup falsely rejected or accepted reconciliation")
+        }
+        guard case .failure(let retry) = await engine.submit(command), retry.cause == .unresolved else {
+            throw ScaleFailure.assertion("Uncertain receipt lookup falsely rejected or accepted the retry")
+        }
+        try require(engine.snapshot.isSuspended, "Uncertain receipt did not suspend history")
+        let state = await host.snapshot()
+        try await engine.close(); try await host.close()
+        return ScaleReceiptFailureReport(initialResult: "unresolved", retryResult: "unresolved", reconciliationResult: "unresolved", suspended: true,
+            hostValue: state.value, deliveries: state.deliveries, members: state.members,
+            processID: ProcessInfo.processInfo.processIdentifier)
+    }
+
     public static func create(directory: URL, groups: Int, seed: Int, budgets: ScaleBudgets = .mac,
                               progress: @escaping @MainActor (String) -> Void = { _ in }) async throws -> ScaleWorkloadReport {
         try require((100...100_000).contains(groups) && (1...10_000).contains(seed), "Invalid scale fixture")

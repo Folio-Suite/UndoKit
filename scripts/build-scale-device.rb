@@ -81,7 +81,7 @@ manifest['buildSucceeded'] = success
 manifest['command'] = command
 app = File.join(build_root, 'Build', 'Products', "#{options[:configuration]}-#{options[:sdk]}", 'ScaleDevice.app')
 if success
-  manifest['artifactSHA256'] = Dir.glob(File.join(app, '**/*')).select { |p| File.file?(p) && File.basename(p) != 'BuildManifest.json' }.to_h { |p| [p.delete_prefix(app + '/'), Digest::SHA256.file(p).hexdigest] }
+  manifest['artifactSHA256'] = Dir.glob(File.join(app, '**/*'), File::FNM_DOTMATCH).select { |p| File.file?(p) }.to_h { |p| [p.delete_prefix(app + '/'), Digest::SHA256.file(p).hexdigest] }
   # The complete artifact hash inventory is external: modifying the signed app here
   # would invalidate its signature and the inventory itself. The embedded manifest
   # captures source/toolchain/configuration before compilation.

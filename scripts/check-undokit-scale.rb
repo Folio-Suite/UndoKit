@@ -43,7 +43,13 @@ def output(*command)
 end
 def allocated(path)
   return 0 unless File.exist?(path)
-  Integer(output('du', '-sk', path).split.first) * 1024
+  value, errors, status = Open3.capture3('du', '-sk', path)
+  # Compilers atomically replace short-lived .tmp files during this sampled walk.
+  # A vanished file contributes no remaining allocation; permission/I/O errors
+  # still refuse the measurement instead of quietly omitting owned material.
+  vanished = !errors.empty? && errors.lines.all? { |line| line.include?('No such file or directory') }
+  raise "Disk inventory failed for #{path}: #{errors}" unless status.success? || vanished
+  Integer(value.split.first) * 1024
 end
 def free_bytes(path)
   Integer(output('df', '-k', path).lines.last.split[3]) * 1024

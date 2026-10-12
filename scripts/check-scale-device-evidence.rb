@@ -11,14 +11,28 @@ OptionParser.new do |parser|
   parser.on('--evidence PATH') { |v| options[:evidence] = File.expand_path(v) }
   parser.on('--build-manifest PATH') { |v| options[:build] = File.expand_path(v) }
   parser.on('--observations PATH') { |v| options[:observations] = File.expand_path(v) }
+  parser.on('--artifact-report PATH', 'inspect one runtime artifact inventory without physical qualification') { |v| options[:artifact] = File.expand_path(v) }
   parser.on('-h', '--help') { puts parser; exit 0 }
 end.parse!
-abort 'Evidence, exact external build manifest and physical observations required' unless options.values_at(:evidence, :build, :observations).all?
+abort 'Exact external build manifest required' unless options[:build]
+abort 'Evidence and physical observations required (or --artifact-report for inspection)' unless options[:artifact] || options.values_at(:evidence, :observations).all?
 report = {result: 'incomplete', buildManifestSHA256: Digest::SHA256.file(options[:build]).hexdigest,
-          observationsSHA256: Digest::SHA256.file(options[:observations]).hexdigest, runs: [],
+          observationsSHA256: options[:observations] && Digest::SHA256.file(options[:observations]).hexdigest, runs: [],
           limitation: 'Automated evidence inventory does not replace maintainer review of physical observations; no cold-cache or forced-termination claim.'}
+def verify_artifact!(runtime, build)
+  expected = build.fetch('artifactSHA256')
+  actual = runtime.fetch('installedArtifactSHA256')
+  raise 'Installed artifact identity differs from exact build manifest' unless !expected.empty? && actual == expected
+end
 begin
   build = JSON.parse(File.read(options[:build]))
+  if options[:artifact]
+    verify_artifact!(JSON.parse(File.read(options[:artifact])), build)
+    report[:result] = 'artifact_identity_matched_for_inspection'
+    report[:physicalQualification] = false
+    puts JSON.pretty_generate(report)
+    exit 0
+  end
   raise 'Exact successful physical-device build required' unless build.fetch('sdk') == 'iphoneos' && build.fetch('buildSucceeded') && !build.fetch('artifactSHA256').empty?
   raise 'Physical candidate evidence requires clean committed source' unless build.fetch('sourceDirtyPaths').empty?
   raise 'Physical observations are empty' if File.read(options[:observations]).strip.empty?
@@ -26,6 +40,7 @@ begin
     directory = File.join(options[:evidence], "seed-#{seed}")
     raise "Failure artifacts retained for seed #{seed}; inspect before acceptance" unless Dir.glob(File.join(directory, 'Failure-*.json')).empty?
     workload = JSON.parse(File.read(File.join(directory, 'WorkloadReport.json')))
+    verify_artifact!(workload, build)
     embedded = JSON.parse(File.read(File.join(directory, 'BuildManifest.json')))
     %w[sourceHead sourceDirtyPaths sourceSHA256 toolchain swift configuration sdk].each do |identity|
       raise "Fixture build identity differs from exact manifest: #{identity}" unless embedded.fetch(identity) == build.fetch(identity)
@@ -36,6 +51,7 @@ begin
       workload.fetch('peakResidentBytes') <= budgets.fetch('residentBytes') && workload.fetch('peakOwnedAllocatedBytes') <= budgets.fetch('ownedBytes') &&
       workload.fetch('maximumOrdinaryHeartbeatGapSeconds') <= budgets.fetch('ordinaryHeartbeatSeconds')
     samples = (1..10).map { |index| JSON.parse(File.read(File.join(directory, "Reopen-#{index}.json"))) }
+    samples.each { |sample| verify_artifact!(sample, build) }
     raise 'Distinct fresh processes required' unless samples.map { |sample| sample.fetch('processID') }.uniq.length == 10 &&
       samples.none? { |sample| sample.fetch('processID') == workload.fetch('processID') }
     raise 'Fresh-process sample exceeds bounds or differs from independent expected state' unless samples.all? do |sample|

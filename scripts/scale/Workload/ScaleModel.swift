@@ -45,10 +45,14 @@ actor ScaleHost: HistoryHost {
     let resource: HistoryObjectReference
     var state: HostSnapshot
     var outcomes: [String: StoredReceipt] = [:]
+    var uncertainWrites = Set<String>()
     var deliveryLatencies: [Double] = []
     let journal: FileHandle
-    init(directory: URL, seed: Int) throws {
+    let closeBeforeFirstSynchronization: Bool
+    var journalClosed = false
+    init(directory: URL, seed: Int, closeBeforeFirstSynchronization: Bool = false) throws {
         self.directory = directory
+        self.closeBeforeFirstSynchronization = closeBeforeFirstSynchronization
         resource = HistoryObjectReference(storeID: identifier(seed, 9, 0), objectKey: "shared", versionKey: "v1")
         state = HostSnapshot()
         let receiptURL = directory.appendingPathComponent("Receipts.jsonl")
@@ -66,6 +70,9 @@ actor ScaleHost: HistoryHost {
         let started = monotonic()
         let key = Self.key(delivery.token)
         if let prior = outcomes[key] { return outcome(prior) }
+        // An uncertain append may already contain the authoritative next state.
+        // Do not deliver again or base another effect on the old in-memory state.
+        guard uncertainWrites.isEmpty else { return .unresolved }
         do {
             var next = state
             var members: [StoredMember] = []
@@ -78,20 +85,32 @@ actor ScaleHost: HistoryHost {
             next.encodedPayloadBytes += members.reduce(0) { $0 + $1.bytes * 3 }
             let receipt = StoredReceipt(key: key, members: members, state: next)
             var bytes = try JSONEncoder().encode(receipt); bytes.append(10)
+            uncertainWrites.insert(key)
             try journal.write(contentsOf: bytes)
+            // Command-only fault proof: the real FileHandle synchronization now throws
+            // after a successful append. Ordinary scale creation never enables this.
+            if closeBeforeFirstSynchronization {
+                try journal.close()
+                journalClosed = true
+            }
             try journal.synchronize()
             state = next; outcomes[key] = receipt
+            uncertainWrites.remove(key)
             deliveryLatencies.append(monotonic() - started)
             return outcome(receipt)
         } catch { return .unresolved }
     }
-    func outcome(for token: HistoryToken) async -> HistoryHostOutcome { outcomes[Self.key(token)].map(outcome) ?? .rejected }
+    func outcome(for token: HistoryToken) async -> HistoryHostOutcome {
+        let key = Self.key(token)
+        if uncertainWrites.contains(key) { return .unresolved }
+        return outcomes[key].map(outcome) ?? .rejected
+    }
     func snapshot() -> HostSnapshot { state }
     func timings() -> [Double] { deliveryLatencies }
     func close() throws {
-        try journal.synchronize()
+        if !journalClosed { try journal.synchronize() }
         try JSONEncoder().encode(state).write(to: directory.appendingPathComponent("Host.json"), options: .atomic)
-        try journal.close()
+        if !journalClosed { try journal.close(); journalClosed = true }
     }
     private static func key(_ token: HistoryToken) -> String {
         "\(token.scope):\(token.generation):\(token.sequence):\(token.command)"
@@ -144,10 +163,25 @@ public struct ScaleWorkloadReport: Codable, Sendable {
     public var maximumOrdinaryHeartbeatGapSeconds: Double; public var processID: Int32; public var hardware: String; public var os: String
     public var platform: String
     public var physicalMemoryBytes: UInt64
+    public var installedArtifactSHA256: [String: String]? = nil
+    public var artifactInventorySeconds: Double? = nil
 }
 public struct ScaleReopenReport: Codable, Sendable {
     public var hostValue: Int; public var deliveries: Int; public var members: Int
     public var availabilitySeconds: Double; public var totalSeconds: Double; public var processID: Int32
     public var canUndo: Bool; public var canRedo: Bool; public var peakResidentBytes: UInt64
     public var peakOwnedAllocatedBytes: UInt64; public var historyAllocatedBytes: UInt64; public var hostAllocatedBytes: UInt64
+    public var installedArtifactSHA256: [String: String]? = nil
+    public var artifactInventorySeconds: Double? = nil
+}
+
+public struct ScaleReceiptFailureReport: Codable, Sendable {
+    public var initialResult: String
+    public var retryResult: String
+    public var reconciliationResult: String
+    public var suspended: Bool
+    public var hostValue: Int
+    public var deliveries: Int
+    public var members: Int
+    public var processID: Int32
 }

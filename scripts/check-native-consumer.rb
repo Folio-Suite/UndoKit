@@ -9,6 +9,7 @@ require "json"
 require "securerandom"
 require "digest"
 require "time"
+require_relative "build-support"
 
 Options = Struct.new(:route, :platform, :configuration, :keep, keyword_init: true)
 options = Options.new(route: "package", platform: "macos", configuration: "Debug", keep: false)
@@ -65,7 +66,7 @@ def run!(*command, env: {}, label: nil)
       File.write(File.join($consumer_temporary, "simulator-launch.log"), simulator_log)
     end
     if $consumer_keep
-      failed_evidence = File.join(ROOT, "DerivedData", "Consumers", "failed-#{Time.now.utc.strftime('%Y%m%dT%H%M%SZ')}-#{SecureRandom.hex(3)}")
+      failed_evidence = File.join(UndoKitBuild.directory("Consumers"), "failed-#{Time.now.utc.strftime('%Y%m%dT%H%M%SZ')}-#{SecureRandom.hex(3)}")
       FileUtils.cp_r($consumer_temporary, failed_evidence)
       warn "Failed consumer artifacts and reports retained: #{failed_evidence}"
     end
@@ -212,8 +213,13 @@ def generated_project(directory, root, route, platform, configuration, framework
   path
 end
 
-temporary_parent = File.join(ROOT, "DerivedData", "Consumers")
+temporary_parent = UndoKitBuild.directory("Consumers")
 FileUtils.mkdir_p(temporary_parent)
+# Reuse build databases across runs/worktrees; serialize their mutation.
+consumer_lock = File.open(File.join(temporary_parent, "build.lock"), File::RDWR | File::CREAT, 0o600)
+consumer_lock.flock(File::LOCK_EX)
+build_root = UndoKitBuild.directory("Consumers", "Build")
+at_exit { consumer_lock.close }
 Dir.mktmpdir("undokit-consumer-", temporary_parent) do |temporary|
   $consumer_temporary = temporary
   $consumer_keep = options.keep
@@ -273,10 +279,10 @@ Dir.mktmpdir("undokit-consumer-", temporary_parent) do |temporary|
         report = File.join(evidence_root, "#{route}-#{platform}-report.json")
         root = File.join(evidence_root, "#{route}-#{platform}-host")
         FileUtils.mkdir_p(root)
-        build = File.join(temporary, "package-build")
+        build = File.join(build_root, "Package")
         run!("swift", "run", "--configuration", options.configuration.downcase, "--package-path", scratch,
              "--scratch-path", build, "Consumer", env: {"UNDOkit_CONSUMER_ROOT" => root, "UNDOkit_CONSUMER_REPORT" => report,
-               "CLANG_MODULE_CACHE_PATH" => File.join(temporary, "clang-module-cache")},
+               "CLANG_MODULE_CACHE_PATH" => File.join(build_root, "ModuleCache")},
              label: "SwiftPM source consumer: #{platform} #{options.configuration}")
         puts "Evidence: #{JSON.parse(File.read(report)).inspect}"
         resource_paths = verify_resources!(build, "package")
@@ -289,7 +295,7 @@ Dir.mktmpdir("undokit-consumer-", temporary_parent) do |temporary|
 
       framework_path = nil
       if route == "native"
-        derived = File.join(temporary, "native-derived-#{platform}")
+        derived = File.join(build_root, "Native")
         destination = platform == "ios-simulator" ? "generic/platform=iOS Simulator" : "generic/platform=macOS"
         command = ["xcodebuild", "-project", File.join(ROOT, "UndoKit.xcodeproj"), "-scheme", "UndoKit",
                    "-configuration", options.configuration, "-destination", destination,
@@ -301,10 +307,8 @@ Dir.mktmpdir("undokit-consumer-", temporary_parent) do |temporary|
         command.insert(1, "-skipPackagePluginValidation") if ENV["GITHUB_ACTIONS"] == "true"
         run!(*command, label: "Native framework build: #{platform} universal").
           tap { |output| raise "expected native framework build output" if output.empty? }
-        products = Dir.glob(File.join(derived, "Build", "Products", "**", "UndoKit.framework"))
-        framework_path = products.find do |path|
-          platform == "ios-simulator" ? path.include?("iphonesimulator") : !path.include?("iphonesimulator")
-        end
+        product_configuration = options.configuration + (platform == "ios-simulator" ? "-iphonesimulator" : "")
+        framework_path = File.join(derived, "Build", "Products", product_configuration, "UndoKit.framework")
         raise "native framework missing under #{File.join(derived, 'Build', 'Products')}" unless framework_path && File.directory?(framework_path)
         architectures, lipo_status = Open3.capture2("lipo", "-archs", File.join(framework_path, "UndoKit"))
         raise "could not inspect native framework architectures" unless lipo_status.success?
@@ -315,16 +319,14 @@ Dir.mktmpdir("undokit-consumer-", temporary_parent) do |temporary|
 
       project = generated_project(scratch, ROOT, route == "native" ? "native-framework" : "source-package",
                                   platform, options.configuration, framework_path)
-      derived = File.join(temporary, "consumer-derived-#{route}-#{platform}")
+      derived = File.join(build_root, "Host")
       destination = platform == "ios-simulator" ? "id=#{selected_simulator['udid']}" : "generic/platform=macOS"
       run!("xcodebuild", "-project", project, "-scheme", "Consumer", "-configuration", options.configuration,
            "-destination", destination, "-derivedDataPath", derived,
            "CODE_SIGNING_ALLOWED=YES", "CODE_SIGN_IDENTITY=-", "build",
            label: "Independent #{route} app build: #{platform} #{options.configuration}")
-      app_candidates = Dir.glob(File.join(derived, "Build", "Products", "**", "Consumer.app"))
-      app = app_candidates.find do |path|
-        platform == "ios-simulator" ? path.include?("iphonesimulator") : !path.include?("iphonesimulator")
-      end
+      product_configuration = options.configuration + (platform == "ios-simulator" ? "-iphonesimulator" : "")
+      app = File.join(derived, "Build", "Products", product_configuration, "Consumer.app")
       raise "consumer app missing under #{File.join(derived, 'Build', 'Products')}" unless app && File.directory?(app)
       resource_paths = verify_resources!(app, route)
       puts "Installed #{route} resources: #{resource_paths.inspect}"
@@ -387,6 +389,6 @@ Dir.mktmpdir("undokit-consumer-", temporary_parent) do |temporary|
     FileUtils.cp_r(temporary, destination)
     puts "Retained consumer evidence: #{destination}"
   else
-    puts "Consumer harness passed; owned temporary stores and generated builds were removed"
+    puts "Consumer harness passed; temporary stores/projects removed; shared build cache retained at #{build_root}"
   end
 end

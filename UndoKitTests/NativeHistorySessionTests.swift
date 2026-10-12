@@ -391,7 +391,7 @@ import XCTest
         await session.close()
         XCTAssertNotEqual(session.status.phase, .closed, "Complete close discarded unidentified native work")
         XCTAssertNotNil(weakTarget)
-        try session.reconcileNativeRegistrations()
+        try await session.reconcileNativeRegistrations()
         XCTAssertNil(weakTarget)
         XCTAssertEqual(session.status.phase, .ready)
         await session.close()
@@ -465,6 +465,175 @@ import XCTest
         await session.close()
     }
 
+    func testUnknownRegistrationArrivingDuringDrainBlocksCloseAndPreservesWork() async throws {
+        let directory = try testDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let owners = NativeHistorySessions<NativeIntegerLease>()
+        let lease = NativeIntegerLease(directory: directory, scope: UUID(), working: UUID())
+        let session = await owners.open(documentURL: directory, mode: .create, codec: .json(),
+            draftURL: directory.appendingPathComponent("Draft.json")) { lease }
+        let gate = NativeDeliveryGate(); lease.deliveryGate = gate
+        try session.updateDraft(7)
+        let submitting = Task { await session.commit() }
+        await gate.waitUntilStarted()
+        let closing = Task { await session.close() }
+        await Task.yield()
+        var object: NativeIntegerPresentation? = NativeIntegerPresentation()
+        weak let preserved = object
+        let target = NativeSelectorUndoTarget()
+        session.undoManager.groupsByEvent = false
+        session.undoManager.beginUndoGrouping()
+        session.undoManager.registerUndo(withTarget: target,
+            selector: #selector(NativeSelectorUndoTarget.restore(_:)), object: object!)
+        session.undoManager.endUndoGrouping(); object = nil
+        gate.resume(); _ = await submitting.value; await closing.value
+        XCTAssertNotEqual(session.status.phase, .closed)
+        XCTAssertTrue(session.status.isEditingBlocked)
+        XCTAssertNotNil(preserved)
+        XCTAssertNotNil(lease.history, "Drain-time unknown work released the domain lease")
+        XCTAssertTrue(owners.session(for: directory) === session)
+        try await session.reconcileNativeRegistrations()
+        XCTAssertNil(preserved)
+        await session.close()
+        XCTAssertTrue(owners.entries.isEmpty)
+    }
+
+    func testUnknownRegistrationArrivingDuringCompleteLeaseCloseRetainsOwnerAndReacquiresForRecovery() async throws {
+        let directory = try testDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let owners = NativeHistorySessions<NativeIntegerLease>()
+        let lease = NativeIntegerLease(directory: directory, scope: UUID(), working: UUID())
+        let draftURL = directory.appendingPathComponent("Draft.json")
+        let session = await owners.open(documentURL: directory, mode: .create, codec: .json(), draftURL: draftURL) { lease }
+        var presenter: NativeIntegerPresentation? = NativeIntegerPresentation()
+        weak let preserved = presenter
+        let connection = try session.connect(owner: presenter!, captureDraft: { NativeDraftCapture(value: $0.value) }, draftDidChange: { $0.value = $1 })
+        let gate = NativeDeliveryGate(); lease.completeCloseGate = gate
+        let closing = Task { await session.close() }
+        await gate.waitUntilStarted()
+        XCTAssertNil(lease.history, "Fixture must have completely released its history before closure returns")
+        presenter!.value = 17
+        let target = NativeSelectorUndoTarget()
+        session.undoManager.groupsByEvent = false
+        session.undoManager.beginUndoGrouping()
+        session.undoManager.registerUndo(withTarget: target,
+            selector: #selector(NativeSelectorUndoTarget.restore(_:)), object: presenter!)
+        session.undoManager.endUndoGrouping(); presenter = nil
+        gate.resume(); await closing.value
+        XCTAssertEqual(session.status.phase, .blocked)
+        XCTAssertNotNil(preserved)
+        XCTAssertTrue(owners.session(for: directory) === session)
+        let same = await owners.open(documentURL: directory, mode: .existing, codec: .json(), draftURL: draftURL) {
+            XCTFail("A second factory bypassed blocked closure ownership")
+            return NativeIntegerLease(directory: directory, scope: UUID(), working: UUID())
+        }
+        XCTAssertTrue(same === session)
+        try await session.reconcileNativeRegistrations()
+        XCTAssertNotNil(lease.history, "Recovery released callback data before reacquiring its document lease")
+        XCTAssertNil(preserved)
+        XCTAssertEqual(session.draft, 17)
+        guard case .accepted = await session.retryDraft() else { return XCTFail("Preserved authored values could not commit after recovery") }
+        XCTAssertEqual(try readHost(directory).value, 17)
+        await session.close(); connection.disconnect()
+        XCTAssertTrue(owners.entries.isEmpty)
+    }
+
+    func testBlockedRefreshCanReconcileNativeWorkWithoutReplacingPreparedCommand() async throws {
+        let directory = try testDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let owners = NativeHistorySessions<NativeIntegerLease>()
+        let lease = NativeIntegerLease(directory: directory, scope: UUID(), working: UUID())
+        let draftURL = directory.appendingPathComponent("Draft.json")
+        let session = await owners.open(documentURL: directory, mode: .create, codec: .json(), draftURL: draftURL) { lease }
+        try session.updateDraft(13); lease.failReadAfterAcceptance = true
+        guard case .accepted = await session.commit() else { return XCTFail("Authoritative transaction was not accepted") }
+        XCTAssertEqual(session.status.phase, .blocked)
+        let originalCommand = try XCTUnwrap(try readHost(directory).receipts.first?.command)
+        var object: NativeIntegerPresentation? = NativeIntegerPresentation()
+        weak let preserved = object
+        let target = NativeSelectorUndoTarget()
+        session.undoManager.groupsByEvent = false
+        session.undoManager.beginUndoGrouping()
+        session.undoManager.registerUndo(withTarget: target,
+            selector: #selector(NativeSelectorUndoTarget.restore(_:)), object: object!)
+        session.undoManager.endUndoGrouping(); object = nil
+        lease.failReadAfterAcceptance = false
+        try await session.reconcileNativeRegistrations()
+        XCTAssertNil(preserved)
+        XCTAssertEqual(session.draft, 13)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: draftURL.path))
+        guard case .accepted(let receipt) = await session.retryDraft() else { return XCTFail("Blocked exact intent did not recover") }
+        XCTAssertEqual(receipt.token.command, originalCommand)
+        XCTAssertEqual(try readHost(directory).applicationCount, 1)
+        XCTAssertEqual(session.status.phase, .ready)
+        await session.close()
+    }
+
+    func testNativeReconciliationPreservesExplicitDraftDecisionAfterRejectionAndRestore() async throws {
+        for restore in [false, true] {
+            let directory = try testDirectory()
+            defer { try? FileManager.default.removeItem(at: directory) }
+            let owners = NativeHistorySessions<NativeIntegerLease>()
+            let scope = UUID(), working = UUID(), draftURL = directory.appendingPathComponent("Draft.json")
+            let lease = NativeIntegerLease(directory: directory, scope: scope, working: working)
+            var session = await owners.open(documentURL: directory, mode: .create, codec: .json(), draftURL: draftURL) { lease }
+            try session.updateDraft(13, isComposing: restore)
+            if restore {
+                await session.close()
+                session = await owners.open(documentURL: directory, mode: .existing, codec: .json(), draftURL: draftURL) {
+                    NativeIntegerLease(directory: directory, scope: scope, working: working)
+                }
+            } else {
+                lease.host?.rejectNext = true
+                let rejection = await session.commit(); XCTAssertEqual(rejection, .rejected)
+            }
+            XCTAssertTrue(session.status.requiresDraftDecision)
+            var object: NativeIntegerPresentation? = NativeIntegerPresentation()
+            weak let preserved = object
+            let target = NativeSelectorUndoTarget()
+            session.undoManager.groupsByEvent = false
+            session.undoManager.beginUndoGrouping()
+            session.undoManager.registerUndo(withTarget: target,
+                selector: #selector(NativeSelectorUndoTarget.restore(_:)), object: object!)
+            session.undoManager.endUndoGrouping(); object = nil
+            try await session.reconcileNativeRegistrations()
+            XCTAssertNil(preserved)
+            XCTAssertEqual(session.draft, 13)
+            XCTAssertTrue(session.status.requiresDraftDecision, "Native reconciliation implicitly chose draft restoration")
+            XCTAssertFalse(session.status.canUndo)
+            XCTAssertEqual(try readHost(directory).applicationCount, 0)
+            guard case .accepted = await session.retryDraft() else { return XCTFail("Explicit draft decision could not recover") }
+            XCTAssertFalse(session.status.requiresDraftDecision)
+            XCTAssertEqual(try readHost(directory).value, 13)
+            XCTAssertEqual(try readHost(directory).applicationCount, 1)
+            await session.close()
+        }
+    }
+
+    func testCloseWaitsForAwaitedNativeReconciliationToFinish() async throws {
+        let directory = try testDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let owners = NativeHistorySessions<NativeIntegerLease>()
+        let lease = NativeIntegerLease(directory: directory, scope: UUID(), working: UUID())
+        let session = await owners.open(documentURL: directory, mode: .create, codec: .json(),
+            draftURL: directory.appendingPathComponent("Draft.json")) { lease }
+        try session.updateDraft(7); lease.failAfterEngineClose = true
+        await session.close(); lease.failAfterEngineClose = false
+        let gate = NativeDeliveryGate(); lease.openingGate = gate
+        let reconciliation = Task { try await session.reconcileNativeRegistrations() }
+        await gate.waitUntilStarted()
+        let completed = expectation(description: "Close drains native reconciliation")
+        let closing = Task { await session.close(); completed.fulfill() }
+        await Task.yield()
+        XCTAssertEqual(session.status.phase, .closing)
+        gate.resume(); try await reconciliation.value
+        let outcome = await XCTWaiter.fulfillment(of: [completed], timeout: 1)
+        XCTAssertEqual(outcome, .completed, "Reconciliation failed to wake complete-close waiters")
+        if outcome == .completed { await closing.value }
+        XCTAssertEqual(session.status.phase, .closed)
+        XCTAssertTrue(owners.entries.isEmpty)
+    }
+
     private func readHost(_ directory: URL) throws -> PersistenceEvidenceHost {
         try PersistenceEvidenceHost(directory: directory, resource: NativeIntegerLease.resource)
     }
@@ -479,6 +648,7 @@ import XCTest
     var host: PersistenceEvidenceHost?
     var deliveryGate: NativeDeliveryGate?
     var openingGate: NativeDeliveryGate?
+    var completeCloseGate: NativeDeliveryGate?
     var failClose = false
     var failAfterEngineClose = false
     var failReadAfterAcceptance = false
@@ -499,6 +669,7 @@ import XCTest
         try await history?.close()
         if failAfterEngineClose { throw CocoaError(.fileWriteNoPermission) }
         history = nil; host = nil
+        if let completeCloseGate { await completeCloseGate.pause() }
     }
     func deliver(_ delivery: HistoryDelivery) async -> HistoryHostOutcome {
         if let deliveryGate { await deliveryGate.pause() }

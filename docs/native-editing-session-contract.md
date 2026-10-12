@@ -110,9 +110,16 @@ native callbacks. Every superclass registration is currently unexplained: it
 suspends semantic admission and Undo/Redo, blocks complete close, and retains the
 registration objects through disconnection or unrelated acceptance. It does not
 infer classification merely from a typed draft change. The advanced
-`reconcileNativeRegistrations()` action may release those callbacks only after the
-host explicitly identifies their authored work and reconciles the values. It
-captures connected content before clearing and executes no Command.
+`reconcileNativeRegistrations() async throws` action may release those callbacks only
+after the host explicitly identifies their authored work and reconciles the values.
+It works from blocked or suspended states and while a draft decision is pending.
+It reacquires an already closed lease before capturing connected content, persists
+that content before clearing, and executes no Command. It preserves exact prepared
+intent and pending restore/discard choices; a conflicting captured value cannot
+replace unsettled intent. New registrations arriving during awaited reacquisition
+require another explicit reconciliation. Close drains this recovery work and
+rechecks registrations before and after complete lease closure, retaining the owner
+and callback objects if closure cannot certify their preservation.
 
 Supported AppKit/UIKit bindings are the following slice. They must classify the
 stock controls' editing registrations, preserve unrelated native registrations,

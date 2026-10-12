@@ -20,6 +20,7 @@ import Foundation
     private var base: NativeDraftSnapshot<Lease.Draft>?
     private var composing = false
     private var unexplainedNativeRegistration = false
+    private var nativeRegistrationEpoch = 0
     private var epoch = UUID()
     private struct Binding: Equatable {
         let scope: UUID
@@ -170,7 +171,6 @@ import Foundation
         return await inverseAdmitted(undo: false)
     }
     func close() async {
-        guard !unexplainedNativeRegistration else { publish(); return }
         if phase == .closed { return }
         if closing { await withCheckedContinuation { closeFinished.append($0) }; return }
         if phase == .ready, !requiresDecision, let captured = capture?() {
@@ -180,14 +180,26 @@ import Foundation
         closing = true; publish()
         defer { let waiters = closeFinished; closeFinished = []; waiters.forEach { $0.resume() } }
         if phase == .busy || phase == .opening { await withCheckedContinuation { operationFinished.append($0) } }
+        guard !unexplainedNativeRegistration else {
+            closing = false; issue = nativeRegistrationFailure(); phase = .blocked; publish(); return
+        }
         phase = .closing; publish()
         if journalDirty { do { try persistDraft() } catch { closing = false; block(error); return } }
-        do { try await lease.close(); manager.removeAllActions(); epoch = UUID(); phase = .closed; issue = nil; closing = false; publish() }
+        do {
+            try await lease.close()
+            guard !unexplainedNativeRegistration else {
+                // Closure may already have released resources. Retain native evidence and the
+                // collection owner; recovery must reacquire the existing lease before capture.
+                closing = false; needsReopen = true; issue = nativeRegistrationFailure()
+                phase = .blocked; publish(); return
+            }
+            manager.removeAllActions(); epoch = UUID(); phase = .closed; issue = nil; closing = false; publish()
+        }
         catch { closing = false; needsReopen = true; block(error) }
     }
     private func reopenLease() async throws {
         guard let binding else { throw failure(.missingHistory) }
-        try persistDraft()
+        if journalDirty { try persistDraft() }
         epoch = UUID()
         try await lease.close()
         try await lease.open(.existing)
@@ -319,19 +331,47 @@ import Foundation
             underlyingDescription: "Native registrations require explicit host reconciliation")
     }
     func nativeRegistrationObserved() {
-        unexplainedNativeRegistration = true
+        unexplainedNativeRegistration = true; nativeRegistrationEpoch += 1
         // Preserve all unexplained groups until the host can identify their authored work.
         manager.levelsOfUndo = 0
         publish()
     }
-    func reconcileNativeRegistrations() throws {
-        guard phase == .ready, !closing, !requiresDecision, prepared == nil,
-              lease.history?.snapshot.isSuspended == false else { throw failure(.busy) }
-        guard captureCurrent() else { throw failure(.busy) }
-        // The caller explicitly certifies that all native registrations have been identified
-        // and their authored values reconciled. Captured values must persist before release.
-        unexplainedNativeRegistration = false
-        manager.removeAllActions(); manager.levelsOfUndo = 1; publish()
+    func reconcileNativeRegistrations() async throws {
+        guard !closing, phase == .ready || phase == .blocked || phase == .suspended else { throw failure(.busy) }
+        let priorPhase = phase, registrations = nativeRegistrationEpoch
+        phase = .busy; publish()
+        defer {
+            if phase == .busy { phase = priorPhase }
+            let waiters = operationFinished; operationFinished = []; waiters.forEach { $0.resume() }
+            publish()
+        }
+        do {
+            if needsReopen { try await reopenLease() }
+            guard registrations == nativeRegistrationEpoch else { throw failure(.busy) }
+            if journalCompatible {
+                if let captured = capture?() {
+                    if requiresDecision || prepared != nil {
+                        guard captured.value == draft else {
+                            throw HistoryFailure(.identityConflict, stage: .reconciliation, disposition: .suspended,
+                                underlyingDescription: "Native reconciliation cannot replace unsettled draft intent")
+                        }
+                    } else {
+                        draft = captured.value; composing = captured.isComposing
+                        proposedRevision = Data(UUID().uuidString.utf8); journalDirty = true
+                    }
+                }
+                if base != nil { try persistDraft() }
+            } else if let captured = capture?(), captured.value != draft || captured.isComposing {
+                throw HistoryFailure(.compatibility, stage: .reconciliation, disposition: .suspended)
+            }
+            // Explicit host certification releases callbacks only after captured values are safe.
+            // Prepared Commands, marked restoration and pending user decisions remain unchanged.
+            unexplainedNativeRegistration = false
+            manager.removeAllActions(); manager.levelsOfUndo = 1
+            if priorPhase == .blocked && issue?.cause == .hostProtocol {
+                phase = lease.history?.snapshot.isSuspended == true ? .suspended : .ready; issue = nil
+            }
+        } catch { block(error); throw error }
     }
     var nativeCanUndo: Bool { status.canUndo }
     var nativeCanRedo: Bool { status.canRedo }

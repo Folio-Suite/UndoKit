@@ -133,8 +133,10 @@ public struct NativeHistorySessionEntry: Sendable {
     /// Advanced recovery only: the host must first identify every unexplained native
     /// registration and reconcile its authored values. This explicit certification permits
     /// clearing native callbacks after capturing the connected value; it executes no Command.
+    /// A fully closed lease is reacquired before capture. Prepared intent and pending draft
+    /// decisions are preserved, and newer registrations during recovery require another review.
     /// Supported AppKit/UIKit registration classification belongs to the forthcoming bindings.
-    public func reconcileNativeRegistrations() throws { try editing.reconcileNativeRegistrations() }
+    public func reconcileNativeRegistrations() async throws { try await editing.reconcileNativeRegistrations() }
     #if DEBUG
     /// Demonstrates the existing production accepted-finalization save failure.
     /// Durable host acceptance may already exist; use retryDraft to reconcile exact intent.

@@ -7,8 +7,9 @@ import Foundation
 /// Off keeps transaction preparation and recovery while ordinary Undo remains
 /// available only during the open engine session.
 public enum HistoryRecordingMode: Equatable, Sendable {
+    // Keep the public On/Off policy vocabulary.
     /// Retain finalized ordinary Actions for reopening and historical reads.
-    case on
+    case on // swiftlint:disable:this identifier_name
     /// Keep safe preparation and reconciliation, with ordinary Undo only for this open session.
     case off
 }

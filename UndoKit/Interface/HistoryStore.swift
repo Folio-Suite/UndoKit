@@ -86,8 +86,8 @@ public struct HistoryScopeInspection: Equatable, Sendable {
     var context: NSManagedObjectContext { container.viewContext }
 
     init(url: URL, workingIdentity: UUID, storeIdentity: UUID,
-                 access: HistoryStoreAccess, limits: HistoryLimits,
-                 container: NSPersistentContainer, lockDescriptor: Int32) {
+         access: HistoryStoreAccess, limits: HistoryLimits,
+         container: NSPersistentContainer, lockDescriptor: Int32) {
         self.url = url
         self.workingIdentity = workingIdentity
         self.storeIdentity = storeIdentity
@@ -130,23 +130,7 @@ public struct HistoryScopeInspection: Equatable, Sendable {
         let url = requestedURL.standardizedFileURL.resolvingSymlinksInPath()
         let manager = FileManager.default
         try prepareOpening(at: url, mode: mode, access: access)
-        var descriptor: Int32 = -1
-        if access == .readWrite {
-            descriptor = Darwin.open(url.appendingPathExtension("owner").path,
-                                     O_CREAT | O_RDWR, S_IRUSR | S_IWUSR)
-            guard descriptor >= 0 else {
-                throw HistoryFailure(.unavailableStore, stage: .admission, disposition: .usable)
-            }
-            guard flock(descriptor, LOCK_EX | LOCK_NB) == 0 else {
-                Darwin.close(descriptor)
-                throw HistoryFailure(.busy, stage: .admission, disposition: .usable)
-            }
-        }
-        if case .create = mode, manager.fileExists(atPath: url.path) {
-            flock(descriptor, LOCK_UN)
-            Darwin.close(descriptor)
-            throw HistoryFailure(.identityConflict, stage: .admission, disposition: .usable)
-        }
+        let descriptor = try acquireOwner(at: url, mode: mode, access: access)
         let artifacts = Self.storeArtifactURLs(at: url)
         let preexistingArtifacts = Set(artifacts.filter { manager.fileExists(atPath: $0.path) })
         var owned = descriptor >= 0
@@ -171,11 +155,7 @@ public struct HistoryScopeInspection: Equatable, Sendable {
         } catch {
             if case .create = mode {
                 do {
-                    if let openedStore {
-                        try openedStore.removeFailedCreationArtifacts(preexisting: preexistingArtifacts)
-                    } else {
-                        try Self.removeCreatedArtifacts(at: url, preexisting: preexistingArtifacts)
-                    }
+                    try cleanFailedOpening(at: url, openedStore: openedStore, preexisting: preexistingArtifacts)
                 } catch let cleanupError {
                     if owned { flock(descriptor, LOCK_UN); Darwin.close(descriptor) }
                     throw HistoryFailure(.storage, stage: .admission, disposition: .suspended,

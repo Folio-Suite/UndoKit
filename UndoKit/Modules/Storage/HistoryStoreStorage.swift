@@ -9,6 +9,36 @@ extension HistoryStore {
     #if DEBUG
     @TaskLocal static var failCopyAfterCreation = false
     #endif
+    static func acquireOwner(at url: URL, mode: HistoryOpenMode, access: HistoryStoreAccess) throws -> Int32 {
+        let manager = FileManager.default
+        var descriptor: Int32 = -1
+        if access == .readWrite {
+            descriptor = Darwin.open(url.appendingPathExtension("owner").path,
+                                     O_CREAT | O_RDWR, S_IRUSR | S_IWUSR)
+            guard descriptor >= 0 else {
+                throw HistoryFailure(.unavailableStore, stage: .admission, disposition: .usable)
+            }
+            guard flock(descriptor, LOCK_EX | LOCK_NB) == 0 else {
+                Darwin.close(descriptor)
+                throw HistoryFailure(.busy, stage: .admission, disposition: .usable)
+            }
+        }
+        if case .create = mode, manager.fileExists(atPath: url.path) {
+            flock(descriptor, LOCK_UN)
+            Darwin.close(descriptor)
+            throw HistoryFailure(.identityConflict, stage: .admission, disposition: .usable)
+        }
+        return descriptor
+    }
+
+    static func cleanFailedOpening(at url: URL, openedStore: HistoryStore?, preexisting: Set<URL>) throws {
+        if let openedStore {
+            try openedStore.removeFailedCreationArtifacts(preexisting: preexisting)
+        } else {
+            try removeCreatedArtifacts(at: url, preexisting: preexisting)
+        }
+    }
+
     static func prepareOpening(at url: URL, mode: HistoryOpenMode, access: HistoryStoreAccess) throws {
         let manager = FileManager.default
         let exists = manager.fileExists(atPath: url.path)
@@ -241,94 +271,6 @@ extension HistoryStore {
             current = problem.userInfo[NSUnderlyingErrorKey] as? NSError
         }
         return .unavailableStore
-    }
-
-    /// Establish compatibility and binding before any writable coordinator touches
-    /// the original. This method never edits records, including copy adoption.
-    func validateRegistration(mode: HistoryOpenMode) throws {
-        let request = HistoryStoreRecord.fetchRequest()
-        request.predicate = NSPredicate(format: "\(#keyPath(HistoryStoreRecord.key)) == %@", "primary")
-        request.fetchLimit = 2
-        let records = try context.fetch(request)
-        guard records.count == 1, let record = records.first,
-              let storeID = record.storeID.flatMap(UUID.init(uuidString:)),
-              record.workingID.flatMap(UUID.init(uuidString:)) != nil else {
-            throw HistoryFailure(.compatibility, stage: .admission, disposition: .usable)
-        }
-        switch mode {
-        case .create:
-            throw HistoryFailure(.identityConflict, stage: .admission, disposition: .usable)
-        case .existing:
-            guard record.workingID == workingIdentity.uuidString else {
-                throw HistoryFailure(.identityConflict, stage: .admission, disposition: .usable)
-            }
-            storeIdentity = storeID
-        case .independentCopy(let sourceWorkingIdentity):
-            guard record.workingID == sourceWorkingIdentity.uuidString,
-                  sourceWorkingIdentity != workingIdentity else {
-                throw HistoryFailure(.identityConflict, stage: .admission, disposition: .usable)
-            }
-            let scopes = try context.fetch(HistoryScopeRecord.fetchRequest())
-            guard scopes.allSatisfy({ $0.workingID == sourceWorkingIdentity.uuidString }) else {
-                throw HistoryFailure(.identityConflict, stage: .admission, disposition: .usable)
-            }
-        }
-    }
-
-    func register(mode: HistoryOpenMode) throws {
-        let request = HistoryStoreRecord.fetchRequest()
-        request.predicate = NSPredicate(format: "\(#keyPath(HistoryStoreRecord.key)) == %@", "primary")
-        request.fetchLimit = 1
-        let record = try context.fetch(request).first
-        switch mode {
-        case .create:
-            guard record == nil else {
-                throw HistoryFailure(.identityConflict, stage: .admission, disposition: .usable)
-            }
-            guard let name = HistoryStoreRecord.fetchRequest().entityName,
-                  let created = NSEntityDescription.insertNewObject(
-                forEntityName: name, into: context
-            ) as? HistoryStoreRecord else {
-                throw HistoryFailure(.compatibility, stage: .admission, disposition: .usable)
-            }
-            created.key = "primary"
-            created.workingID = workingIdentity.uuidString
-            created.storeID = storeIdentity.uuidString
-            do {
-                #if DEBUG
-                if Self.failInitialRegistrationSave {
-                    throw HistoryFailure(.storage, stage: .admission, disposition: .usable,
-                        underlyingDescription: "Injected first registration save failure")
-                }
-                #endif
-                try context.save()
-            } catch {
-                context.rollback()
-                throw error
-            }
-        case .existing:
-            guard let record else {
-                throw HistoryFailure(.compatibility, stage: .admission, disposition: .usable)
-            }
-            guard record.workingID == workingIdentity.uuidString,
-                  let storeID = record.storeID.flatMap(UUID.init(uuidString:)) else {
-                throw HistoryFailure(.identityConflict, stage: .admission, disposition: .usable)
-            }
-            storeIdentity = storeID
-        case .independentCopy(let sourceWorkingIdentity):
-            guard let record, record.workingID == sourceWorkingIdentity.uuidString,
-                  sourceWorkingIdentity != workingIdentity else {
-                throw HistoryFailure(.identityConflict, stage: .admission, disposition: .usable)
-            }
-            let scopes = try context.fetch(HistoryScopeRecord.fetchRequest())
-            guard scopes.allSatisfy({ $0.workingID == sourceWorkingIdentity.uuidString }) else {
-                throw HistoryFailure(.identityConflict, stage: .admission, disposition: .usable)
-            }
-            record.workingID = workingIdentity.uuidString
-            record.storeID = storeIdentity.uuidString
-            for scope in scopes { scope.workingID = workingIdentity.uuidString }
-            do { try context.save() } catch { context.rollback(); throw error }
-        }
     }
 
     func copyIdle(to destination: URL, allowingUnresolved: Bool = false) throws {

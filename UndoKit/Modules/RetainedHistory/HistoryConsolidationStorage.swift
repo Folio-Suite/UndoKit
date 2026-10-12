@@ -36,6 +36,12 @@ extension RetainedHistory {
             // Its historical endpoint still has to survive the live plan.
             if case .group(let id) = plan.target { kept.insert(id.uuidString) }
         }
+        return includingStructuralPartners(of: kept, groups: groups)
+    }
+
+    private func includingStructuralPartners(of protected: Set<String>,
+                                             groups: [HistoryGroupRecord]) -> Set<String> {
+        var kept = protected
         // Keep structural partners of protected Undo/Redo actions, including
         // an original on a displaced branch and its compensation relation.
         var changed = true

@@ -14,35 +14,38 @@ extension HistoryTransactionCoordinator {
             guard !scopeRow.suspended else {
                 return .failure(HistoryFailure(.unresolved, stage: .reconciliation, disposition: .suspended))
             }
-            let boundGeneration: UUID?
-            switch request {
-            case .command(let command): boundGeneration = command.expectedGeneration
-            case .undo(let generation), .redo(let generation): boundGeneration = generation
-            }
-            if try scopeRow.requiresGenerationBinding &&
-               boundGeneration != scopeRow.uuid(scopeRow.generationID) {
-                return .failure(HistoryFailure(.identityConflict, stage: .admission, disposition: .usable))
-            }
+            try validateGeneration(for: request, scopeRow: scopeRow)
             switch request {
             case .command(let command):
                 return await execute(command: command, kind: .command, targetGroup: nil)
-            case .undo:
-                if let group = sessionGroups.last(where: { $0.applied }) {
-                    return await executeSessionInverse(group, kind: .undo)
-                }
-                guard let target = try history.eligibleGroup(for: .undo) else { return .rejected }
-                return await executeInverse(target: target, kind: .undo)
-            case .redo:
-                if let group = sessionGroups.first(where: { !$0.applied }) {
-                    return await executeSessionInverse(group, kind: .redo)
-                }
-                guard let target = try history.eligibleGroup(for: .redo) else { return .rejected }
-                return await executeInverse(target: target, kind: .redo)
+            case .undo: return try await executeAvailableInverse(kind: .undo)
+            case .redo: return try await executeAvailableInverse(kind: .redo)
             }
         } catch let failure as HistoryFailure where failure.cause == .identityConflict {
             return .failure(failure)
         } catch {
             return .failure(HistoryFailure(.storage, stage: .admission, disposition: .usable))
+        }
+    }
+
+    private func executeAvailableInverse(kind: HistoryDeliveryKind) async throws -> HistoryResult {
+        let session = kind == .undo
+            ? sessionGroups.last(where: { $0.applied })
+            : sessionGroups.first(where: { !$0.applied })
+        if let session { return await executeSessionInverse(session, kind: kind) }
+        guard let target = try history.eligibleGroup(for: kind) else { return .rejected }
+        return await executeInverse(target: target, kind: kind)
+    }
+
+    private func validateGeneration(for request: Request, scopeRow: HistoryScopeRecord) throws {
+        let boundGeneration: UUID?
+        switch request {
+        case .command(let command): boundGeneration = command.expectedGeneration
+        case .undo(let generation), .redo(let generation): boundGeneration = generation
+        }
+        if try scopeRow.requiresGenerationBinding &&
+           boundGeneration != scopeRow.uuid(scopeRow.generationID) {
+            throw HistoryFailure(.identityConflict, stage: .admission, disposition: .usable)
         }
     }
 
@@ -122,39 +125,43 @@ extension HistoryTransactionCoordinator {
         } catch let failure as HistoryFailure where failure.cause == .identityConflict {
             return .failure(failure)
         } catch {
-            context.rollback()
-            let durableStage = (try? history.fetchOne(HistoryTransactionRecord.self, keyPath: \.key, key: key))?.stage
-            if store.writeFailed {
-                let stage: HistoryFailureStage = durableStage == nil || durableStage == "prepared"
-                    ? .preparation : .finalization
-                return .failure(HistoryFailure(.storage, stage: stage, disposition: .suspended,
+            return recoverDeliveryFailure(error, transactionKey: key)
+        }
+    }
+
+    private func recoverDeliveryFailure(_ error: Error, transactionKey key: String) -> HistoryResult {
+        context.rollback()
+        let durableStage = (try? history.fetchOne(HistoryTransactionRecord.self, keyPath: \.key, key: key))?.stage
+        if store.writeFailed {
+            let stage: HistoryFailureStage = durableStage == nil || durableStage == "prepared"
+                ? .preparation : .finalization
+            return .failure(HistoryFailure(.storage, stage: stage, disposition: .suspended,
+                                           underlyingDescription: String(describing: error)))
+        }
+        if durableStage == "prepared" {
+            do {
+                let prepared = try history.fetchOne(HistoryTransactionRecord.self, keyPath: \.key, key: key)
+                prepared?.stage = "cancelled"
+                try history.saveContext()
+                return .failure(HistoryFailure(.storage, stage: .preparation,
+                                               disposition: .usable,
+                                               underlyingDescription: String(describing: error)))
+            } catch {
+                context.rollback()
+                suspend()
+                return .failure(HistoryFailure(.storage, stage: .preparation,
+                                               disposition: .suspended,
                                                underlyingDescription: String(describing: error)))
             }
-            if durableStage == "prepared" {
-                do {
-                    let prepared = try history.fetchOne(HistoryTransactionRecord.self, keyPath: \.key, key: key)
-                    prepared?.stage = "cancelled"
-                    try history.saveContext()
-                    return .failure(HistoryFailure(.storage, stage: .preparation,
-                                                   disposition: .usable,
-                                                   underlyingDescription: String(describing: error)))
-                } catch {
-                    context.rollback()
-                    suspend()
-                    return .failure(HistoryFailure(.storage, stage: .preparation,
-                                                   disposition: .suspended,
-                                                   underlyingDescription: String(describing: error)))
-                }
-            }
-            if durableStage == "deliveryStarted" || durableStage == "acceptancePending" {
-                suspend()
-                return .failure(HistoryFailure(.storage, stage: .finalization,
-                    disposition: .suspended, underlyingDescription: String(describing: error)
-                ))
-            }
-            return .failure(HistoryFailure(.storage, stage: .preparation,
-                                           disposition: .usable, underlyingDescription: String(describing: error)))
         }
+        if durableStage == "deliveryStarted" || durableStage == "acceptancePending" {
+            suspend()
+            return .failure(HistoryFailure(.storage, stage: .finalization,
+                disposition: .suspended, underlyingDescription: String(describing: error)
+            ))
+        }
+        return .failure(HistoryFailure(.storage, stage: .preparation,
+                                       disposition: .usable, underlyingDescription: String(describing: error)))
     }
 
     private func deliverToHost(_ delivery: HistoryDelivery) async -> HistoryHostOutcome {

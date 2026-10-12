@@ -6,7 +6,6 @@ import Foundation
 import XCTest
 
 @MainActor final class HistoryPersistenceFailureTests: XCTestCase {
-    private let resourceBytes = Data("Required recovery resource v1".utf8)
 
     #if DEBUG
     func testSaveFailureAfterPreflightPreservesHostAndAllowsFreshSession() async throws {
@@ -54,13 +53,8 @@ import XCTest
             XCTAssertEqual(try fixture.engine.historyPage(limit: 10).count, 0)
             XCTAssertEqual(try fixture.store.inspectScope(fixture.scope).pendingRecoveryCount, 1)
             let freshHost = try PersistenceEvidenceHost(directory: fixture.directory, resource: fixture.resource)
-            XCTAssertEqual(freshHost.value, 7)
-            XCTAssertEqual(freshHost.applicationCount, 1)
             let receipt = try XCTUnwrap(freshHost.receipts.first)
-            XCTAssertEqual(receipt.command, command.id)
-            XCTAssertEqual(receipt.effects.map(\.member), command.members.map(\.id))
-            XCTAssertEqual(receipt.effects.map(\.before), [0, 4])
-            XCTAssertEqual(try Data(contentsOf: freshHost.resourceURL), resourceBytes)
+            assertAcceptedEvidence(freshHost, command: command)
             if point == .acceptedFinalization {
                 XCTAssertEqual(try fixture.store.requiredObjects(in: fixture.resource.storeID, limit: 10)
                     .objects.map(\.reference), [fixture.resource])
@@ -100,7 +94,8 @@ import XCTest
             let fixture = try await makeFixture()
             defer { try? FileManager.default.removeItem(at: fixture.directory) }
             fixture.host.rejectNext = true
-            let command = HistoryCommand(fingerprint: Data("rejected seven".utf8), payload: PersistenceEvidenceHost.payload(7))
+            let command = HistoryCommand(fingerprint: Data("rejected seven".utf8),
+                payload: PersistenceEvidenceHost.payload(7))
             let result = await HistoryScopeStorage.$failSaveAt.withValue(point) {
                 await fixture.engine.submit(command)
             }
@@ -132,7 +127,8 @@ import XCTest
     func testFailedDeliveryFenceNeverDeliversPreparedCommandOnReopen() async throws {
         let fixture = try await makeFixture()
         defer { try? FileManager.default.removeItem(at: fixture.directory) }
-        let command = HistoryCommand(fingerprint: Data("prepared seven".utf8), payload: PersistenceEvidenceHost.payload(7))
+        let command = HistoryCommand(fingerprint: Data("prepared seven".utf8),
+            payload: PersistenceEvidenceHost.payload(7))
         let result = await HistoryScopeStorage.$failSaveAt.withValue(.deliveryFence) {
             await fixture.engine.submit(command)
         }
@@ -140,7 +136,8 @@ import XCTest
         XCTAssertEqual(try fixture.store.inspectScope(fixture.scope).pendingRecoveryCount, 1)
         try await fixture.store.close()
         let freshHost = try PersistenceEvidenceHost(directory: fixture.directory, resource: fixture.resource)
-        let reopened = try await HistoryStore.open(at: fixture.store.url, workingIdentity: fixture.identity, mode: .existing)
+        let reopened = try await HistoryStore.open(at: fixture.store.url,
+            workingIdentity: fixture.identity, mode: .existing)
         let engine = try await reopened.openScope(fixture.scope, mode: .existing, host: freshHost)
         XCTAssertFalse(engine.snapshot.isSuspended)
         XCTAssertEqual(freshHost.deliveryCount, 0)
@@ -194,7 +191,8 @@ import XCTest
         try await reader.close()
         try await fixture.store.close()
         let freshHost = try PersistenceEvidenceHost(directory: fixture.directory, resource: fixture.resource)
-        let reopened = try await HistoryStore.open(at: fixture.store.url, workingIdentity: fixture.identity, mode: .existing)
+        let reopened = try await HistoryStore.open(at: fixture.store.url,
+            workingIdentity: fixture.identity, mode: .existing)
         let engine = try await reopened.openScope(fixture.scope, mode: .existing, host: freshHost)
         XCTAssertEqual(try engine.historyPage(limit: 10), sourceEntries)
         XCTAssertEqual(freshHost.applicationCount, 1)
@@ -209,7 +207,8 @@ extension HistoryPersistenceFailureTests {
         for missingCodec in [true, false] {
             let fixture = try await makeFixture()
             defer { try? FileManager.default.removeItem(at: fixture.directory) }
-            let command = HistoryCommand(fingerprint: Data("set seven".utf8), payload: PersistenceEvidenceHost.payload(7))
+            let command = HistoryCommand(fingerprint: Data("set seven".utf8),
+                payload: PersistenceEvidenceHost.payload(7))
             let result = await HistoryScopeStorage.$failSaveAt.withValue(.acceptanceEvidence) {
                 await fixture.engine.submit(command)
             }
@@ -229,21 +228,8 @@ extension HistoryPersistenceFailureTests {
             XCTAssertEqual(try blocked.inspectScope(fixture.scope).pendingRecoveryCount, 1)
             XCTAssertEqual(try blockedEngine.historyPage(limit: 10).count, 0)
             let recovery = await blockedEngine.reconcile()
-            guard case .failure(let missingPrerequisite) = recovery else {
-                XCTFail("Missing interpretation prerequisite was not reported")
-                return
-            }
-            XCTAssertEqual(missingPrerequisite.cause, .compatibility)
-            XCTAssertEqual(missingPrerequisite.disposition, .suspended)
-            var cleanupRan = false
-            do {
-                try await blocked.withRequiredObjects(in: fixture.resource.storeID) { _ in cleanupRan = true }
-                XCTFail("Unresolved evidence allowed resource cleanup")
-            } catch let failure as HistoryFailure {
-                XCTAssertEqual(failure.cause, .unresolved)
-                XCTAssertEqual(failure.disposition, .suspended)
-            }
-            XCTAssertFalse(cleanupRan)
+            assertMissingPrerequisite(recovery)
+            try await assertCleanupRefused(in: blocked, retentionStore: fixture.resource.storeID)
             XCTAssertEqual(unavailableHost.value, 7)
             XCTAssertEqual(unavailableHost.applicationCount, 1)
             XCTAssertEqual(unavailableHost.deliveryCount, 1)
@@ -270,15 +256,7 @@ extension HistoryPersistenceFailureTests {
     func testFailedConsolidationPreservesHistoryHoldsAndRecoveryResources() async throws {
         let fixture = try await makeFixture(limits: HistoryLimits(maxUndoGroups: 1))
         defer { try? FileManager.default.removeItem(at: fixture.directory) }
-        var commandIDs: [UUID] = []
-        for value in 1...3 {
-            let command = HistoryCommand(fingerprint: Data("set \(value)".utf8), payload: PersistenceEvidenceHost.payload(value))
-            guard case .accepted = await fixture.engine.submit(command) else {
-                XCTFail("Retention setup failed")
-                return
-            }
-            commandIDs.append(command.id)
-        }
+        let commandIDs = try await populateRetentionFixture(fixture)
         let boundary = try fixture.engine.createCheckpoint(name: "Three", state: PersistenceEvidenceHost.payload(3),
                                                            resources: [fixture.resource])
         let hold = try fixture.engine.holdDetail(from: commandIDs[0], through: commandIDs[0])
@@ -395,37 +373,4 @@ extension HistoryPersistenceFailureTests {
         try await fixture.store.close()
     }
 
-    private struct Fixture {
-        let directory: URL
-        let identity: UUID
-        let scope: UUID
-        let resource: HistoryObjectReference
-        let store: HistoryStore
-        let engine: HistoryEngine
-        let host: PersistenceEvidenceHost
-    }
-
-    private func makeFixture(limits: HistoryLimits = HistoryLimits()) async throws -> Fixture {
-        let directory = try testDirectory()
-        let resource = HistoryObjectReference(storeID: UUID(), objectKey: "protected-resource", versionKey: "v1")
-        let host = try PersistenceEvidenceHost(directory: directory, resource: resource)
-        try resourceBytes.write(to: host.resourceURL)
-        let identity = UUID(), scope = UUID()
-        let store = try await HistoryStore.open(at: directory.appendingPathComponent("History.sqlite"),
-                                                workingIdentity: identity, mode: .create, limits: limits)
-        let engine = try await store.openScope(scope, mode: .create, host: host)
-        return Fixture(directory: directory, identity: identity, scope: scope, resource: resource,
-                       store: store, engine: engine, host: host)
-    }
-
-    private func assertStorageFailure(_ result: HistoryResult, stage: HistoryFailureStage,
-                                      file: StaticString = #filePath, line: UInt = #line) {
-        guard case .failure(let failure) = result else {
-            XCTFail("Production persistence failure was not returned", file: file, line: line)
-            return
-        }
-        XCTAssertEqual(failure.cause, .storage, file: file, line: line)
-        XCTAssertEqual(failure.stage, stage, file: file, line: line)
-        XCTAssertEqual(failure.disposition, .suspended, file: file, line: line)
-    }
 }

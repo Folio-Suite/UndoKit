@@ -25,16 +25,7 @@ extension RetainedHistory {
             $0.sequence < boundary.info.sequence &&
             !protected.contains($0.key ?? "")
         }
-        let holds = try retentionHolds()
-        var keptCheckpoints = policy.keptCheckpointIDs
-        keptCheckpoints.insert(checkpointID)
-        for hold in holds {
-            if case .state(let id) = hold.kind { keptCheckpoints.insert(id) }
-        }
-        for plan in activeRecoveryPlans {
-            if case .checkpoint(let id) = plan.source { keptCheckpoints.insert(id) }
-            if case .checkpoint(let id) = plan.target { keptCheckpoints.insert(id) }
-        }
+        let keptCheckpoints = try protectedCheckpointIDs(including: checkpointID, policy: policy)
         let checkpoints = try history.fetch(HistoryCheckpointRecord.self, predicate: NSPredicate(
             format: "\(#keyPath(HistoryCheckpointRecord.scopeKey)) == %@ AND " +
                 "\(#keyPath(HistoryCheckpointRecord.sequence)) < %@", scope.uuidString,
@@ -46,6 +37,33 @@ extension RetainedHistory {
         let selectedGroups = Array(candidates.prefix(limits.maxReadPage))
         let remaining = max(0, limits.maxReadPage - selectedGroups.count)
         let selectedCheckpoints = Array(removableCheckpoints.prefix(remaining))
+        try removeConsolidated(groups: selectedGroups, checkpoints: selectedCheckpoints)
+        let retained = groups.count - selectedGroups.count
+        return HistoryConsolidationResult(removedGroups: selectedGroups.count,
+            removedCheckpoints: selectedCheckpoints.count,
+            protectedGroups: protected.count, retainedGroups: retained,
+            targetUnmet: retained > policy.targetDetailedGroups,
+            hasMore: candidates.count > selectedGroups.count ||
+                removableCheckpoints.count > selectedCheckpoints.count)
+    }
+
+    private func protectedCheckpointIDs(including checkpointID: UUID,
+                                        policy: HistoryRetentionPolicy) throws -> Set<UUID> {
+        let holds = try retentionHolds()
+        var keptCheckpoints = policy.keptCheckpointIDs
+        keptCheckpoints.insert(checkpointID)
+        for hold in holds {
+            if case .state(let id) = hold.kind { keptCheckpoints.insert(id) }
+        }
+        for plan in activeRecoveryPlans {
+            if case .checkpoint(let id) = plan.source { keptCheckpoints.insert(id) }
+            if case .checkpoint(let id) = plan.target { keptCheckpoints.insert(id) }
+        }
+        return keptCheckpoints
+    }
+
+    private func removeConsolidated(groups selectedGroups: [HistoryGroupRecord],
+                                    checkpoints selectedCheckpoints: [HistoryCheckpointRecord]) throws {
         do {
             for group in selectedGroups {
                 if Task.isCancelled {
@@ -67,13 +85,6 @@ extension RetainedHistory {
             context.rollback()
             throw error
         }
-        let retained = groups.count - selectedGroups.count
-        return HistoryConsolidationResult(removedGroups: selectedGroups.count,
-            removedCheckpoints: selectedCheckpoints.count,
-            protectedGroups: protected.count, retainedGroups: retained,
-            targetUnmet: retained > policy.targetDetailedGroups,
-            hasMore: candidates.count > selectedGroups.count ||
-                removableCheckpoints.count > selectedCheckpoints.count)
     }
 
 }

@@ -181,6 +181,9 @@ import XCTest
         try await engine.close()
     }
 
+}
+
+extension HistoryRecordingTests {
     func testClearHistoryStartsNewGenerationWithoutRemovingAnotherScope() async throws {
         let directory = try testDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }

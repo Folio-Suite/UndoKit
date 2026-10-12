@@ -44,21 +44,27 @@ extension HistoryStore {
         let objects = try pageRows.map { row -> HistoryRequiredObject in
             let objectKey = row[#keyPath(HistoryResourceRecord.objectKey)] as? String ?? ""
             let versionKey = row[#keyPath(HistoryResourceRecord.versionKey)] as? String ?? ""
-            let count = try context.count(for: {
-                let countRequest = NSFetchRequest<NSFetchRequestResult>(entityName: resourceEntityName)
-                countRequest.predicate = NSPredicate(
-                    format: "\(#keyPath(HistoryResourceRecord.storeID)) == %@ AND " +
-                        "\(#keyPath(HistoryResourceRecord.objectKey)) == %@ AND " +
-                        "\(#keyPath(HistoryResourceRecord.versionKey)) == %@",
-                    retentionStore.uuidString, objectKey, versionKey)
-                return countRequest
-            }())
+            let count = try referenceCount(in: retentionStore, objectKey: objectKey, versionKey: versionKey,
+                                           entityName: resourceEntityName)
             return HistoryRequiredObject(reference: HistoryObjectReference(
                 storeID: retentionStore, objectKey: objectKey,
                 versionKey: versionKey.isEmpty ? nil : versionKey), referenceCount: count)
         }
         return HistoryRequiredObjectPage(objects: objects,
             nextCursor: rows.count > limit ? objects.last?.reference : nil)
+    }
+
+    private func referenceCount(in retentionStore: UUID, objectKey: String,
+                                versionKey: String, entityName: String) throws -> Int {
+        return try context.count(for: {
+            let countRequest = NSFetchRequest<NSFetchRequestResult>(entityName: entityName)
+            countRequest.predicate = NSPredicate(
+                format: "\(#keyPath(HistoryResourceRecord.storeID)) == %@ AND " +
+                    "\(#keyPath(HistoryResourceRecord.objectKey)) == %@ AND " +
+                    "\(#keyPath(HistoryResourceRecord.versionKey)) == %@",
+                retentionStore.uuidString, objectKey, versionKey)
+            return countRequest
+        }())
     }
 
     func isRetentionCleanupPending(for retentionStore: UUID) throws -> Bool {

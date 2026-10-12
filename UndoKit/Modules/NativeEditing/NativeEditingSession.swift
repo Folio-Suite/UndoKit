@@ -330,6 +330,10 @@ import Foundation
         HistoryFailure(.hostProtocol, stage: .admission, disposition: .suspended,
             underlyingDescription: "Native registrations require explicit host reconciliation")
     }
+}
+
+// Native callback reconciliation is separate from ordinary editing admission.
+extension NativeEditingSession {
     func nativeRegistrationObserved() {
         unexplainedNativeRegistration = true; nativeRegistrationEpoch += 1
         // Preserve all unexplained groups until the host can identify their authored work.

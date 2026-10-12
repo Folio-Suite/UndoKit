@@ -52,8 +52,10 @@ def run!(*command, env: {}, label: nil)
   puts "  #{label || command.join(' ')}"
   output, status = Open3.capture2e(env, *command)
   unless status.success?
-    diagnostic = output.lines.grep(/(?:^| )error:|^.*warning:|BUILD FAILED|BUILD SUCCEEDED|sandbox|failed/i)
-    warn diagnostic.last(60).join
+    # Xcode failures such as plugin validation need not contain "error:".
+    # Preserve the complete failed command output in CI, where temporary files
+    # disappear with the runner and filtered diagnostics can hide the cause.
+    warn output
     log = File.join(Dir.tmpdir, "undokit-consumer-last-failure.log")
     File.write(log, output)
     warn "Full command output: #{log}"

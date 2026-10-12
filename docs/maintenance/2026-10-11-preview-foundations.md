@@ -51,8 +51,9 @@ copy refusal when destination sidecars already exist. Local full-suite logs are
 
 After a lint-only split of the persistence test class into same-file extensions,
 focused rediscovery passed all nine Debug and two Release persistence tests.
-SwiftLint completed with zero errors and 42 warnings, including existing
-warnings and new long preservation-test bodies/files. No lint rules were disabled.
+That initial SwiftLint run completed with zero errors and 42 warnings, including
+existing warnings and new long preservation-test bodies/files. The follow-up
+cleanup below supersedes that lint baseline.
 
 ## Independent consumer results
 
@@ -96,7 +97,8 @@ Separate standards and spec reviews compared
 `1fee2c3fb8af9a8f6dbe3f134e1d431042f8f481`.
 Standards: zero hard violations, one optional duplication refactor around
 independent-copy binding validation. Both preflight and live-context checks
-remain in place; sharing their predicate is deferred. Spec: zero actionable
+remain in place; the follow-up cleanup now shares their nonmutating validation.
+Spec: zero actionable
 findings against issues 13–15 and accepted decisions 5–8. The subsequent
 same-file test extension split changes layout only and has focused Debug/Release
 validation above.
@@ -108,3 +110,44 @@ deployment-floor OS, physical iPhone/iPad, signing or installation outside the
 consumer harness. Failure injection and graceful close/reopen do not simulate
 an exhausted disk or abrupt process termination. Final candidate fixture sealing
 and the remaining preview gates stay in the release plan.
+
+## Analyze follow-up (2026-10-12)
+
+The native Analyze log invoked the build plugin's `swiftlint lint`, not
+`swiftlint analyze`. It reported 20 framework lint warnings; a repository-wide
+lint run also found 22 test warnings. The follow-up separates payload storage,
+store registration, delivery recovery, accepted-outcome finalization and
+retention selection into cohesive helpers, preserving durable save order and
+public behavior. Opening preflight and live independent-copy registration share
+one nonmutating binding check. Test scenarios retain their assertion coverage
+while fixture construction and related scenarios have focused helpers/files.
+
+The public recording case `.on` retains its domain name with a single
+`identifier_name` exception at that declaration. No thresholds or repository-wide
+rules were relaxed. Repository-wide SwiftLint now reports zero warnings and zero
+errors. Generated Core Data public-import diagnostics remain tracked separately
+in [#31](https://github.com/Folio-Suite/UndoKit/issues/31); generated sources were
+not edited. The user's local project DerivedData setting was preserved.
+
+Fresh verification after cleanup:
+
+- Focused opening, persistence, retention, lifecycle and recording: 48 passed.
+- Full Debug: 96 passed, one opt-in scale test skipped, zero failures.
+- Full Release: 88 passed, one opt-in scale test skipped, zero failures.
+- Separate 200-group scale run: passed; 199 far-back reconstruction steps,
+  101 divergent steps, three groups consolidated in one pass.
+- Native Xcode build: passed using project-local `DerivedData/UndoKit`.
+
+Logs are retained under `DerivedData/PreviewEvidence/cleanup-*.log`, with
+`swiftlint-cleanup.log` empty because the quiet lint run emitted no diagnostics.
+
+Separate incremental reviews of `c197fcc...63dda2a` returned zero standards
+violations or actionable smells, and zero spec findings. Review checked the
+save fences, rollback paths, lock lifetime, copy validation, retention protection
+and preserved test assertions.
+
+The prior pushed CI run passed package tests and the package simulator route,
+then failed at the native framework build. Its diagnostic filter omitted the
+underlying error. The consumer runner now emits the complete output of a failed
+command so fresh CI retains the actual cause; no speculative build-setting or
+plugin-trust change is included.

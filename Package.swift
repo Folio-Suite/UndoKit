@@ -6,11 +6,12 @@ import PackageDescription
 
 let package = Package(
     name: "UndoKit",
-    platforms: [.macOS(.v14)],
+    platforms: [.macOS(.v14), .iOS(.v17)],
     products: [.library(name: "UndoKit", type: .dynamic, targets: ["UndoKit"])],
     targets: [
         .target(name: "UndoKit", path: "UndoKit", resources: [.process("Resources")]),
-        .testTarget(name: "UndoKitTests", dependencies: ["UndoKit"], path: "UndoKitTests")
+        .testTarget(name: "UndoKitTests", dependencies: ["UndoKit"], path: "UndoKitTests",
+                    resources: [.copy("Fixtures")])
     ],
     swiftLanguageModes: [.v6]
 )

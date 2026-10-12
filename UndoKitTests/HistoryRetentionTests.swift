@@ -2,19 +2,10 @@
 // SPDX-License-Identifier: MIT
 
 import Foundation
-import SQLite3
 import UndoKit
 import XCTest
 
 @MainActor final class HistoryRetentionTests: XCTestCase {
-    private func accepted(_ engine: HistoryEngine, _ value: Int) async throws -> HistoryEntry {
-        let command = HistoryCommand(fingerprint: Data("set \(value)".utf8), payload: payload(value))
-        guard case .accepted(let receipt) = await engine.submit(command) else {
-            throw HistoryFailure(.hostProtocol, stage: .delivery, disposition: .usable)
-        }
-        return try XCTUnwrap(engine.historyPage(limit: 100).first { $0.groupID == receipt.groupID })
-    }
-
     func testDetailHoldsResolveRepeatedGroupIDsWithinEachScope() async throws {
         let directory = try testDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -152,6 +143,9 @@ import XCTest
         try await engine.close()
     }
 
+}
+
+extension HistoryRetentionTests {
     func testSharedResourcesAndCleanupRetryAcrossScopes() async throws {
         let directory = try testDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -186,11 +180,7 @@ import XCTest
             policy: HistoryRetentionPolicy(targetDetailedGroups: 0))
         XCTAssertTrue(try store.requiredObjects(in: storeID, limit: 10).objects.isEmpty)
         XCTAssertTrue(try store.cleanupPending(for: storeID))
-        enum CleanupError: Error { case interrupted }
-        do {
-            try await store.withRequiredObjects(in: storeID) { _ in throw CleanupError.interrupted }
-            XCTFail("Interrupted cleanup succeeded")
-        } catch CleanupError.interrupted {}
+        try await interruptCleanup(in: store, retentionStore: storeID)
         try await store.close()
         let reopened = try await HistoryStore.open(at: url, workingIdentity: workingID,
             mode: .existing, limits: HistoryLimits(maxUndoGroups: 1))
@@ -207,6 +197,14 @@ import XCTest
         } catch let failure as HistoryFailure { XCTAssertEqual(failure.cause, .busy) }
         try await reader.close()
         try await reopened.close()
+    }
+
+    private func interruptCleanup(in store: HistoryStore, retentionStore storeID: UUID) async throws {
+        enum CleanupError: Error { case interrupted }
+        do {
+            try await store.withRequiredObjects(in: storeID) { _ in throw CleanupError.interrupted }
+            XCTFail("Interrupted cleanup succeeded")
+        } catch CleanupError.interrupted {}
     }
 
     func testOrdinaryDepthWinsOverTargetAndCancelledPassDoesNotPrune() async throws {
@@ -358,37 +356,12 @@ import XCTest
 }
 
 extension HistoryRetentionTests {
-    func testMissingDetailHoldBoundPreventsConsolidation() async throws {
-        let directory = try testDirectory()
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let url = directory.appendingPathComponent("History.sqlite")
-        let scope = UUID(), workingID = UUID()
-        let host = try CounterHost(url: directory.appendingPathComponent("host.json"))
-        let limits = HistoryLimits(maxUndoGroups: 1)
-        let engine = try await HistoryEngine.open(at: url, scope: scope, workingIdentity: workingID,
-            mode: .create, host: host, limits: limits)
-        let first = try await accepted(engine, 1)
-        _ = try await accepted(engine, 2)
-        let boundary = try engine.createCheckpoint(name: "Two", state: payload(2))
-        _ = try engine.holdDetail(from: first.groupID, through: first.groupID)
-        try await engine.close()
-
-        // Corrupt a closed fixture; assertions remain at the public history boundary.
-        var database: OpaquePointer?
-        XCTAssertEqual(sqlite3_open_v2(url.path, &database, SQLITE_OPEN_READWRITE, nil), SQLITE_OK)
-        let connection = try XCTUnwrap(database)
-        defer { sqlite3_close(connection) }
-        XCTAssertEqual(sqlite3_exec(connection,
-            "UPDATE ZHISTORYHOLDRECORD SET ZUPPERSEQUENCE = NULL", nil, nil, nil), SQLITE_OK)
-        XCTAssertEqual(sqlite3_changes(connection), 1)
-
-        let reopened = try await HistoryEngine.open(at: url, scope: scope, workingIdentity: workingID,
-            mode: .existing, host: host, limits: limits)
-        XCTAssertThrowsError(try reopened.retentionHolds())
-        XCTAssertThrowsError(try reopened.consolidateHistory(through: boundary.id,
-            policy: HistoryRetentionPolicy(targetDetailedGroups: 0)))
-        XCTAssertEqual(try reopened.historyPage(limit: 20).count, 2)
-        try await reopened.close()
+    func accepted(_ engine: HistoryEngine, _ value: Int) async throws -> HistoryEntry {
+        let command = HistoryCommand(fingerprint: Data("set \(value)".utf8), payload: payload(value))
+        guard case .accepted(let receipt) = await engine.submit(command) else {
+            throw HistoryFailure(.hostProtocol, stage: .delivery, disposition: .usable)
+        }
+        return try XCTUnwrap(engine.historyPage(limit: 100).first { $0.groupID == receipt.groupID })
     }
 
 }

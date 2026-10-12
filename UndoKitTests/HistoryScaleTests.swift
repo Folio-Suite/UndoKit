@@ -18,27 +18,9 @@ import XCTest
         let engine = try await HistoryEngine.open(at: directory.appendingPathComponent("History.cd"),
             scope: UUID(), workingIdentity: UUID(), mode: .create, host: host,
             limits: HistoryLimits(maxUndoGroups: 100, maxReadPage: 64))
-        let buildStart = Date()
-        var first: UUID?
-        var firstCommand: HistoryCommand?
-        var firstReceipt: HistoryReceipt?
-        var last: UUID?
-        for value in 1...count {
-            let command = HistoryCommand(fingerprint: Data("set \(value)".utf8), payload: payload(value))
-            let result = await engine.submit(command)
-            guard case .accepted(let receipt) = result else {
-                XCTFail("Fixture stopped at \(value): \(result)"); return
-            }
-            if first == nil {
-                first = receipt.groupID
-                firstCommand = command
-                firstReceipt = receipt
-            }
-            last = receipt.groupID
-        }
-        print("SCALE fixture groups=\(count) seconds=\(Date().timeIntervalSince(buildStart))")
+        let fixture = try await populate(engine, count: count)
         let farStart = Date()
-        let far = try engine.beginRecoveryPlan(to: .group(try XCTUnwrap(first)), using: .acceptedEffects)
+        let far = try engine.beginRecoveryPlan(to: .group(fixture.firstReceipt.groupID), using: .acceptedEffects)
         let farResult = try reconstruct(far, engine: engine, value: host.value)
         XCTAssertEqual(farResult.value, 1)
         XCTAssertEqual(farResult.steps, count - 1)
@@ -53,13 +35,50 @@ import XCTest
             XCTFail("Divergent command failed"); return
         }
         let divergenceStart = Date()
-        let branch = try engine.beginRecoveryPlan(to: .group(try XCTUnwrap(last)), using: .acceptedEffects)
+        let branch = try engine.beginRecoveryPlan(to: .group(fixture.last), using: .acceptedEffects)
         let branchResult = try reconstruct(branch, engine: engine, value: host.value)
         XCTAssertEqual(branchResult.value, count)
         XCTAssertEqual(branchResult.steps, reversals + 1)
         XCTAssertEqual(host.value, -1)
         engine.releaseRecoveryPlan(branch)
         print("SCALE divergent steps=\(branchResult.steps) seconds=\(Date().timeIntervalSince(divergenceStart))")
+        try await checkConsolidation(engine, host: host, count: count,
+                                     firstCommand: fixture.firstCommand, firstReceipt: fixture.firstReceipt)
+        try await engine.close()
+    }
+
+    private enum ScaleFixtureFailure: Error { case command(Int, HistoryResult) }
+
+    private struct ScaleFixture {
+        let firstCommand: HistoryCommand
+        let firstReceipt: HistoryReceipt
+        let last: UUID
+    }
+
+    private func populate(_ engine: HistoryEngine, count: Int) async throws -> ScaleFixture {
+        let buildStart = Date()
+        var firstCommand: HistoryCommand?
+        var firstReceipt: HistoryReceipt?
+        var last: UUID?
+        for value in 1...count {
+            let command = HistoryCommand(fingerprint: Data("set \(value)".utf8), payload: payload(value))
+            let result = await engine.submit(command)
+            guard case .accepted(let receipt) = result else {
+                throw ScaleFixtureFailure.command(value, result)
+            }
+            if firstReceipt == nil {
+                firstCommand = command
+                firstReceipt = receipt
+            }
+            last = receipt.groupID
+        }
+        print("SCALE fixture groups=\(count) seconds=\(Date().timeIntervalSince(buildStart))")
+        return try ScaleFixture(firstCommand: XCTUnwrap(firstCommand), firstReceipt: XCTUnwrap(firstReceipt),
+                                last: XCTUnwrap(last))
+    }
+
+    private func checkConsolidation(_ engine: HistoryEngine, host: ScaleHost, count: Int,
+                                    firstCommand: HistoryCommand, firstReceipt: HistoryReceipt) async throws {
         let checkpoint = try engine.createCheckpoint(name: "Divergent current", state: payload(-1))
         let consolidationStart = Date()
         var removed = 0
@@ -78,12 +97,11 @@ import XCTest
         XCTAssertEqual(try engine.checkpoint(id: checkpoint.id)?.state, payload(-1))
         XCTAssertEqual(host.value, -1)
         let deliveredBeforeRetry = host.deliveries
-        let retry = await engine.submit(try XCTUnwrap(firstCommand))
-        XCTAssertEqual(retry, .accepted(try XCTUnwrap(firstReceipt)))
+        let retry = await engine.submit(firstCommand)
+        XCTAssertEqual(retry, .accepted(firstReceipt))
         XCTAssertEqual(host.deliveries, deliveredBeforeRetry)
         let consolidationSeconds = Date().timeIntervalSince(consolidationStart)
         print("SCALE consolidation removed=\(removed) passes=\(passes) seconds=\(consolidationSeconds)")
-        try await engine.close()
     }
 
     private func reconstruct(_ plan: HistoryRecoveryPlan, engine: HistoryEngine,

@@ -23,12 +23,31 @@ concurrency:
 jobs:
   swift-package:
     runs-on: xcode-27
-    timeout-minutes: 30
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        configuration: [Debug, Release]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Verify producer toolchain
+        run: ruby scripts/check-toolchain.rb
+      - name: Validate pinned SwiftLint build plugin
+        run: |
+          ruby -rjson <<'RUBY'
+          # Approve only the reviewed revision before CI bypasses the interactive plugin prompt.
+          revision = "ef7d692fc6706e8f5628e26bcafaefa445c58a97"
+          resolved = JSON.parse(File.read("UndoKit.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"))
+          pin = resolved.fetch("pins").find { |item| item.fetch("identity") == "swiftlintplugins" }
+          abort "Review SwiftLint plugin trust after changing its dependency pin" unless
+            pin && pin.fetch("state").fetch("revision") == revision &&
+            pin.fetch("location") == "https://github.com/SimplyDanny/SwiftLintPlugins"
+          RUBY
       - name: Test package
-        run: swift test
-      - name: Build independent source consumer
-        run: scripts/check-consumer.sh
+        env:
+          CONFIGURATION: ${{ matrix.configuration }}
+        run: swift test --configuration "$(echo "$CONFIGURATION" | tr '[:upper:]' '[:lower:]')"
+      - name: Run independent package and native consumers on macOS and iOS simulator
+        run: scripts/check-consumer.sh --route both --platform both --configuration ${{ matrix.configuration }}

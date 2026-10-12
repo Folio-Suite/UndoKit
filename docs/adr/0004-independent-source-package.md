@@ -7,6 +7,10 @@ SPDX-License-Identifier: MIT
 
 Accepted on 2026-10-08.
 
+Platform scope and the iOS deferral are superseded by
+[ADR 0005](0005-preview-source-and-project-platforms.md), implementing the
+accepted preview platform and distribution decisions. Other boundaries remain.
+
 UndoKit is developed and consumed as an independent Swift Package. Swift
 Package Manager defines its supported build and test workflow. The Xcode
 project remains an optional developer harness with its own standalone defaults;

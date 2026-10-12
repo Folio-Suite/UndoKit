@@ -1,0 +1,4 @@
+SPDX-FileCopyrightText: 2026 the Folio Project
+SPDX-License-Identifier: MIT
+
+Preview fixture resource v1: the counter stores canonical decimal integers.

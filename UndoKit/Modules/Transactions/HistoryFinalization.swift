@@ -29,38 +29,7 @@ extension HistoryTransactionCoordinator {
                 try history.saveContext()
                 return try finalizeRejected(transaction)
             case .accepted(let effects):
-                let members = try history.transactionMembers(transaction)
-                guard effects.count == members.count,
-                      Set(effects.map(\.memberID)).count == members.count,
-                      zip(effects, members).allSatisfy({
-                          $0.memberID.uuidString == $1.memberID
-                      }),
-                      effects.allSatisfy({
-                          history.valid($0.undo) && history.valid($0.redo) && history.valid($0.resources)
-                      }),
-                      effects.reduce(0, { $0 + $1.resources.count }) <= 10_000,
-                      effects.reduce(0, { total, effect in
-                          total + effect.resources.reduce(0) { bytes, reference in
-                              bytes + reference.objectKey.utf8.count +
-                                  (reference.versionKey?.utf8.count ?? 0) + 64
-                          }
-                      }) <= limits.maxPayloadBytes,
-                      effects.reduce(0, { $0 + $1.undo.data.count + $1.redo.data.count })
-                        <= limits.maxPayloadBytes * 2 else {
-                    suspend()
-                    return .failure(HistoryFailure(.hostProtocol, stage: .reconciliation, disposition: .suspended))
-                }
-                for (effect, member) in zip(effects, members) {
-                    history.put(effect.undo, on: member, role: .undo)
-                    history.put(effect.redo, on: member, role: .redo)
-                    try history.addResourceReferences(effect.resources,
-                                              ownerType: transaction.recordsAction ? "action" : "session",
-                                              ownerKey: member.key ?? "")
-                }
-                transaction.stage = "acceptancePending"
-                try history.saveContext()
-                return try transaction.recordsAction
-                    ? finalizeAccepted(transaction) : finalizeSessionAccepted(transaction)
+                return try accept(effects, transaction: transaction)
             }
         } catch {
             context.rollback()
@@ -68,6 +37,41 @@ extension HistoryTransactionCoordinator {
             return .failure(HistoryFailure(.storage, stage: .finalization,
                                            disposition: .suspended, underlyingDescription: String(describing: error)))
         }
+    }
+
+    private func accept(_ effects: [HistoryEffect], transaction: HistoryTransactionRecord) throws -> HistoryResult {
+        let members = try history.transactionMembers(transaction)
+        guard effects.count == members.count,
+              Set(effects.map(\.memberID)).count == members.count,
+              zip(effects, members).allSatisfy({
+                  $0.memberID.uuidString == $1.memberID
+              }),
+              effects.allSatisfy({
+                  history.valid($0.undo) && history.valid($0.redo) && history.valid($0.resources)
+              }),
+              effects.reduce(0, { $0 + $1.resources.count }) <= 10_000,
+              effects.reduce(0, { total, effect in
+                  total + effect.resources.reduce(0) { bytes, reference in
+                      bytes + reference.objectKey.utf8.count +
+                          (reference.versionKey?.utf8.count ?? 0) + 64
+                  }
+              }) <= limits.maxPayloadBytes,
+              effects.reduce(0, { $0 + $1.undo.data.count + $1.redo.data.count })
+                <= limits.maxPayloadBytes * 2 else {
+            suspend()
+            return .failure(HistoryFailure(.hostProtocol, stage: .reconciliation, disposition: .suspended))
+        }
+        for (effect, member) in zip(effects, members) {
+            history.put(effect.undo, on: member, role: .undo)
+            history.put(effect.redo, on: member, role: .redo)
+            try history.addResourceReferences(effect.resources,
+                                      ownerType: transaction.recordsAction ? "action" : "session",
+                                      ownerKey: member.key ?? "")
+        }
+        transaction.stage = "acceptancePending"
+        try history.saveContext()
+        return try transaction.recordsAction
+            ? finalizeAccepted(transaction) : finalizeSessionAccepted(transaction)
     }
 
     func finalizeSessionAccepted(_ transaction: HistoryTransactionRecord) throws -> HistoryResult {
@@ -108,6 +112,13 @@ extension HistoryTransactionCoordinator {
             updateSnapshot()
             return .accepted(HistoryReceipt(token: token, groupID: groupID))
         }
+        updateSessionGroups(kind: kind, groupID: groupID, targetID: targetID, effects: effects)
+        updateSnapshot()
+        return .accepted(HistoryReceipt(token: token, groupID: groupID))
+    }
+
+    private func updateSessionGroups(kind: HistoryDeliveryKind, groupID: UUID,
+                                     targetID: UUID?, effects: [HistoryEffect]) {
         switch kind {
         case .command:
             sessionGroups.removeAll(where: { !$0.applied })
@@ -131,8 +142,6 @@ extension HistoryTransactionCoordinator {
                                                   applied: kind == .redo))
             }
         }
-        updateSnapshot()
-        return .accepted(HistoryReceipt(token: token, groupID: groupID))
     }
 
     private func closeUsableFailure(_ failure: HistoryFailure,
@@ -162,19 +171,7 @@ extension HistoryTransactionCoordinator {
         group.kind = kind.rawValue
         group.state = kind == .command ? "applied" : "historical"
         group.sourceGroupID = transaction.targetGroupID
-        if kind == .redo, let original = transaction.targetGroupID {
-            let request = HistoryGroupRecord.fetchRequest()
-            request.predicate = NSPredicate(format: "\(#keyPath(HistoryGroupRecord.scopeKey)) == %@ AND " +
-                "\(#keyPath(HistoryGroupRecord.kind)) == %@ AND " +
-                "\(#keyPath(HistoryGroupRecord.sourceGroupID)) == %@",
-                                            scope.uuidString, HistoryDeliveryKind.undo.rawValue, original)
-            request.sortDescriptors = [NSSortDescriptor(key: #keyPath(HistoryGroupRecord.sequence), ascending: false)]
-            request.fetchLimit = 1
-            guard let compensation = try context.fetch(request).first else {
-                throw HistoryFailure(.hostProtocol, stage: .finalization, disposition: .suspended)
-            }
-            group.compensationGroupID = compensation.key
-        }
+        try linkCompensation(on: group, transaction: transaction, kind: kind)
         group.restorationOrigin = transaction.restorationOrigin
         group.memberCount = transaction.memberCount
         group.recordedAt = transaction.recordedAt
@@ -184,21 +181,7 @@ extension HistoryTransactionCoordinator {
             group.presentationPayload = transaction.presentationPayload
             group.presentationDigest = transaction.presentationDigest
         }
-        let finalizedMembers = try history.transactionMembers(transaction)
-        for member in finalizedMembers {
-            let action = history.insert(HistoryActionRecord.self)
-            action.key = member.key
-            action.transactionKey = transaction.key
-            action.memberID = member.memberID
-            action.ordinal = member.ordinal
-            action.kind = kind.rawValue
-            history.put(try history.payload(on: member, role: .undo), on: action, role: .undo)
-            history.put(try history.payload(on: member, role: .redo), on: action, role: .redo)
-            action.group = group
-        }
-        // Action payloads are the accepted historical material. The prepared
-        // delivery members are terminal duplicates and no longer aid recovery.
-        for member in finalizedMembers { context.delete(member) }
+        try materializeActions(for: transaction, in: group, kind: kind)
         switch kind {
         case .command:
             for row in try history.ordinaryGroups(state: "undone") { row.state = "branched" }
@@ -219,6 +202,42 @@ extension HistoryTransactionCoordinator {
         updateSnapshot()
         let token = try history.token(for: transaction)
         return .accepted(HistoryReceipt(token: token, groupID: try group.uuid(group.key)))
+    }
+
+    private func materializeActions(for transaction: HistoryTransactionRecord, in group: HistoryGroupRecord,
+                                    kind: HistoryDeliveryKind) throws {
+        let finalizedMembers = try history.transactionMembers(transaction)
+        for member in finalizedMembers {
+            let action = history.insert(HistoryActionRecord.self)
+            action.key = member.key
+            action.transactionKey = transaction.key
+            action.memberID = member.memberID
+            action.ordinal = member.ordinal
+            action.kind = kind.rawValue
+            history.put(try history.payload(on: member, role: .undo), on: action, role: .undo)
+            history.put(try history.payload(on: member, role: .redo), on: action, role: .redo)
+            action.group = group
+        }
+        // Action payloads are the accepted historical material. The prepared
+        // delivery members are terminal duplicates and no longer aid recovery.
+        for member in finalizedMembers { context.delete(member) }
+    }
+
+    private func linkCompensation(on group: HistoryGroupRecord, transaction: HistoryTransactionRecord,
+                                  kind: HistoryDeliveryKind) throws {
+        if kind == .redo, let original = transaction.targetGroupID {
+            let request = HistoryGroupRecord.fetchRequest()
+            request.predicate = NSPredicate(format: "\(#keyPath(HistoryGroupRecord.scopeKey)) == %@ AND " +
+                "\(#keyPath(HistoryGroupRecord.kind)) == %@ AND " +
+                "\(#keyPath(HistoryGroupRecord.sourceGroupID)) == %@",
+                                            scope.uuidString, HistoryDeliveryKind.undo.rawValue, original)
+            request.sortDescriptors = [NSSortDescriptor(key: #keyPath(HistoryGroupRecord.sequence), ascending: false)]
+            request.fetchLimit = 1
+            guard let compensation = try context.fetch(request).first else {
+                throw HistoryFailure(.hostProtocol, stage: .finalization, disposition: .suspended)
+            }
+            group.compensationGroupID = compensation.key
+        }
     }
 
     func finalizeRejected(_ transaction: HistoryTransactionRecord) throws -> HistoryResult {

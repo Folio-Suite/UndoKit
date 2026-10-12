@@ -67,7 +67,10 @@ encounters rejection does not fall through to preceding accepted history.
 **Delay next edit** creates a controlled pending delivery; **Release delayed
 outcome** completes it. Delegate and native text-input barriers refuse semantic
 changes and repeated inverses while preserving focus/selection. Local controls
-and other scene scopes retain their own routing.
+and other scene scopes retain their own routing. Toolbar Undo/Redo availability
+follows the focused history owner: local text can undo/redo during document
+acceptance; returning focus to a semantic editor restores the pending barrier.
+The other semantic buttons remain barred.
 
 Debug exposes **Accept then fail finalization** using the real production save
 failure seam. The host first atomically writes the effect and receipt; history

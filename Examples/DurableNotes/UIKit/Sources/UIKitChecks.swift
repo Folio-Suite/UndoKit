@@ -146,6 +146,23 @@ import MachO
         try require(controller.router.isEditingBlocked && controller.bodyEditor.text == pendingText,
             "Pending native editing barrier allowed another semantic input")
         try require(controller.bodyEditor.isFirstResponder, "Pending barrier lost native text focus")
+        let beforePendingLocal = await session.read().applicationCount
+        controller.scratch.becomeFirstResponder()
+        let pendingLocal = controller.scratch.localHistory
+        pendingLocal.beginUndoGrouping(); controller.scratch.insertText("pending local"); pendingLocal.endUndoGrouping()
+        controller.lifecycleChanged()
+        try require(controller.undoButton.isEnabled, "Focused local toolbar Undo was disabled by document pending state")
+        controller.undoButton.sendActions(for: .touchUpInside)
+        try require(controller.scratch.text.isEmpty && controller.redoButton.isEnabled,
+            "Enabled local toolbar Undo did not reverse native text or expose local Redo")
+        controller.redoButton.sendActions(for: .touchUpInside)
+        try require(controller.scratch.text == "pending local", "Enabled local toolbar Redo failed during document pending state")
+        try require((await session.read()).applicationCount == beforePendingLocal && controller.router.isEditingBlocked,
+            "Local toolbar invocation affected pending document history")
+        controller.bodyEditor.becomeFirstResponder()
+        try require(!controller.undoButton.isEnabled && !controller.redoButton.isEnabled,
+            "Document toolbar inverses became enabled while acceptance was pending")
+        observations.append("During pending document acceptance, actual enabled toolbar controls follow focused local UITextView Undo/Redo; returning focus to the document restores the semantic barrier.")
         var peer: NotesSceneOwner?
         if UIApplication.shared.supportsMultipleScenes {
             app.requestNewScene()

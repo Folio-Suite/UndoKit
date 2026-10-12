@@ -133,10 +133,15 @@ import UndoKit
         try router.attach(snapshot: session.engine.snapshot, undoName: "Edit Note", redoName: "Edit Note")
     }
     func textViewDidChange(_ textView: UITextView) {
-        guard !updating, textView !== scratch else { return }
+        if textView === scratch { lifecycleChanged(); return }
+        guard !updating else { return }
         provisional = true; router.noteProvisionalEdit()
     }
-    func textViewDidEndEditing(_ textView: UITextView) { if textView !== scratch { _ = settleEditing() } }
+    func textViewDidBeginEditing(_ textView: UITextView) { lifecycleChanged() }
+    func textViewDidEndEditing(_ textView: UITextView) {
+        if textView !== scratch { _ = settleEditing() }
+        lifecycleChanged()
+    }
     func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
         textView === scratch || (owner.mayEdit && !router.isEditingBlocked)
     }
@@ -213,6 +218,10 @@ import UndoKit
         // pending work preserve focus/selection and refuse changes in the delegate.
         titleEditor.isEditable = owner.mayEdit; bodyEditor.isEditable = owner.mayEdit
         buttons.forEach { $0.isEnabled = editable }
+        // Toolbar availability follows the focused history owner. Local text
+        // remains independent while document acceptance/closure blocks semantics.
+        undoButton?.isEnabled = scratch.isFirstResponder ? scratch.localHistory.canUndo : owner.mayEdit && router.canUndo
+        redoButton?.isEnabled = scratch.isFirstResponder ? scratch.localHistory.canRedo : owner.mayEdit && router.canRedo
         renderStatus()
     }
     private func renderStatus() {
@@ -247,8 +256,14 @@ import UndoKit
         await refresh()
     }
     func commitDraft() { draftNeedsDecision = false; _ = settleEditing() }
-    @objc private func undoTapped() { (scratch.isFirstResponder ? scratch.localHistory : router.undoManager).undo() }
-    @objc private func redoTapped() { (scratch.isFirstResponder ? scratch.localHistory : router.undoManager).redo() }
+    @objc private func undoTapped() {
+        (scratch.isFirstResponder ? scratch.localHistory : router.undoManager).undo()
+        lifecycleChanged()
+    }
+    @objc private func redoTapped() {
+        (scratch.isFirstResponder ? scratch.localHistory : router.undoManager).redo()
+        lifecycleChanged()
+    }
     @objc private func commitTapped() { commitDraft() }
     @objc private func discardTapped() { Task { await discardDraft() } }
     @objc private func exampleTapped() { apply(title: "Shopping", body: "Tea and bread") }

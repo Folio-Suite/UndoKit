@@ -178,3 +178,10 @@ The initial manual trust-file approach was superseded by this CLI pattern.
 Ruby syntax, exact-pin acceptance, changed-pin refusal, and CI-only flag
 selection passed. The pinned native universal macOS build passed locally;
 the fresh hosted run remains the authoritative test of the CI approval gate.
+
+The consumer harness also explicitly ad-hoc signs native framework builds.
+Previously they inherited the project's personal Apple Development identity,
+which a fresh runner does not provision. A universal macOS build passed with
+`CODE_SIGN_IDENTITY=-` and manual signing; `codesign --verify --strict` passed
+and reported an ad-hoc signature without a team. This is consumer-test signing,
+not release signing or distribution qualification.

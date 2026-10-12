@@ -294,7 +294,8 @@ Dir.mktmpdir("undokit-consumer-", temporary_parent) do |temporary|
         command = ["xcodebuild", "-project", File.join(ROOT, "UndoKit.xcodeproj"), "-scheme", "UndoKit",
                    "-configuration", options.configuration, "-destination", destination,
                    "-derivedDataPath", derived, "-onlyUsePackageVersionsFromResolvedFile",
-                   "ARCHS=arm64 x86_64", "ONLY_ACTIVE_ARCH=NO", "build"]
+                   "ARCHS=arm64 x86_64", "ONLY_ACTIVE_ARCH=NO",
+                   "CODE_SIGNING_ALLOWED=YES", "CODE_SIGN_IDENTITY=-", "CODE_SIGN_STYLE=Manual", "build"]
         # Hosted CI validates the reviewed dependency pin before this command;
         # it cannot accept Xcode's interactive unsigned-plugin approval prompt.
         command.insert(1, "-skipPackagePluginValidation") if ENV["GITHUB_ACTIONS"] == "true"

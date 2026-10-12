@@ -8,6 +8,13 @@ import Foundation
 /// Scope-local persistence shared by transactions and retained-history operations.
 /// Managed objects never cross the framework's public interface.
 @MainActor final class HistoryScopeStorage {
+    #if DEBUG
+    enum FailurePoint: Sendable {
+        case preparation, deliveryFence, acceptanceEvidence, rejectionEvidence
+        case acceptedFinalization, rejectedFinalization, retention
+    }
+    @TaskLocal static var failSaveAt: FailurePoint?
+    #endif
     let store: HistoryStore
     let scope: UUID
     let limits: HistoryLimits
@@ -32,12 +39,39 @@ import Foundation
     // Every protocol boundary saves before that suspension; rollback only affects unsaved
     // history changes and cannot retract a domain effect accepted in the host's own store.
     func saveContext() throws {
-        do { try context.save() } catch {
+        do {
+            #if DEBUG
+            if shouldFailSave() { throw CocoaError(.fileWriteOutOfSpace) }
+            #endif
+            try context.save()
+        } catch {
             context.rollback()
             store.noteWriteFailure()
             throw error
         }
     }
+
+    #if DEBUG
+    /// A stage-addressed test seam at the real context-save boundary, after
+    /// admission/preflight. The normal rollback/write-failure path handles it.
+    private func shouldFailSave() -> Bool {
+        guard let point = Self.failSaveAt else { return false }
+        if point == .retention { return context.hasChanges }
+        let stage: String
+        switch point {
+        case .preparation: stage = "prepared"
+        case .deliveryFence: stage = "deliveryStarted"
+        case .acceptanceEvidence: stage = "acceptancePending"
+        case .rejectionEvidence: stage = "rejectionPending"
+        case .acceptedFinalization: stage = "accepted"
+        case .rejectedFinalization: stage = "rejected"
+        case .retention: return false
+        }
+        return context.insertedObjects.union(context.updatedObjects).contains { object in
+            (object as? HistoryTransactionRecord)?.stage == stage
+        }
+    }
+    #endif
 
     func register(mode: HistoryScopeOpenMode) throws {
         let key = scope.uuidString

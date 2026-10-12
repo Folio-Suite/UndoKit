@@ -1,0 +1,32 @@
+{
+  "recipeVersion": 1,
+  "qualification": "unsealed-development-recipe",
+  "sourceCommitAtIntroduction": "6c8eb91c5d3fdf7d89473a6ce0bf769bbee1f295",
+  "modelSourceSHA256": "fb9cfc0dc5af28bb95cd26283abe4f214009cb28f438b2507fb9784bc6331532",
+  "workingIdentity": "10000000-0000-0000-0000-000000000001",
+  "scopeIdentity": "20000000-0000-0000-0000-000000000001",
+  "retentionStoreIdentity": "30000000-0000-0000-0000-000000000001",
+  "checkpointIdentity": "40000000-0000-0000-0000-000000000001",
+  "codecFamily": "preview.counter.set",
+  "codecVersion": 1,
+  "codecEncoding": "canonical UTF-8 signed decimal integer",
+  "resourceFile": "preview-resource-v1.txt",
+  "resourceObjectKey": "counter-description",
+  "resourceVersionKey": "v1",
+  "commands": [
+    {
+      "id": "50000000-0000-0000-0000-000000000001",
+      "memberIDs": ["60000000-0000-0000-0000-000000000001", "60000000-0000-0000-0000-000000000002"],
+      "values": [4, 11]
+    },
+    {
+      "id": "50000000-0000-0000-0000-000000000002",
+      "memberIDs": ["60000000-0000-0000-0000-000000000003"],
+      "values": [7]
+    }
+  ],
+  "expectedHistorySequences": [1, 3, 4, 5],
+  "expectedHistoryKinds": ["command", "command", "undo", "redo"],
+  "expectedCheckpointValue": 11,
+  "expectedFinalHostValue": 7
+}

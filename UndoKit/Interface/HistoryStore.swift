@@ -17,7 +17,7 @@ public enum HistoryScopeOpenMode: Sendable {
 public enum HistoryStoreAccess: Sendable {
     /// Own the exclusive writer lock and permit scope delivery and maintenance.
     case readWrite
-    /// Inspect committed records without creating history or delivering host commands.
+    /// Inspect a committed snapshot taken at opening, without changing original files.
     case readOnly
 }
 
@@ -78,13 +78,14 @@ public struct HistoryScopeInspection: Equatable, Sendable {
     var maintenance: Bool { activity.maintenance }
     var activeMaintenanceURL: URL?
     var writeFailed = false
+    var inspectionDirectory: URL?
     // NSPersistentContainer owns a main-queue viewContext. All store/scoped helpers stay
     // on MainActor, so managed records are accessed here without crossing a context queue.
     // Host actors exchange immutable encoded values, never these NSManagedObject instances.
     // Apple: https://developer.apple.com/documentation/coredata/nspersistentcontainer/viewcontext
     var context: NSManagedObjectContext { container.viewContext }
 
-    private init(url: URL, workingIdentity: UUID, storeIdentity: UUID,
+    init(url: URL, workingIdentity: UUID, storeIdentity: UUID,
                  access: HistoryStoreAccess, limits: HistoryLimits,
                  container: NSPersistentContainer, lockDescriptor: Int32) {
         self.url = url
@@ -97,6 +98,7 @@ public struct HistoryScopeInspection: Equatable, Sendable {
     }
 
     deinit {
+        if let inspectionDirectory { try? FileManager.default.removeItem(at: inspectionDirectory) }
         if lockDescriptor >= 0 {
             flock(lockDescriptor, LOCK_UN)
             Darwin.close(lockDescriptor)
@@ -104,7 +106,12 @@ public struct HistoryScopeInspection: Equatable, Sendable {
     }
 
     /// Opens a physical store without substituting an empty database for missing history.
-    /// Read-only opening neither creates directories nor an owner file.
+    /// Existing stores are validated on an isolated copy before writable loading.
+    /// Read-only sessions inspect a snapshot and never change the original database,
+    /// sidecars or owner file. Reopen to inspect newer commits. No migration is
+    /// performed; an unsupported model is refused without alteration. The host
+    /// must quiesce any cross-process writer and coordinate file replacement
+    /// while opening captures the database and its journals.
     /// - Parameters:
     ///   - requestedURL: Host-coordinated file location; no fallback store is created.
     ///   - workingIdentity: Stable identity of the corresponding host data.
@@ -122,33 +129,7 @@ public struct HistoryScopeInspection: Equatable, Sendable {
         }
         let url = requestedURL.standardizedFileURL.resolvingSymlinksInPath()
         let manager = FileManager.default
-        let exists = manager.fileExists(atPath: url.path)
-        switch mode {
-        case .create:
-            guard access == .readWrite, !exists else {
-                throw HistoryFailure(.identityConflict, stage: .admission, disposition: .usable)
-            }
-            try manager.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        case .existing, .independentCopy:
-            guard exists else {
-                throw HistoryFailure(.missingHistory, stage: .admission, disposition: .usable)
-            }
-            do {
-                let handle = try FileHandle(forReadingFrom: url)
-                defer { try? handle.close() }
-                guard try handle.read(upToCount: 16) == Data("SQLite format 3\0".utf8) else {
-                    throw HistoryFailure(.corruptHistory, stage: .admission, disposition: .usable)
-                }
-            } catch let failure as HistoryFailure {
-                throw failure
-            } catch {
-                throw HistoryFailure(.unavailableStore, stage: .admission, disposition: .usable,
-                                     underlyingDescription: String(describing: error))
-            }
-            if case .independentCopy = mode, access != .readWrite {
-                throw HistoryFailure(.invalidInput, stage: .admission, disposition: .usable)
-            }
-        }
+        try prepareOpening(at: url, mode: mode, access: access)
         var descriptor: Int32 = -1
         if access == .readWrite {
             descriptor = Darwin.open(url.appendingPathExtension("owner").path,
@@ -171,7 +152,15 @@ public struct HistoryScopeInspection: Equatable, Sendable {
         var owned = descriptor >= 0
         var openedStore: HistoryStore?
         do {
-            let container = try makeContainer(at: url, readOnly: access == .readOnly)
+            switch mode {
+            case .create: break
+            case .existing, .independentCopy:
+                let inspection = try await makeValidatedInspection(at: url, workingIdentity: workingIdentity,
+                                                                   mode: mode, limits: limits)
+                if access == .readOnly { return inspection }
+                try await inspection.close()
+            }
+            let container = try makeContainer(at: url, readOnly: false)
             let store = HistoryStore(url: url, workingIdentity: workingIdentity,
                                      storeIdentity: UUID(), access: access, limits: limits,
                                      container: container, lockDescriptor: descriptor)
@@ -355,5 +344,9 @@ extension HistoryStore {
         }
         if lockDescriptor >= 0 { flock(lockDescriptor, LOCK_UN); Darwin.close(lockDescriptor); lockDescriptor = -1 }
         closed = true
+        if let inspectionDirectory {
+            try? FileManager.default.removeItem(at: inspectionDirectory)
+            self.inspectionDirectory = nil
+        }
     }
 }

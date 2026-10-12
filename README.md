@@ -126,16 +126,41 @@ authorizes implementation with verification developed alongside each slice.
 
 ## Building the package
 
-UndoKit requires macOS 14 or later and Swift 6. Swift Package Manager is the
-authoritative source build and test workflow; the Xcode project is an optional
-developer harness. iOS qualification and XCFramework distribution are deferred.
-There is no binary product.
+The source package and native framework project target macOS 14 or later
+(arm64/x86_64) and iOS/iPadOS 17 or later (device arm64, separate simulator
+arm64/x86_64). They use Swift 6 with complete concurrency checking. The producer
+toolchain is Xcode 27.0 (27A266a), Apple Swift 6.4; verify it with
+`ruby scripts/check-toolchain.rb`. Swift Package Manager is authoritative for
+unit tests. [ADR 0005](docs/adr/0005-preview-source-and-project-platforms.md)
+records the scope; binary distribution and full release qualification remain
+later gates.
 
-From the repository root, run `swift build`, `swift test`, and
-`scripts/check-consumer.sh`. The independent consumer check imports the package
-from a separate executable and opens a store through the public API, exercising
-the bundled Core Data model. CI runs package tests and the consumer check on
-macOS with Xcode 27.
+From the repository root, run `swift test` and `swift test -c release`.
+`scripts/check-consumer.sh` runs an independent macOS package consumer. For the
+complete source/project check, run each configuration:
+
+```sh
+scripts/check-consumer.sh --route both --platform both --configuration Debug
+scripts/check-consumer.sh --route both --platform both --configuration Release
+```
+
+The shared fixture submits a grouped Command, performs Undo/Redo, closes and
+reopens durable history alongside separately persisted host state and receipts.
+The native macOS product is built for both architectures; runtime evidence is
+reported for the executing architecture. The iOS path runs in an installed
+simulator app. Checks inspect the installed compiled model and privacy manifest.
+Builds and generated consumers live under the repository's ignored `DerivedData/`.
+Use `--keep` to retain evidence there. CI runs both configurations. Debug-only failure
+injection tests are excluded from Release; ordinary durability and consumer
+checks run in both. These checks do not establish floor-OS, Intel execution,
+physical-device, signed distribution or XCFramework qualification.
+
+The bundled privacy manifest declares available-disk-space checking for copy
+capacity admission (Apple reason E174.1), and file metadata checks for stable
+opening snapshots in app containers or user-authorized documents (C617.1/3B52.1).
+UndoKit does not transmit this data;
+hosts remain responsible for their own privacy declarations. See Apple's
+[required-reason API documentation](https://developer.apple.com/documentation/bundleresources/app-privacy-configuration/nsprivacyaccessedapitypes/nsprivacyaccessedapitype).
 
 The guarded production-scale case can be measured with
 `scripts/check-undokit-scale.rb [groups]`. It defaults to 10,000 groups and accepts
@@ -148,8 +173,9 @@ selected major version (including across minor versions during `0.x`); beta
 allows updates within the selected minor version; release engineering requires
 an exact version. Commit resolved dependency records at every stage. Stage
 transitions are deliberate and are not inferred from UndoKit's version number.
-Pre-alpha API and storage compatibility remain bounded by the documented
-contracts; a dependency range is not a promise of persisted-format migration.
+API and storage compatibility follow the accepted
+[history compatibility policy](docs/history-compatibility.md); a dependency
+range alone is not a promise of persisted-format migration.
 
 The original source license and authorship are retained. New integration files
 carry the Folio Project's MIT SPDX notices.

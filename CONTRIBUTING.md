@@ -40,12 +40,24 @@ when changing imported template material.
 
 ## Build and validation
 
-Requirements are macOS 14 or later and Swift 6. From the repository root, run
-`swift build`, `swift test`, and `scripts/check-consumer.sh` for changes that
-affect package integration. The consumer check builds a separate executable
-against the local package and opens a history store through the public API,
-including its bundled Core Data model. CI runs package tests and this consumer
-check with Xcode 27.
+Use Xcode 27.0 (27A266a), Apple Swift 6.4 and Swift 6 language mode with complete
+concurrency checking. Run `ruby scripts/check-toolchain.rb`, `swift test` and
+`swift test -c release`. Source/project targets explicitly use macOS 14 and
+iOS/iPadOS 17 floors; macOS and simulator products cover arm64/x86_64, and
+device products arm64. These settings are declarations, not hardware qualification.
+
+For integration changes, run `scripts/check-consumer.sh --route both --platform
+both --configuration Debug`, then the same command with `Release`. This checks
+independent package/native consumers, grouped transactions, host receipts,
+Undo/Redo and reopen on macOS and an installed iOS simulator app. The native
+macOS framework must contain both architectures and the installed consumers
+must carry the compiled model and privacy manifest. Build output belongs under
+the repository's ignored `DerivedData/`; the consumer runner uses this location
+and `--keep` retains its evidence there.
+CI repeats both configurations. Debug-only injected failure cases do not exist
+in Release; all ordinary durability and consumer cases run in both. Floor-OS,
+Intel runtime, physical device and binary distribution acceptance remain later
+release gates.
 
 Scale other checks to the change. For documentation and templates, check local
 links, copyright and license notices, and repository-specific references.

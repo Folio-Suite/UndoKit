@@ -125,7 +125,8 @@ extension HistoryTransactionCoordinator {
             context.rollback()
             let durableStage = (try? history.fetchOne(HistoryTransactionRecord.self, keyPath: \.key, key: key))?.stage
             if store.writeFailed {
-                let stage: HistoryFailureStage = durableStage == nil ? .preparation : .finalization
+                let stage: HistoryFailureStage = durableStage == nil || durableStage == "prepared"
+                    ? .preparation : .finalization
                 return .failure(HistoryFailure(.storage, stage: stage, disposition: .suspended,
                                                underlyingDescription: String(describing: error)))
             }

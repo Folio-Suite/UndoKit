@@ -23,12 +23,20 @@ concurrency:
 jobs:
   swift-package:
     runs-on: xcode-27
-    timeout-minutes: 30
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        configuration: [Debug, Release]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Verify producer toolchain
+        run: ruby scripts/check-toolchain.rb
       - name: Test package
-        run: swift test
-      - name: Build independent source consumer
-        run: scripts/check-consumer.sh
+        env:
+          CONFIGURATION: ${{ matrix.configuration }}
+        run: swift test --configuration "$(echo "$CONFIGURATION" | tr '[:upper:]' '[:lower:]')"
+      - name: Run independent package and native consumers on macOS and iOS simulator
+        run: scripts/check-consumer.sh --route both --platform both --configuration ${{ matrix.configuration }}

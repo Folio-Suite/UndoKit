@@ -2,9 +2,44 @@
 // SPDX-License-Identifier: MIT
 
 import CoreData
+import Darwin
 import Foundation
 
 extension HistoryStore {
+    #if DEBUG
+    @TaskLocal static var failCopyAfterCreation = false
+    #endif
+    static func prepareOpening(at url: URL, mode: HistoryOpenMode, access: HistoryStoreAccess) throws {
+        let manager = FileManager.default
+        let exists = manager.fileExists(atPath: url.path)
+        switch mode {
+        case .create:
+            guard access == .readWrite, !exists else {
+                throw HistoryFailure(.identityConflict, stage: .admission, disposition: .usable)
+            }
+            try manager.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        case .existing, .independentCopy:
+            guard exists else {
+                throw HistoryFailure(.missingHistory, stage: .admission, disposition: .usable)
+            }
+            do {
+                let handle = try FileHandle(forReadingFrom: url)
+                defer { try? handle.close() }
+                guard try handle.read(upToCount: 16) == Data("SQLite format 3\0".utf8) else {
+                    throw HistoryFailure(.corruptHistory, stage: .admission, disposition: .usable)
+                }
+            } catch let failure as HistoryFailure {
+                throw failure
+            } catch {
+                throw HistoryFailure(.unavailableStore, stage: .admission, disposition: .usable,
+                                     underlyingDescription: String(describing: error))
+            }
+            if case .independentCopy = mode, access != .readWrite {
+                throw HistoryFailure(.invalidInput, stage: .admission, disposition: .usable)
+            }
+        }
+    }
+
     struct FileIdentity: Equatable {
         let device: UInt64
         let inode: UInt64
@@ -58,6 +93,85 @@ extension HistoryStore {
         let coordinator = container.persistentStoreCoordinator
         for persistentStore in coordinator.persistentStores { try coordinator.remove(persistentStore) }
         try Self.removeCreatedArtifacts(at: url, preexisting: preexisting, expected: identities)
+    }
+
+    struct OpeningArtifactStamp: Equatable {
+        let device: UInt64
+        let inode: UInt64
+        let bytes: Int64
+        let modifiedSeconds: Int
+        let modifiedNanoseconds: Int
+        let changedSeconds: Int
+        let changedNanoseconds: Int
+    }
+
+    static func openingArtifactStamps(at url: URL) throws -> [String: OpeningArtifactStamp] {
+        var stamps: [String: OpeningArtifactStamp] = [:]
+        for suffix in ["", "-wal", "-journal"] {
+            var info = stat()
+            guard Darwin.lstat(url.path + suffix, &info) == 0 else {
+                if errno == ENOENT { continue }
+                throw HistoryFailure(.unavailableStore, stage: .admission, disposition: .usable)
+            }
+            stamps[suffix] = OpeningArtifactStamp(device: UInt64(info.st_dev), inode: UInt64(info.st_ino),
+                bytes: info.st_size, modifiedSeconds: info.st_mtimespec.tv_sec,
+                modifiedNanoseconds: info.st_mtimespec.tv_nsec, changedSeconds: info.st_ctimespec.tv_sec,
+                changedNanoseconds: info.st_ctimespec.tv_nsec)
+        }
+        return stamps
+    }
+
+    /// Copy data/journals, never shared-memory locks. MainActor excludes local
+    /// saves during this synchronous capture; a writer's owner lock excludes
+    /// other cooperating writers for writable preflight. A reader cannot take
+    /// that lock from a live writer, so refuse if any source artifact changes
+    /// identity, size, modification time or change time across the whole capture.
+    /// Hosts still coordinate external movement/replacement of their files.
+    static func makeOpeningSnapshot(at url: URL) throws -> URL {
+        let manager = FileManager.default
+        let directory = manager.temporaryDirectory.appendingPathComponent("UndoKit-inspection-\(UUID())")
+        do {
+            let before = try openingArtifactStamps(at: url)
+            guard before[""] != nil else {
+                throw HistoryFailure(.missingHistory, stage: .admission, disposition: .usable)
+            }
+            try manager.createDirectory(at: directory, withIntermediateDirectories: false)
+            let destination = directory.appendingPathComponent("History.sqlite")
+            for suffix in ["", "-wal", "-journal"] where before[suffix] != nil {
+                try manager.copyItem(at: URL(fileURLWithPath: url.path + suffix),
+                                     to: URL(fileURLWithPath: destination.path + suffix))
+            }
+            guard before == (try openingArtifactStamps(at: url)) else {
+                throw HistoryFailure(.busy, stage: .admission, disposition: .usable,
+                                     underlyingDescription: "History changed during inspection capture; retry opening")
+            }
+            return directory
+        } catch {
+            try? manager.removeItem(at: directory)
+            if let failure = error as? HistoryFailure { throw failure }
+            throw HistoryFailure(.unavailableStore, stage: .admission, disposition: .usable,
+                                 underlyingDescription: String(describing: error))
+        }
+    }
+
+    static func makeValidatedInspection(at url: URL, workingIdentity: UUID, mode: HistoryOpenMode,
+                                        limits: HistoryLimits) async throws -> HistoryStore {
+        let directory = try makeOpeningSnapshot(at: url)
+        do {
+            let container = try makeContainer(at: directory.appendingPathComponent("History.sqlite"), readOnly: true)
+            let inspection = HistoryStore(url: url, workingIdentity: workingIdentity,
+                storeIdentity: UUID(), access: .readOnly, limits: limits,
+                container: container, lockDescriptor: -1)
+            inspection.inspectionDirectory = directory
+            do { try inspection.validateRegistration(mode: mode) } catch {
+                try await inspection.close()
+                throw error
+            }
+            return inspection
+        } catch {
+            try? FileManager.default.removeItem(at: directory)
+            throw error
+        }
     }
 
     static func safePathComponent(_ value: String) -> Bool {
@@ -129,6 +243,38 @@ extension HistoryStore {
         return .unavailableStore
     }
 
+    /// Establish compatibility and binding before any writable coordinator touches
+    /// the original. This method never edits records, including copy adoption.
+    func validateRegistration(mode: HistoryOpenMode) throws {
+        let request = HistoryStoreRecord.fetchRequest()
+        request.predicate = NSPredicate(format: "\(#keyPath(HistoryStoreRecord.key)) == %@", "primary")
+        request.fetchLimit = 2
+        let records = try context.fetch(request)
+        guard records.count == 1, let record = records.first,
+              let storeID = record.storeID.flatMap(UUID.init(uuidString:)),
+              record.workingID.flatMap(UUID.init(uuidString:)) != nil else {
+            throw HistoryFailure(.compatibility, stage: .admission, disposition: .usable)
+        }
+        switch mode {
+        case .create:
+            throw HistoryFailure(.identityConflict, stage: .admission, disposition: .usable)
+        case .existing:
+            guard record.workingID == workingIdentity.uuidString else {
+                throw HistoryFailure(.identityConflict, stage: .admission, disposition: .usable)
+            }
+            storeIdentity = storeID
+        case .independentCopy(let sourceWorkingIdentity):
+            guard record.workingID == sourceWorkingIdentity.uuidString,
+                  sourceWorkingIdentity != workingIdentity else {
+                throw HistoryFailure(.identityConflict, stage: .admission, disposition: .usable)
+            }
+            let scopes = try context.fetch(HistoryScopeRecord.fetchRequest())
+            guard scopes.allSatisfy({ $0.workingID == sourceWorkingIdentity.uuidString }) else {
+                throw HistoryFailure(.identityConflict, stage: .admission, disposition: .usable)
+            }
+        }
+    }
+
     func register(mode: HistoryOpenMode) throws {
         let request = HistoryStoreRecord.fetchRequest()
         request.predicate = NSPredicate(format: "\(#keyPath(HistoryStoreRecord.key)) == %@", "primary")
@@ -193,7 +339,9 @@ extension HistoryStore {
               }) else {
             throw HistoryFailure(.busy, stage: .admission, disposition: .usable)
         }
-        guard !FileManager.default.fileExists(atPath: destination.path) else {
+        guard Self.storeArtifactURLs(at: destination).allSatisfy({
+            !FileManager.default.fileExists(atPath: $0.path)
+        }) else {
             throw HistoryFailure(.identityConflict, stage: .admission, disposition: .usable)
         }
         let pending = HistoryTransactionRecord.fetchRequest()
@@ -222,32 +370,44 @@ extension HistoryStore {
             noteWriteFailure()
             throw error
         }
-        let coordinator = container.persistentStoreCoordinator
-        let options: [AnyHashable: Any] = [NSSQLitePragmasOption: ["journal_mode": "DELETE"]]
         do {
-            // Copy through Core Data rather than copying the SQLite file alone: committed
-            // pages may still live in its WAL. The separate coordinator then opens/closes
-            // the destination with DELETE journaling so the host receives a closed file.
-            try coordinator.replacePersistentStore(at: destination, destinationOptions: options,
-                                                   withPersistentStoreFrom: url, sourceOptions: nil,
-                                                   ofType: NSSQLiteStoreType)
-            let copied = NSPersistentStoreCoordinator(managedObjectModel: container.managedObjectModel)
+            try createClosedCopy(at: destination)
+        } catch {
+            // Never offer an incomplete destination. Preserve the live source and
+            // remove every owned destination artifact, including SQLite journals.
+            do { try Self.removeCreatedArtifacts(at: destination, preexisting: []) } catch let cleanupError {
+                throw HistoryFailure(.storage, stage: .finalization, disposition: .usable,
+                    underlyingDescription: "Copy failed: \(error). Destination cleanup failed: \(cleanupError)")
+            }
+            throw HistoryFailure(.storage, stage: .finalization, disposition: .usable,
+                                 underlyingDescription: String(describing: error))
+        }
+    }
+
+    private func createClosedCopy(at destination: URL) throws {
+        let options: [AnyHashable: Any] = [NSSQLitePragmasOption: ["journal_mode": "DELETE"]]
+        // Copy through Core Data: committed pages may still live in the WAL.
+        try container.persistentStoreCoordinator.replacePersistentStore(at: destination,
+            destinationOptions: options, withPersistentStoreFrom: url,
+            sourceOptions: nil, ofType: NSSQLiteStoreType)
+        #if DEBUG
+        if Self.failCopyAfterCreation { throw CocoaError(.fileWriteOutOfSpace) }
+        #endif
+        let copied = NSPersistentStoreCoordinator(managedObjectModel: container.managedObjectModel)
+        do {
             let snapshotStore = try copied.addPersistentStore(ofType: NSSQLiteStoreType,
                 configurationName: nil, at: destination, options: options)
             try copied.remove(snapshotStore)
-            guard !FileManager.default.fileExists(atPath: destination.path + "-wal") else {
-                throw HistoryFailure(.storage, stage: .finalization, disposition: .usable)
-            }
-            let sharedMemory = URL(fileURLWithPath: destination.path + "-shm")
-            if FileManager.default.fileExists(atPath: sharedMemory.path) {
-                try FileManager.default.removeItem(at: sharedMemory)
-            }
         } catch {
-            // A failed destination is not offered as a coherent copy. The source
-            // remains open, locked and available for inspection/recovery.
-            try? FileManager.default.removeItem(at: destination)
-            throw HistoryFailure(.storage, stage: .finalization, disposition: .usable,
-                                 underlyingDescription: String(describing: error))
+            for store in copied.persistentStores { try copied.remove(store) }
+            throw error
+        }
+        guard !FileManager.default.fileExists(atPath: destination.path + "-wal") else {
+            throw HistoryFailure(.storage, stage: .finalization, disposition: .usable)
+        }
+        let sharedMemory = URL(fileURLWithPath: destination.path + "-shm")
+        if FileManager.default.fileExists(atPath: sharedMemory.path) {
+            try FileManager.default.removeItem(at: sharedMemory)
         }
     }
 

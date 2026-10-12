@@ -34,6 +34,23 @@ jobs:
           persist-credentials: false
       - name: Verify producer toolchain
         run: ruby scripts/check-toolchain.rb
+      - name: Approve pinned SwiftLint build plugin
+        run: |
+          ruby -rjson -rfileutils <<'RUBY'
+          # Trust only the reviewed plugin revision, matching local Xcode approval.
+          revision = "ef7d692fc6706e8f5628e26bcafaefa445c58a97"
+          resolved = JSON.parse(File.read("UndoKit.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"))
+          pin = resolved.fetch("pins").find { |item| item.fetch("identity") == "swiftlintplugins" }
+          abort "Review SwiftLint plugin trust after changing its dependency pin" unless
+            pin && pin.fetch("state").fetch("revision") == revision &&
+            pin.fetch("location") == "https://github.com/SimplyDanny/SwiftLintPlugins"
+          directory = File.join(Dir.home, ".swiftpm", "security")
+          FileUtils.mkdir_p(directory)
+          File.write(File.join(directory, "plugins.json"), JSON.pretty_generate([
+            {"fingerprint" => revision, "packageIdentity" => "swiftlintplugins",
+             "targetName" => "SwiftLintBuildToolPlugin"}
+          ]) + "\n")
+          RUBY
       - name: Test package
         env:
           CONFIGURATION: ${{ matrix.configuration }}

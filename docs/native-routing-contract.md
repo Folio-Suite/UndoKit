@@ -7,6 +7,10 @@ SPDX-License-Identifier: MIT
 
 Accepted by the maintainer on 2026-09-29 through
 [Folio issue #44](https://github.com/Folio-Suite/Folio/issues/44).
+The maintainer's 2026-10-12 [UIKit live/durable Undo decision](adr/0006-uikit-live-and-durable-undo.md)
+revises the persisted typing granularity and supported UIKit binding ownership
+below. Earlier advanced-router and other-platform obligations remain in force.
+
 This contract extends [durable acceptance](durable-acceptance-contract.md),
 [history retention](history-retention-contract.md) and the
 [typed host interface](typed-interface-contract.md).
@@ -29,8 +33,14 @@ The host supplies a thin adapter with explicit application policy.
 | Interpret payloads, validate and compensate atomically, preserve authoritative outcomes | Host under the durable-acceptance contract |
 | Refresh affected views and choose navigation/reveal behavior | Host |
 
-UndoKit does not interpret affected-content metadata or manipulate application
-views. Host obligations are part of the public integration contract and must
+The advanced router leaves these controls to the host. For a supported UIKit
+binding, UndoKit owns generic control settlement, barriers, draft preservation
+and connection lifecycle through the host's draft mapping. The host retains
+semantic validation, scope selection, feedback and navigation policy.
+
+UndoKit does not interpret affected-content metadata. Framework-owned UIKit
+bindings may read and render connected native control values under that explicit
+mapping; they must preserve native selection/composition and avoid stealing focus. Host obligations are part of the public integration contract and must
 appear in eventual normative DocC, with examples and failure handling.
 
 ## Invocation, ordering and the editing barrier
@@ -43,7 +53,12 @@ ordered submission queue remains available under its existing contract.
 
 Before submission, the host settles the current native editing group according
 to the control's editing rules and submits the resulting Command. Preserve
-native typing coalescing and marked-text composition rules. Queue Undo after
+marked-text composition rules. Native typing coalescing remains a live-editing
+concern; supported UIKit durable bindings persist the editing transactions in
+[ADR 0006](adr/0006-uikit-live-and-durable-undo.md), not every local typing step.
+A binding must distinguish live local Undo from durable group Undo and prove
+its routing and retirement boundaries; losing live typing Undo is not implied
+permission to claim full native integration. Queue Undo after
 prior edits and resolve its target when it reaches the head of the queue;
 a menu's earlier availability snapshot cannot select a stale target.
 

@@ -71,7 +71,7 @@ public struct NativeHistorySessionEntry: Sendable {
                      codec: HistoryCodec<Lease.Draft>, codecVersion: Int = 1, draftURL: URL,
                      makeLease: () -> Lease) async -> NativeHistorySession<Lease> {
         let key = canonical(documentURL)
-        if let existing = sessions[key] { return existing }
+        if let existing = sessions[key] { await existing.waitForOpening(); return existing }
         let session = NativeHistorySession(documentURL: key, lease: makeLease(), codec: codec,
             codecVersion: codecVersion, draftURL: draftURL)
         sessions[key] = session
@@ -90,7 +90,9 @@ public struct NativeHistorySessionEntry: Sendable {
         await session.open(.existing)
     }
     public func closeAll() async { for session in Array(sessions.values) { await session.close() } }
-    private func canonical(_ url: URL) -> URL { url.standardizedFileURL.resolvingSymlinksInPath() }
+    private func canonical(_ url: URL) -> URL {
+        URL(fileURLWithPath: url.standardizedFileURL.resolvingSymlinksInPath().path, isDirectory: false)
+    }
 }
 
 /// Safe native editing, durable submission and complete lease closure behind one interface.
@@ -114,6 +116,7 @@ public struct NativeHistorySessionEntry: Sendable {
         editing = NativeEditingSession(documentURL: documentURL, lease: lease, codec: codec, codecVersion: codecVersion, draftURL: draftURL)
     }
     fileprivate func open(_ mode: NativeHistoryOpenMode) async { await editing.open(mode) }
+    fileprivate func waitForOpening() async { await editing.waitForOpening() }
     /// Callbacks receive a weakly retained presentation owner as their first argument.
     /// Do not capture the same owner strongly inside these callbacks.
     public func connect<Owner: AnyObject>(owner: Owner,

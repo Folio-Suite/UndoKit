@@ -6,6 +6,49 @@ import UndoKit
 import XCTest
 
 @MainActor final class NativeHistorySessionTests: XCTestCase {
+    func testDirectoryFlagDoesNotCreateAnotherOwnerForTheSameDocument() async throws {
+        let directory = try testDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let owners = NativeHistorySessions<NativeIntegerLease>()
+        let fileURL = URL(fileURLWithPath: directory.path, isDirectory: false)
+        let first = await owners.open(documentURL: fileURL, mode: .create, codec: .json(),
+            draftURL: directory.appendingPathComponent("Draft.json")) {
+                NativeIntegerLease(directory: directory, scope: UUID(), working: UUID())
+            }
+        let directoryURL = URL(fileURLWithPath: directory.path, isDirectory: true)
+        let second = await owners.open(documentURL: directoryURL, mode: .existing, codec: .json(),
+            draftURL: directory.appendingPathComponent("Draft.json")) {
+                NativeIntegerLease(directory: directory, scope: UUID(), working: UUID())
+            }
+        XCTAssertTrue(first === second)
+        XCTAssertEqual(second.status.phase, .ready)
+        await owners.closeAll()
+    }
+    func testConcurrentOpenReturnsOnlyAfterTheRetainedOwnerFinishesAcquisition() async throws {
+        let directory = try testDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let owners = NativeHistorySessions<NativeIntegerLease>()
+        let lease = NativeIntegerLease(directory: directory, scope: UUID(), working: UUID())
+        let gate = NativeDeliveryGate(); lease.openingGate = gate
+        let first = Task { await owners.open(documentURL: directory, mode: .create, codec: .json(),
+            draftURL: directory.appendingPathComponent("Draft.json")) { lease } }
+        await gate.waitUntilStarted()
+        var joiningStarted = false, joiningReturned = false
+        let joined = Task {
+            joiningStarted = true
+            let session = await owners.open(documentURL: directory, mode: .existing, codec: .json(),
+                draftURL: directory.appendingPathComponent("Draft.json")) { lease }
+            joiningReturned = true
+            return session
+        }
+        while !joiningStarted { await Task.yield() }
+        XCTAssertFalse(joiningReturned, "Parallel caller received an incompletely acquired owner")
+        gate.resume()
+        let original = await first.value, returned = await joined.value
+        XCTAssertTrue(original === returned)
+        XCTAssertEqual(returned.status.phase, .ready)
+        await returned.close()
+    }
     func testDraftCommitUndoRedoAndReopenUseIndependentDurableHost() async throws {
         let directory = try testDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }

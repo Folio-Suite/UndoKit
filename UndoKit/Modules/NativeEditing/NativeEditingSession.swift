@@ -334,6 +334,9 @@ import Foundation
 
 // Native callback reconciliation is separate from ordinary editing admission.
 extension NativeEditingSession {
+    func waitForOpening() async {
+        if phase == .opening { await withCheckedContinuation { operationFinished.append($0) } }
+    }
     func nativeRegistrationObserved() {
         unexplainedNativeRegistration = true; nativeRegistrationEpoch += 1
         // Preserve all unexplained groups until the host can identify their authored work.

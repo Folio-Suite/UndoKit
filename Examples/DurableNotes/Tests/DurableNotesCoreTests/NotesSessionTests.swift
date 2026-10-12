@@ -129,4 +129,27 @@ import XCTest
         XCTAssertEqual(readout.note, Note(title: "Owned", body: "Single writer"))
         try await nextOwner.close()
     }
+
+    func testExistingOpenRefusesUnavailableStorageWithoutCreatingReplacement() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let session = try await NotesSession.open(at: root)
+        _ = await session.edit(title: "Original", body: "Never replace an unavailable document")
+        try await session.close()
+        let unavailable = root.appendingPathExtension("unavailable")
+        defer { try? FileManager.default.removeItem(at: unavailable) }
+        try FileManager.default.moveItem(at: root, to: unavailable)
+        do {
+            let replacement = try await NotesSession.openExisting(at: root)
+            try await replacement.close()
+            XCTFail("Unavailable storage was replaced")
+        } catch { }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: root.path))
+        try FileManager.default.moveItem(at: unavailable, to: root)
+        let reopened = try await NotesSession.openExisting(at: root)
+        let readout = await reopened.read()
+        XCTAssertEqual(readout.note, Note(title: "Original", body: "Never replace an unavailable document"))
+        XCTAssertEqual(readout.applicationCount, 1)
+        try await reopened.close()
+    }
 }

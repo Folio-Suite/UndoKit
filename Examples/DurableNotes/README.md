@@ -7,14 +7,15 @@ SPDX-License-Identifier: MIT
 
 A small runnable AppKit host for UndoKit. Two document windows edit separate
 persisted notes, each with a title and body. `DurableNotesCore` is a bounded,
-Foundation-only host module intended to be shared with the later UIKit shell.
+Foundation-only host module shared with the [UIKit shell](UIKit/README.md).
 It contains no AppKit routing or UI code.
 
 ## Build and run
 
 Use the repository's selected Xcode 27.0 (27A266a), Swift 6.4 toolchain, Swift 6
 language mode, and macOS 14 or later. The sample package also declares iOS 17 for
-its shared core; there is no UIKit shell or iOS acceptance evidence yet.
+its shared core. The separate UIKit project and simulator runner are documented
+in [UIKit/README.md](UIKit/README.md).
 
 From the repository root:
 
@@ -143,7 +144,8 @@ ranges, pending outcomes and reopening. They supplement the portable host tests.
 
 The focused host tests cover grouped edit/Undo/Redo/reopen receipts, Debug
 accepted-effect/failed-finalization reconciliation, atomic rejection and separate
-scopes, missing host-state preservation, and duplicate-writer refusal. The root
+scopes, missing host-state preservation, duplicate-writer refusal and
+existing-only restoration without replacement storage creation. The root
 `HistoryDebugFailureInjectionTests` exercises the public Debug API, including
 busy refusal and inherited task-local isolation when independently owned stores
 reuse both scope and Command IDs. Injection binds the selected engine owner too.

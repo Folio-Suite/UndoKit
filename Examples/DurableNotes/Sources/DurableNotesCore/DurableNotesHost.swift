@@ -28,6 +28,13 @@ actor DurableNotesHost: HistoryHost {
     private var rejectNext = false
     private var delayNext = false
     private var delayed: CheckedContinuation<Void, Never>?
+    private static var writeOptions: Data.WritingOptions {
+        #if os(iOS)
+        [.atomic, .completeFileProtection]
+        #else
+        [.atomic]
+        #endif
+    }
 
     init(url: URL, createIfMissing: Bool = true) throws {
         self.url = url
@@ -37,7 +44,7 @@ actor DurableNotesHost: HistoryHost {
             guard createIfMissing else { throw HistoryFailure(.missingHistory, stage: .admission, disposition: .suspended) }
             state = State()
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try JSONEncoder().encode(state).write(to: url, options: .atomic)
+            try JSONEncoder().encode(state).write(to: url, options: Self.writeOptions)
         }
     }
     func identity() -> (scope: UUID, working: UUID) { (state.scope, state.workingIdentity) }
@@ -77,7 +84,7 @@ actor DurableNotesHost: HistoryHost {
             let receipt = Receipt(accepted: accepted, effects: effects)
             next.receipts[key] = receipt
             if accepted { next.applicationCount += 1 }
-            try JSONEncoder().encode(next).write(to: url, options: .atomic)
+            try JSONEncoder().encode(next).write(to: url, options: Self.writeOptions)
             state = next
             return Self.outcome(receipt)
         } catch { return .unresolved }

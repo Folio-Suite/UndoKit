@@ -9,8 +9,16 @@ import UndoKit
 final class NotesOwnership {
     private var descriptor: Int32
     init(directory: URL, createDirectory: Bool = true) throws {
-        if createDirectory { try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true) }
-        descriptor = Darwin.open(directory.appendingPathComponent("Owner.lock").path, O_RDWR | O_CREAT, 0o600)
+        if createDirectory {
+            #if os(iOS)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true,
+                attributes: [.protectionKey: FileProtectionType.complete])
+            #else
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            #endif
+        }
+        descriptor = Darwin.open(directory.appendingPathComponent("Owner.lock").path,
+            createDirectory ? O_RDWR | O_CREAT : O_RDWR, 0o600)
         guard descriptor >= 0 else { throw CocoaError(.fileWriteNoPermission) }
         guard flock(descriptor, LOCK_EX | LOCK_NB) == 0 else {
             Darwin.close(descriptor); descriptor = -1
@@ -31,11 +39,21 @@ final class NotesOwnership {
     private init(engine: HistoryEngine, host: DurableNotesHost, directory: URL, ownership: NotesOwnership) {
         self.engine = engine; self.host = host; self.directory = directory; self.ownership = ownership
     }
+    /// Lifecycle restoration must never turn an unavailable document into a new scope.
+    public static func openExisting(at directory: URL) async throws -> NotesSession {
+        try await open(at: directory, existingOnly: true)
+    }
     public static func open(at directory: URL) async throws -> NotesSession {
-        let ownership = try NotesOwnership(directory: directory)
+        try await open(at: directory, existingOnly: false)
+    }
+    private static func open(at directory: URL, existingOnly: Bool) async throws -> NotesSession {
+        let ownership = try NotesOwnership(directory: directory, createDirectory: !existingOnly)
         let history = directory.appendingPathComponent("History.sqlite")
         let exists = FileManager.default.fileExists(atPath: history.path)
         let hostURL = directory.appendingPathComponent("Note.json")
+        guard !existingOnly || (exists && FileManager.default.fileExists(atPath: hostURL.path)) else {
+            throw HistoryFailure(.missingHistory, stage: .admission, disposition: .suspended)
+        }
         guard !exists || FileManager.default.fileExists(atPath: hostURL.path) else {
             throw HistoryFailure(.missingHistory, stage: .admission, disposition: .suspended)
         }
@@ -47,6 +65,16 @@ final class NotesOwnership {
         }
         let engine = try await HistoryEngine.open(at: history, scope: identity.scope,
             workingIdentity: identity.working, mode: exists ? .existing : .create, host: host)
+        #if os(iOS)
+        do {
+            // Protect the directory and every current SQLite sidecar/ownership file.
+            // Future atomic host writes explicitly request complete protection too.
+            for url in [directory] + (try FileManager.default.contentsOfDirectory(at: directory,
+                includingPropertiesForKeys: nil)) {
+                try FileManager.default.setAttributes([.protectionKey: FileProtectionType.complete], ofItemAtPath: url.path)
+            }
+        } catch { try? await engine.close(); throw error }
+        #endif
         return NotesSession(engine: engine, host: host, directory: directory, ownership: ownership)
     }
     public func read() async -> NotesReadout { await host.read() }

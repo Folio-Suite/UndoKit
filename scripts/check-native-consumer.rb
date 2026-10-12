@@ -295,6 +295,9 @@ Dir.mktmpdir("undokit-consumer-", temporary_parent) do |temporary|
                    "-configuration", options.configuration, "-destination", destination,
                    "-derivedDataPath", derived, "-onlyUsePackageVersionsFromResolvedFile",
                    "ARCHS=arm64 x86_64", "ONLY_ACTIVE_ARCH=NO", "build"]
+        # Hosted CI validates the reviewed dependency pin before this command;
+        # it cannot accept Xcode's interactive unsigned-plugin approval prompt.
+        command.insert(1, "-skipPackagePluginValidation") if ENV["GITHUB_ACTIONS"] == "true"
         run!(*command, label: "Native framework build: #{platform} universal").
           tap { |output| raise "expected native framework build output" if output.empty? }
         products = Dir.glob(File.join(derived, "Build", "Products", "**", "UndoKit.framework"))

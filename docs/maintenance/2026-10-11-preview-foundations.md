@@ -162,3 +162,19 @@ every report. Retained local evidence:
 These runs cover the reviewed Swift cleanup; the subsequent runner change only
 expands output on failure. Separate follow-up standards/spec reviews of that
 runner diagnostic change and this evidence record found no actionable issues.
+
+## CI plugin approval follow-up
+
+All four checks for `c5d51bd` (Debug/Release on push and pull-request events)
+failed Xcode's `Validate plug-in SwiftLintBuildToolPlugin` step before native
+compilation. The complete failed-command logs exposed the shared failure.
+Following KitchenMemory's CI pattern, hosted native builds now use
+`-skipPackagePluginValidation` after the workflow validates the exact reviewed
+SwiftLint package revision and repository URL. Native builds also require
+`Package.resolved`. Local builds retain interactive Xcode approval behavior.
+A changed dependency pin is refused until the reviewed revision is updated.
+The initial manual trust-file approach was superseded by this CLI pattern.
+
+Ruby syntax, exact-pin acceptance, changed-pin refusal, and CI-only flag
+selection passed. The pinned native universal macOS build passed locally;
+the fresh hosted run remains the authoritative test of the CI approval gate.

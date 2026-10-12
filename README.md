@@ -88,6 +88,10 @@ it does not implement the production history engine. The implementation's
 module ownership and typed callback context are recorded in
 [ADR 0003](docs/adr/0003-host-adaptation-module-ownership.md).
 
+The [portable native editing session foundation](docs/native-editing-session-contract.md)
+adds app-owned document leases, typed draft recovery and complete closure. Supported
+native control bindings and typing-group qualification remain a separate slice.
+
 The accepted [native-routing contract](docs/native-routing-contract.md) defines
 the reusable bridge, pending editing barriers, local text routing, coherent
 availability and host presentation obligations. The #48 harness has native

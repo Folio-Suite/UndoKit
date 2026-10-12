@@ -6,10 +6,10 @@ import UndoKit
 
 /// The sample deliberately supports one writer per document, across processes.
 /// Acquire ownership before creating or reading the authoritative host state.
-private final class NotesOwnership {
+final class NotesOwnership {
     private var descriptor: Int32
-    init(directory: URL) throws {
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    init(directory: URL, createDirectory: Bool = true) throws {
+        if createDirectory { try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true) }
         descriptor = Darwin.open(directory.appendingPathComponent("Owner.lock").path, O_RDWR | O_CREAT, 0o600)
         guard descriptor >= 0 else { throw CocoaError(.fileWriteNoPermission) }
         guard flock(descriptor, LOCK_EX | LOCK_NB) == 0 else {

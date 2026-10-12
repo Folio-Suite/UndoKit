@@ -29,11 +29,12 @@ actor DurableNotesHost: HistoryHost {
     private var delayNext = false
     private var delayed: CheckedContinuation<Void, Never>?
 
-    init(url: URL) throws {
+    init(url: URL, createIfMissing: Bool = true) throws {
         self.url = url
         if FileManager.default.fileExists(atPath: url.path) {
             state = try JSONDecoder().decode(State.self, from: Data(contentsOf: url))
         } else {
+            guard createIfMissing else { throw HistoryFailure(.missingHistory, stage: .admission, disposition: .suspended) }
             state = State()
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             try JSONEncoder().encode(state).write(to: url, options: .atomic)

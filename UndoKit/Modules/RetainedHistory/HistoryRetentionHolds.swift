@@ -50,7 +50,8 @@ extension RetainedHistory {
         guard !activity.closed else { throw HistoryFailure(.busy, stage: .admission, disposition: .usable) }
         let generation = try history.scopeRecord().generationUUID()
         return try history.fetch(HistoryHoldRecord.self, predicate: NSPredicate(
-            format: "\(#keyPath(HistoryHoldRecord.scopeKey)) == %@ AND \(#keyPath(HistoryHoldRecord.generationID)) == %@", scope.uuidString, generation.uuidString))
+            format: "\(#keyPath(HistoryHoldRecord.scopeKey)) == %@ AND " +
+                "\(#keyPath(HistoryHoldRecord.generationID)) == %@", scope.uuidString, generation.uuidString))
             .map { row in
                 let kind: HistoryRetentionHold.Kind
                 if row.kind == "state" {

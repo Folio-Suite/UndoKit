@@ -10,8 +10,10 @@ extension RetainedHistory {
         let scopeRow = try history.scopeRecord()
         let floor = scopeRow.undoFloorSequence
         let request = HistoryGroupRecord.fetchRequest()
-        request.predicate = NSPredicate(format: "\(#keyPath(HistoryGroupRecord.scopeKey)) == %@ AND \(#keyPath(HistoryGroupRecord.sequence)) >= %@",
-                                        scope.uuidString, NSNumber(value: floor))
+        request.predicate = NSPredicate(
+            format: "\(#keyPath(HistoryGroupRecord.scopeKey)) == %@ AND " +
+                "\(#keyPath(HistoryGroupRecord.sequence)) >= %@",
+            scope.uuidString, NSNumber(value: floor))
         request.sortDescriptors = [NSSortDescriptor(key: #keyPath(HistoryGroupRecord.sequence), ascending: false)]
         request.fetchLimit = 1
         let latest = try context.fetch(request).first
@@ -29,7 +31,8 @@ extension RetainedHistory {
     func presentation(forGroup id: UUID) throws -> HistoryPayload? {
         guard !activity.closed else { throw HistoryFailure(.busy, stage: .admission, disposition: .usable) }
         let rows = try history.fetch(HistoryGroupRecord.self, predicate: NSPredicate(
-            format: "\(#keyPath(HistoryGroupRecord.scopeKey)) == %@ AND \(#keyPath(HistoryGroupRecord.key)) == %@", scope.uuidString, id.uuidString))
+            format: "\(#keyPath(HistoryGroupRecord.scopeKey)) == %@ AND " +
+                "\(#keyPath(HistoryGroupRecord.key)) == %@", scope.uuidString, id.uuidString))
         guard let row = rows.first else { return nil }
         guard row.presentationFamily != nil else { return nil }
         let value = try history.presentationPayload(on: row)

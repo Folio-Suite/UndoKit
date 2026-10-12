@@ -246,8 +246,10 @@ extension HistoryStore {
         }
         _ = try inspectScope(scope)
         let request = HistoryGroupRecord.fetchRequest()
-        request.predicate = NSPredicate(format: "\(#keyPath(HistoryGroupRecord.scopeKey)) == %@ AND \(#keyPath(HistoryGroupRecord.sequence)) > %@",
-                                        scope.uuidString, NSNumber(value: sequence ?? 0))
+        request.predicate = NSPredicate(
+            format: "\(#keyPath(HistoryGroupRecord.scopeKey)) == %@ AND " +
+                "\(#keyPath(HistoryGroupRecord.sequence)) > %@",
+            scope.uuidString, NSNumber(value: sequence ?? 0))
         request.sortDescriptors = [NSSortDescriptor(key: #keyPath(HistoryGroupRecord.sequence), ascending: true)]
         request.fetchLimit = limit
         return try context.fetch(request).map { row in

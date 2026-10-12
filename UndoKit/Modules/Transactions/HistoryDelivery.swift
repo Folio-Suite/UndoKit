@@ -64,8 +64,8 @@ extension HistoryTransactionCoordinator {
         do {
             let groupID = try target.uuid(target.key)
             let actions = try history.fetch(HistoryActionRecord.self,
-                                    predicate: NSPredicate(format: "\(#keyPath(HistoryActionRecord.group)) == %@", target),
-                                    sort: [NSSortDescriptor(key: #keyPath(HistoryActionRecord.ordinal), ascending: kind == .redo)])
+                predicate: NSPredicate(format: "\(#keyPath(HistoryActionRecord.group)) == %@", target),
+                sort: [NSSortDescriptor(key: #keyPath(HistoryActionRecord.ordinal), ascending: kind == .redo)])
             let members = try actions.map { action -> HistoryMember in
                 let role: HistoryScopeStorage.CompensationPayloadRole = kind == .undo ? .undo : .redo
                 return HistoryMember(id: try action.uuid(action.memberID),

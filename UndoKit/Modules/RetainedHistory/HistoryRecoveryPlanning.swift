@@ -117,8 +117,10 @@ extension RetainedHistory {
         }
         try rejectGap(lowerExclusive: lower, upperInclusive: upper)
         let request = HistoryActionRecord.fetchRequest()
-        request.predicate = NSPredicate(format: "\(#keyPath(HistoryActionRecord.group)) == %@ AND \(#keyPath(HistoryActionRecord.ordinal)) == %@",
-                                        group, NSNumber(value: ordinal))
+        request.predicate = NSPredicate(
+            format: "\(#keyPath(HistoryActionRecord.group)) == %@ AND " +
+                "\(#keyPath(HistoryActionRecord.ordinal)) == %@",
+            group, NSNumber(value: ordinal))
         request.fetchLimit = 1
         guard let row = try context.fetch(request).first else {
             throw HistoryFailure(.storage, stage: .reconciliation, disposition: .suspended)
@@ -150,7 +152,8 @@ extension RetainedHistory {
             }
             return row.sequence
         case .checkpoint(let id):
-            guard let row = try scopedRow(HistoryCheckpointRecord.self, scopePath: \.scopeKey, keyPath: \.key, id: id) else {
+            guard let row = try scopedRow(HistoryCheckpointRecord.self,
+                scopePath: \.scopeKey, keyPath: \.key, id: id) else {
                 throw HistoryFailure(.compatibility, stage: .admission, disposition: .usable)
             }
             return row.sequence
@@ -167,7 +170,8 @@ extension RetainedHistory {
             }
             return (sequence, .reverse)
         case .checkpoint(let id):
-            guard let row = try scopedRow(HistoryCheckpointRecord.self, scopePath: \.scopeKey, keyPath: \.key, id: id) else {
+            guard let row = try scopedRow(HistoryCheckpointRecord.self,
+                scopePath: \.scopeKey, keyPath: \.key, id: id) else {
                 throw HistoryFailure(.compatibility, stage: .admission, disposition: .usable)
             }
             let sequence = row.sequence

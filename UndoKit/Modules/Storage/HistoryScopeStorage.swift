@@ -136,7 +136,7 @@ import Foundation
 
     func transactionMembers(_ transaction: HistoryTransactionRecord) throws -> [HistoryMemberRecord] {
         let members = try fetch(HistoryMemberRecord.self,
-                                predicate: NSPredicate(format: "\(#keyPath(HistoryMemberRecord.transaction)) == %@", transaction),
+                predicate: NSPredicate(format: "\(#keyPath(HistoryMemberRecord.transaction)) == %@", transaction),
                                 sort: [NSSortDescriptor(key: #keyPath(HistoryMemberRecord.ordinal), ascending: true)])
         for row in members {
             guard let family = row.family,

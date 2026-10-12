@@ -22,7 +22,8 @@ extension RetainedHistory {
             throw HistoryFailure(.capacity, stage: .admission, disposition: .usable)
         }
         guard try history.fetch(HistoryCheckpointRecord.self, predicate: NSPredicate(
-            format: "\(#keyPath(HistoryCheckpointRecord.scopeKey)) == %@ AND \(#keyPath(HistoryCheckpointRecord.key)) == %@", scope.uuidString, id.uuidString
+            format: "\(#keyPath(HistoryCheckpointRecord.scopeKey)) == %@ AND " +
+                "\(#keyPath(HistoryCheckpointRecord.key)) == %@", scope.uuidString, id.uuidString
         )).isEmpty else {
             throw HistoryFailure(.identityConflict, stage: .admission, disposition: .usable)
         }
@@ -56,7 +57,8 @@ extension RetainedHistory {
     func checkpoint(id: UUID) throws -> HistoryCheckpoint? {
         guard !activity.closed else { throw HistoryFailure(.busy, stage: .admission, disposition: .usable) }
         guard let row = try history.fetch(HistoryCheckpointRecord.self, predicate: NSPredicate(
-            format: "\(#keyPath(HistoryCheckpointRecord.scopeKey)) == %@ AND \(#keyPath(HistoryCheckpointRecord.key)) == %@", scope.uuidString, id.uuidString
+            format: "\(#keyPath(HistoryCheckpointRecord.scopeKey)) == %@ AND " +
+                "\(#keyPath(HistoryCheckpointRecord.key)) == %@", scope.uuidString, id.uuidString
         )).first else { return nil }
         let state = HistoryPayload(family: row.family ?? "",
                                    version: Int(row.version), data: row.state ?? Data())
@@ -72,8 +74,10 @@ extension RetainedHistory {
             throw HistoryFailure(.capacity, stage: .admission, disposition: .usable)
         }
         let request = HistoryCheckpointRecord.fetchRequest()
-        request.predicate = NSPredicate(format: "\(#keyPath(HistoryCheckpointRecord.scopeKey)) == %@ AND \(#keyPath(HistoryCheckpointRecord.sequence)) > %@",
-                                        scope.uuidString, NSNumber(value: sequence ?? 0))
+        request.predicate = NSPredicate(
+            format: "\(#keyPath(HistoryCheckpointRecord.scopeKey)) == %@ AND " +
+                "\(#keyPath(HistoryCheckpointRecord.sequence)) > %@",
+            scope.uuidString, NSNumber(value: sequence ?? 0))
         request.sortDescriptors = [NSSortDescriptor(key: #keyPath(HistoryCheckpointRecord.sequence), ascending: true)]
         request.fetchLimit = limit
         return try context.fetch(request).map(history.checkpointInfo)
@@ -85,8 +89,10 @@ extension RetainedHistory {
             throw HistoryFailure(.capacity, stage: .admission, disposition: .usable)
         }
         let request = HistoryGroupRecord.fetchRequest()
-        request.predicate = NSPredicate(format: "\(#keyPath(HistoryGroupRecord.scopeKey)) == %@ AND \(#keyPath(HistoryGroupRecord.sequence)) > %@",
-                                        scope.uuidString, NSNumber(value: sequence ?? 0))
+        request.predicate = NSPredicate(
+            format: "\(#keyPath(HistoryGroupRecord.scopeKey)) == %@ AND " +
+                "\(#keyPath(HistoryGroupRecord.sequence)) > %@",
+            scope.uuidString, NSNumber(value: sequence ?? 0))
         request.sortDescriptors = [NSSortDescriptor(key: #keyPath(HistoryGroupRecord.sequence), ascending: true)]
         request.fetchLimit = limit
         return try context.fetch(request).map { row in

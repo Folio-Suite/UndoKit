@@ -27,7 +27,8 @@ import XCTest
         let command = HistoryCommand(id: UUID(), fingerprint: Data("one".utf8), payload: payload(1))
         guard case .accepted(let receipt) = await first.submit(command),
               case .accepted = await second.submit(command) else {
-            return XCTFail("Independent scopes refused a shared command ID")
+            XCTFail("Independent scopes refused a shared command ID")
+            return
         }
         let firstHold = try first.holdDetail(from: receipt.groupID, through: receipt.groupID)
         let secondHold = try second.holdDetail(from: receipt.groupID, through: receipt.groupID)
@@ -121,7 +122,8 @@ import XCTest
         let early = try engine.createCheckpoint(name: "One", state: payload(1))
         let command = HistoryCommand(fingerprint: Data("two".utf8), payload: payload(2))
         guard case .accepted(let receipt) = await engine.submit(command) else {
-            return XCTFail("Command failed")
+            XCTFail("Command failed")
+            return
         }
         let last = try await accepted(engine, 3)
         let late = try engine.createCheckpoint(name: "Three", state: payload(3))
@@ -134,7 +136,8 @@ import XCTest
         XCTAssertEqual(host.deliveries, deliveries)
         let conflict = HistoryCommand(id: command.id, fingerprint: Data("different".utf8), payload: payload(9))
         guard case .failure(let failure) = await engine.submit(conflict) else {
-            return XCTFail("Changed intent was not refused")
+            XCTFail("Changed intent was not refused")
+            return
         }
         XCTAssertEqual(failure.cause, .identityConflict)
         XCTAssertEqual(host.deliveries, deliveries)
@@ -230,7 +233,8 @@ import XCTest
         let oversized = HistoryCommand(fingerprint: Data("large".utf8),
             payload: HistoryPayload(family: "counter.set", data: Data(repeating: 0, count: 17)))
         guard case .failure(let capacity) = await engine.submit(oversized) else {
-            return XCTFail("Hard payload limit did not refuse admission")
+            XCTFail("Hard payload limit did not refuse admission")
+            return
         }
         XCTAssertEqual(capacity.cause, .capacity)
         XCTAssertEqual(try engine.retentionHolds().map(\.id), [held.id])
@@ -240,7 +244,8 @@ import XCTest
         XCTAssertEqual(result.retainedGroups, 2)
         XCTAssertTrue(result.targetUnmet)
         guard case .accepted = await engine.undo(), case .accepted = await engine.undo() else {
-            return XCTFail("Ordinary two-group depth was shortened")
+            XCTFail("Ordinary two-group depth was shortened")
+            return
         }
         XCTAssertEqual(host.value, 2)
         XCTAssertFalse(engine.snapshot.canUndo)
@@ -257,7 +262,10 @@ import XCTest
             limits: HistoryLimits(maxUndoGroups: 1))
         _ = try await accepted(engine, 1)
         let displaced = try await accepted(engine, 2)
-        guard case .accepted = await engine.undo() else { return XCTFail("Undo failed") }
+        guard case .accepted = await engine.undo() else {
+            XCTFail("Undo failed")
+            return
+        }
         _ = try await accepted(engine, 3)
         let boundary = try engine.createCheckpoint(name: "Three", state: payload(3))
         let hold = try engine.holdDetail(from: displaced.groupID, through: displaced.groupID)
@@ -286,7 +294,8 @@ import XCTest
         secondHost.loseReplyAfterSave = true
         guard case .failure = await second.submit(HistoryCommand(
             fingerprint: Data("set two".utf8), payload: payload(2))) else {
-            return XCTFail("Second scope did not retain unresolved evidence")
+            XCTFail("Second scope did not retain unresolved evidence")
+            return
         }
         var cleaned = false
         do {
@@ -335,7 +344,8 @@ import XCTest
         let outcome = await engine.submit(HistoryCommand(
             fingerprint: Data("one".utf8), payload: payload(1)))
         guard case .failure(let failure) = outcome else {
-            return XCTFail("Invalid accepted-effect reference was retained")
+            XCTFail("Invalid accepted-effect reference was retained")
+            return
         }
         XCTAssertEqual(failure.cause, .hostProtocol)
         XCTAssertEqual(failure.disposition, .suspended)

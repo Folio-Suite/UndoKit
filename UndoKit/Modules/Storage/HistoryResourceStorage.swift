@@ -31,7 +31,8 @@ extension HistoryScopeStorage {
 
     func removeResourceReferences(ownerType: String, ownerKey: String) throws {
         let rows = try fetch(HistoryResourceRecord.self, predicate: NSPredicate(
-            format: "\(#keyPath(HistoryResourceRecord.ownerType)) == %@ AND \(#keyPath(HistoryResourceRecord.ownerKey)) == %@", ownerType, ownerKey))
+            format: "\(#keyPath(HistoryResourceRecord.ownerType)) == %@ AND " +
+                "\(#keyPath(HistoryResourceRecord.ownerKey)) == %@", ownerType, ownerKey))
         for row in rows {
             if let storeID = row.storeID,
                try fetchOne(HistoryCleanupRecord.self, keyPath: \.key, key: storeID) == nil {

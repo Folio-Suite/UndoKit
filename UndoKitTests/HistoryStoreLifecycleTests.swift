@@ -14,12 +14,20 @@ import XCTest
     init(copyURL: URL) { self.copyURL = copyURL }
 
     func deliver(_ delivery: HistoryDelivery) async -> HistoryHostOutcome {
-        do { try await store?.copy(to: copyURL) }
-        catch let failure as HistoryFailure { copyFailure = failure }
-        catch { return .unresolved }
-        do { try await store?.close() }
-        catch let failure as HistoryFailure { closeFailure = failure }
-        catch { return .unresolved }
+        do {
+            try await store?.copy(to: copyURL)
+        } catch let failure as HistoryFailure {
+            copyFailure = failure
+        } catch {
+            return .unresolved
+        }
+        do {
+            try await store?.close()
+        } catch let failure as HistoryFailure {
+            closeFailure = failure
+        } catch {
+            return .unresolved
+        }
         return .rejected
     }
 
@@ -87,8 +95,10 @@ import XCTest
         let second = try await store.openScope(secondScope, mode: .create, host: secondHost)
 
         guard case .accepted = await first.submit(HistoryCommand(fingerprint: Data("first".utf8), payload: payload(3))),
-              case .accepted = await second.submit(HistoryCommand(fingerprint: Data("second".utf8), payload: payload(7))) else {
-            return XCTFail("Both scopes should accept independent changes")
+              case .accepted = await second.submit(HistoryCommand(
+                  fingerprint: Data("second".utf8), payload: payload(7))) else {
+            XCTFail("Both scopes should accept independent changes")
+            return
         }
         XCTAssertEqual(try first.historyPage(limit: 10).map(\.sequence), [1])
         XCTAssertEqual(try second.historyPage(limit: 10).map(\.sequence), [1])
@@ -101,7 +111,10 @@ import XCTest
 
         try await first.close()
         XCTAssertTrue(second.snapshot.canUndo)
-        guard case .accepted = await second.undo() else { return XCTFail("Other scope stopped") }
+        guard case .accepted = await second.undo() else {
+            XCTFail("Other scope stopped")
+            return
+        }
         try await store.close()
         let reopened = try await HistoryStore.open(at: url, workingIdentity: identity, mode: .existing)
         let reopenedSecond = try await reopened.openScope(secondScope, mode: .existing, host: secondHost)
@@ -124,21 +137,29 @@ import XCTest
         let secondResult = await second.submit(HistoryCommand(id: sharedCommand,
             fingerprint: Data("second intent".utf8), payload: payload(7)))
         guard case .accepted = firstResult, case .accepted = secondResult else {
-            return XCTFail("A command identity belongs to its scope")
+            XCTFail("A command identity belongs to its scope")
+            return
         }
-        guard case .accepted = await second.undo() else { return XCTFail("Second scope could not undo") }
+        guard case .accepted = await second.undo() else {
+            XCTFail("Second scope could not undo")
+            return
+        }
         XCTAssertTrue(first.snapshot.canUndo)
         XCTAssertEqual(firstHost.value, 3)
         XCTAssertEqual(secondHost.value, 0)
         guard case .accepted = await first.undo(),
               case .accepted = await second.redo(),
               case .accepted = await first.redo() else {
-            return XCTFail("Inverses crossed scopes")
+            XCTFail("Inverses crossed scopes")
+            return
         }
         XCTAssertEqual(firstHost.value, 3)
         XCTAssertEqual(secondHost.value, 7)
         secondHost.rejectNext = true
-        guard case .rejected = await second.undo() else { return XCTFail("Second inverse was not rejected") }
+        guard case .rejected = await second.undo() else {
+            XCTFail("Second inverse was not rejected")
+            return
+        }
         XCTAssertTrue(first.snapshot.canUndo)
         XCTAssertFalse(second.snapshot.canUndo)
         try await store.close()
@@ -152,8 +173,10 @@ import XCTest
         let writer = try await HistoryStore.open(at: url, workingIdentity: identity, mode: .create)
         let host = try CounterHost(url: directory.appendingPathComponent("host.json"))
         let engine = try await writer.openScope(scope, mode: .create, host: host)
-        guard case .accepted = await engine.submit(HistoryCommand(fingerprint: Data("set".utf8), payload: payload(4))) else {
-            return XCTFail("Writer failed")
+        guard case .accepted = await engine.submit(HistoryCommand(
+            fingerprint: Data("set".utf8), payload: payload(4))) else {
+            XCTFail("Writer failed")
+            return
         }
         let reader = try await HistoryStore.open(at: url, workingIdentity: identity, mode: .existing, access: .readOnly)
         XCTAssertEqual(try reader.historyPage(scope: scope, limit: 10).count, 1)
@@ -192,12 +215,14 @@ import XCTest
         let second = try await store.openScope(secondScope, mode: .create, host: secondHost)
         guard case .failure(let failure) = await first.submit(HistoryCommand(
             fingerprint: Data("unresolved".utf8), payload: payload(1))) else {
-            return XCTFail("First scope should suspend")
+            XCTFail("First scope should suspend")
+            return
         }
         XCTAssertEqual(failure.disposition, .suspended)
         guard case .accepted = await second.submit(HistoryCommand(
             fingerprint: Data("independent".utf8), payload: payload(5))) else {
-            return XCTFail("Second scope should remain writable")
+            XCTFail("Second scope should remain writable")
+            return
         }
         XCTAssertTrue(first.snapshot.isSuspended)
         XCTAssertTrue(second.snapshot.canUndo)
@@ -271,7 +296,8 @@ import XCTest
             fingerprint: Data("one".utf8), payload: payload(1))),
               case .accepted = await second.submit(HistoryCommand(
             fingerprint: Data("two".utf8), payload: payload(2))) else {
-            return XCTFail("Preparation failed")
+            XCTFail("Preparation failed")
+            return
         }
         let originalStoreID = original.storeIdentity
         try await original.withCoordinatedCopy(to: copiedURL) { _ in
@@ -339,11 +365,13 @@ import XCTest
         try await close.value
         guard case .accepted = await activeFirst.value,
               case .accepted = await activeSecond.value else {
-            return XCTFail("Delivered work was lost")
+            XCTFail("Delivered work was lost")
+            return
         }
         guard case .failure(let firstFailure) = firstQueuedResult,
               case .failure(let secondFailure) = secondQueuedResult else {
-            return XCTFail("Queued work was delivered after store closure began")
+            XCTFail("Queued work was delivered after store closure began")
+            return
         }
         XCTAssertEqual(firstFailure.stage, .admission)
         XCTAssertEqual(secondFailure.stage, .admission)

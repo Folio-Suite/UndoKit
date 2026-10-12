@@ -60,7 +60,8 @@ extension RetainedHistory {
     func retireAcceptedGroup(_ group: HistoryGroupRecord) throws {
         let groupID = try group.uuid(group.key)
         let transactionKey = history.transactionKey(groupID)
-        guard let transaction = try history.fetchOne(HistoryTransactionRecord.self, keyPath: \.key, key: transactionKey),
+        guard let transaction = try history.fetchOne(HistoryTransactionRecord.self,
+            keyPath: \.key, key: transactionKey),
               transaction.stage == "accepted" else {
             throw HistoryFailure(.storage, stage: .finalization, disposition: .suspended)
         }

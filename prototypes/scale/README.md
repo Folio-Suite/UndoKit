@@ -8,11 +8,11 @@ SPDX-License-Identifier: MIT
 This package tests a persisted Core Data history graph and deterministic scale
 fixtures. It is not the UndoKit production API.
 
-    swift test --package-path UndoKit/prototypes/scale
-    ruby UndoKit/prototypes/scale/run.rb ordinary
-    ruby UndoKit/prototypes/scale/run.rb large
-    ruby UndoKit/prototypes/scale/run.rb kitchen
-    ruby UndoKit/prototypes/scale/run.rb payload
+    swift test --package-path prototypes/scale
+    ruby prototypes/scale/run.rb ordinary
+    ruby prototypes/scale/run.rb large
+    ruby prototypes/scale/run.rb kitchen
+    ruby prototypes/scale/run.rb payload
 
 Run one large case at a time. The Ruby runner obtains an exclusive lock, builds
 the release executable, makes three independent fixtures with seeds 17, 29 and

@@ -19,7 +19,7 @@ import XCTest
         return .accepted([HistoryEffect(memberID: member.id,
             undo: HistoryPayload(family: "counter", data: Data(String(-delta).utf8)),
             redo: member.payload,
-            resources: requiredResource.map { [$0] } ?? [])])
+            resources: requiredResource.map { [$0] } ?? []), ])
     }
     func outcome(for token: HistoryToken) async -> HistoryHostOutcome { .unresolved }
 }
@@ -42,7 +42,7 @@ import XCTest
         }
         return .accepted([HistoryEffect(memberID: member.id,
             undo: HistoryPayload(family: "counter", data: Data("-1".utf8)),
-            redo: member.payload, resources: [resource])])
+            redo: member.payload, resources: [resource]), ])
     }
 }
 
@@ -59,15 +59,24 @@ import XCTest
             HistoryCommand(fingerprint: Data(UUID().uuidString.utf8),
                 payload: HistoryPayload(family: "counter", data: Data(String(delta).utf8)))
         }
-        guard case .accepted = await engine.submit(command(1)) else { return XCTFail("initial edit") }
+        guard case .accepted = await engine.submit(command(1)) else {
+            XCTFail("initial edit")
+            return
+        }
         _ = try engine.createCheckpoint(name: "Before gap",
             state: HistoryPayload(family: "counter", data: Data("1".utf8)))
         try engine.setRecording(.off)
-        guard case .accepted = await engine.submit(command(2)) else { return XCTFail("Off edit") }
+        guard case .accepted = await engine.submit(command(2)) else {
+            XCTFail("Off edit")
+            return
+        }
         XCTAssertEqual(host.value, 3)
         XCTAssertEqual(try engine.historyPage(limit: 10).count, 1)
         XCTAssertTrue(engine.snapshot.canUndo)
-        guard case .accepted = await engine.undo() else { return XCTFail("session Undo") }
+        guard case .accepted = await engine.undo() else {
+            XCTFail("session Undo")
+            return
+        }
         XCTAssertEqual(host.value, 1)
         XCTAssertEqual(try engine.historyPage(limit: 10).count, 1)
         XCTAssertEqual(try engine.checkpoints(limit: 10).count, 1)
@@ -93,7 +102,10 @@ import XCTest
         try engine.setRecording(.off)
         let command = HistoryCommand(fingerprint: Data("resource".utf8),
             payload: HistoryPayload(family: "counter", data: Data("1".utf8)))
-        guard case .accepted = await engine.submit(command) else { return XCTFail("Off edit") }
+        guard case .accepted = await engine.submit(command) else {
+            XCTFail("Off edit")
+            return
+        }
         XCTAssertEqual(try store.requiredObjects(in: storeID, limit: 10).objects.count, 1)
         try await engine.close()
         XCTAssertTrue(try store.requiredObjects(in: storeID, limit: 10).objects.isEmpty)
@@ -111,9 +123,15 @@ import XCTest
             HistoryCommand(fingerprint: Data(UUID().uuidString.utf8),
                 payload: HistoryPayload(family: "counter", data: Data(String(delta).utf8)))
         }
-        guard case .accepted(let before) = await engine.submit(command(1)) else { return XCTFail("before") }
+        guard case .accepted(let before) = await engine.submit(command(1)) else {
+            XCTFail("before")
+            return
+        }
         try engine.setRecording(.off)
-        guard case .accepted = await engine.submit(command(2)) else { return XCTFail("gap") }
+        guard case .accepted = await engine.submit(command(2)) else {
+            XCTFail("gap")
+            return
+        }
         XCTAssertNil(try engine.readIdentity().latestGroupID)
         XCTAssertThrowsError(try engine.beginRecoveryPlan(to: .group(before.groupID),
             using: .acceptedEffects))
@@ -122,7 +140,10 @@ import XCTest
         XCTAssertNotNil(baseline)
         XCTAssertEqual(try engine.checkpoint(id: baseline!)?.state.data, Data("3".utf8))
         XCTAssertNil(try engine.readIdentity().latestGroupID)
-        guard case .accepted = await engine.submit(command(4)) else { return XCTFail("after") }
+        guard case .accepted = await engine.submit(command(4)) else {
+            XCTFail("after")
+            return
+        }
         XCTAssertNotNil(try engine.readIdentity().latestGroupID)
         XCTAssertEqual(host.value, 7)
         XCTAssertEqual(try engine.historyPage(limit: 10).count, 2)
@@ -139,13 +160,22 @@ import XCTest
             scope: UUID(), workingIdentity: UUID(), mode: .create, host: host)
         let command = HistoryCommand(fingerprint: Data("first".utf8),
             payload: HistoryPayload(family: "counter", data: Data("5".utf8)))
-        guard case .accepted = await engine.submit(command) else { return XCTFail("first") }
+        guard case .accepted = await engine.submit(command) else {
+            XCTFail("first")
+            return
+        }
         try engine.setRecording(.off)
         XCTAssertTrue(engine.snapshot.canUndo)
-        guard case .accepted = await engine.undo() else { return XCTFail("Off Undo") }
+        guard case .accepted = await engine.undo() else {
+            XCTFail("Off Undo")
+            return
+        }
         XCTAssertEqual(host.value, 0)
         XCTAssertTrue(engine.snapshot.canRedo)
-        guard case .accepted = await engine.redo() else { return XCTFail("Off Redo") }
+        guard case .accepted = await engine.redo() else {
+            XCTFail("Off Redo")
+            return
+        }
         XCTAssertEqual(host.value, 5)
         XCTAssertEqual(try engine.historyPage(limit: 10).count, 1)
         try await engine.close()
@@ -161,8 +191,14 @@ import XCTest
         let second = try await store.openScope(UUID(), mode: .create, host: host)
         let command = HistoryCommand(fingerprint: Data("one".utf8),
             payload: HistoryPayload(family: "counter", data: Data("1".utf8)))
-        guard case .accepted = await first.submit(command) else { return XCTFail("first") }
-        guard case .accepted = await second.submit(command) else { return XCTFail("second") }
+        guard case .accepted = await first.submit(command) else {
+            XCTFail("first")
+            return
+        }
+        guard case .accepted = await second.submit(command) else {
+            XCTFail("second")
+            return
+        }
         let oldGeneration = first.snapshot.generation
         let baseline = HistoryPayload(family: "counter", data: Data("2".utf8))
         let newGeneration = try first.clearHistory(adopting: baseline)
@@ -173,20 +209,23 @@ import XCTest
         XCTAssertEqual(try second.historyPage(limit: 10).count, 1)
         let delivered = host.deliveries
         guard case .failure(let stale) = await first.submit(command) else {
-            return XCTFail("Old command was redelivered")
+            XCTFail("Old command was redelivered")
+            return
         }
         XCTAssertEqual(stale.cause, .identityConflict)
         let fresh = HistoryCommand(fingerprint: Data("fresh".utf8),
             payload: HistoryPayload(family: "counter", data: Data("2".utf8)))
         guard case .failure(let unbound) = await first.submit(fresh) else {
-            return XCTFail("Unbound command crossed generation reset")
+            XCTFail("Unbound command crossed generation reset")
+            return
         }
         XCTAssertEqual(unbound.cause, .identityConflict)
         XCTAssertEqual(host.deliveries, delivered)
         let attached = HistoryCommand(fingerprint: fresh.fingerprint,
             payload: fresh.members[0].payload, expectedGeneration: newGeneration)
         guard case .accepted = await first.submit(attached) else {
-            return XCTFail("Current generation command refused")
+            XCTFail("Current generation command refused")
+            return
         }
         XCTAssertEqual(host.deliveries, delivered + 1)
         try await first.close()
@@ -205,7 +244,10 @@ import XCTest
             workingIdentity: workingID, mode: .create, host: host)
         let command = HistoryCommand(fingerprint: Data("unresolved".utf8),
             payload: HistoryPayload(family: "counter", data: Data("1".utf8)))
-        guard case .failure = await engine.submit(command) else { return XCTFail("unresolved") }
+        guard case .failure = await engine.submit(command) else {
+            XCTFail("unresolved")
+            return
+        }
         XCTAssertThrowsError(try engine.clearHistory(adopting:
             HistoryPayload(family: "counter", data: Data("1".utf8))))
         let oldGeneration = engine.snapshot.generation
@@ -231,12 +273,18 @@ import XCTest
             scope: UUID(), workingIdentity: UUID(), mode: .create, host: host)
         let command = HistoryCommand(fingerprint: Data("first".utf8),
             payload: HistoryPayload(family: "counter", data: Data("1".utf8)))
-        guard case .accepted = await engine.submit(command) else { return XCTFail("first") }
+        guard case .accepted = await engine.submit(command) else {
+            XCTFail("first")
+            return
+        }
         try engine.setRecording(.off)
         _ = try engine.setRecording(.on,
             baseline: HistoryPayload(family: "counter", data: Data("1".utf8)))
         XCTAssertTrue(engine.snapshot.canUndo)
-        guard case .accepted = await engine.undo() else { return XCTFail("prior Undo was lost") }
+        guard case .accepted = await engine.undo() else {
+            XCTFail("prior Undo was lost")
+            return
+        }
         XCTAssertEqual(host.value, 0)
         try await engine.close()
     }
@@ -252,7 +300,10 @@ import XCTest
         try engine.setRecording(.off)
         let command = HistoryCommand(fingerprint: Data("pending".utf8),
             payload: HistoryPayload(family: "counter", data: Data("1".utf8)))
-        guard case .failure = await engine.submit(command) else { return XCTFail("pending") }
+        guard case .failure = await engine.submit(command) else {
+            XCTFail("pending")
+            return
+        }
         try await engine.close()
         let store = try await HistoryStore.open(at: url, workingIdentity: workingID, mode: .existing)
         let reopened = try await store.openScope(scope, mode: .existing, host: host)

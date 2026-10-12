@@ -21,6 +21,16 @@ module UndoKit
     def run(xcframework, run_id)
       xcframework = File.expand_path(xcframework)
       raise Assembly::VerificationError, "XCFramework directory is missing: #{xcframework}" unless File.directory?(xcframework)
+      provenance_path = File.join(File.dirname(xcframework), "provenance.json")
+      raise Assembly::VerificationError, "candidate provenance is missing: #{provenance_path}" unless File.file?(provenance_path)
+      producer = JSON.parse(File.read(provenance_path))
+      unless producer["sourceCommit"].to_s.match?(/\A[0-9a-f]{40}\z/) &&
+             producer["xcframeworkTreeSHA256"] == Assembly.tree_sha256(xcframework)
+        raise Assembly::VerificationError, "candidate provenance does not identify the selected XCFramework bytes"
+      end
+      producer_identity = {"producerSourceCommit" => producer.fetch("sourceCommit"),
+                           "producerProvenanceSHA256" => Digest::SHA256.file(provenance_path).hexdigest,
+                           "producerXCFrameworkTreeSHA256" => producer.fetch("xcframeworkTreeSHA256")}
       variants = Assembly.verify_xcframework!(xcframework, File.expand_path("../UndoKit/Resources/PrivacyInfo.xcprivacy", __dir__))
       toolchain = pinned_toolchain!
       mac_framework = File.join(xcframework, variants.fetch("macos").fetch("frameworkPath"))
@@ -41,11 +51,11 @@ module UndoKit
       lock_path = File.join(UndoKitBuild.directory("XCFramework"), "Build.lock")
       File.open(lock_path, File::RDWR | File::CREAT, 0o600) do |lock|
         lock.flock(File::LOCK_EX)
-        build_consumer!(evidence_root, build_root, xcframework, mac_framework, toolchain)
+        build_consumer!(evidence_root, build_root, xcframework, mac_framework, toolchain, producer_identity)
       end
     end
 
-    def build_consumer!(evidence_root, build_root, xcframework, original_framework, toolchain)
+    def build_consumer!(evidence_root, build_root, xcframework, original_framework, toolchain, producer_identity)
       project_directory = File.join(evidence_root, "ConsumerProject")
       source_directory = File.join(project_directory, "Sources")
       FileUtils.mkdir_p(source_directory)
@@ -112,10 +122,14 @@ module UndoKit
         raise Assembly::VerificationError, "binary consumer report #{key}=#{report[key].inspect}; expected #{value.inspect}" unless report[key] == value
       end
 
-      evidence = {
+      unless Assembly.tree_sha256(xcframework) == producer_identity.fetch("producerXCFrameworkTreeSHA256")
+        raise Assembly::VerificationError, "candidate bytes changed during consumer validation"
+      end
+      evidence = producer_identity.merge({
         "schemaVersion" => 1,
         "capturedAtUTC" => Time.now.utc.iso8601,
-        "sourceCommit" => git_output("rev-parse", "HEAD"),
+        "consumerHarnessSourceCommit" => git_output("rev-parse", "HEAD"),
+        "consumerHarnessDirtyPaths" => git_output("status", "--porcelain", "--untracked-files=all").lines.map(&:strip),
         "xcframeworkPath" => xcframework,
         "xcframeworkTreeSHA256" => Assembly.tree_sha256(xcframework),
         "consumer" => "independent macOS application linked to the assembled binary framework",
@@ -135,7 +149,7 @@ module UndoKit
         "runtimeReport" => report,
         "buildLog" => log,
         "runLog" => File.join(evidence_root, "binary-consumer-run.log")
-      }
+      })
       path = File.join(evidence_root, "BinaryConsumerEvidence.json")
       File.write(path, JSON.pretty_generate(evidence) + "\n")
       puts "Independent binary consumer passed: #{path}"

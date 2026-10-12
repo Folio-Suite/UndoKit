@@ -9,6 +9,23 @@ require_relative "assembly"
 class XCFrameworkAssemblyContractTest < Minitest::Test
   Assembly = UndoKit::XCFrameworkAssembly
 
+  def test_consumer_command_refuses_missing_or_mismatched_producer_provenance
+    Dir.mktmpdir("undokit-provenance-") do |temporary|
+      bundle = File.join(temporary, "UndoKit.xcframework")
+      FileUtils.mkdir_p(bundle)
+      command = [RbConfig.ruby, File.expand_path("../check-binary-consumer.rb", __dir__),
+                 "--xcframework", bundle]
+      output, status = Open3.capture2e(*command)
+      refute status.success?
+      assert_includes output, "candidate provenance is missing"
+      File.write(File.join(temporary, "provenance.json"), JSON.generate(
+        "sourceCommit" => "a" * 40, "xcframeworkTreeSHA256" => "wrong-artifact"))
+      output, status = Open3.capture2e(*command)
+      refute status.success?
+      assert_includes output, "does not identify the selected XCFramework bytes"
+    end
+  end
+
   def test_archive_matrix_keeps_device_and_simulator_separate
     assert_equal [
       ["macos", "generic/platform=macOS", %w[arm64 x86_64], "14.0"],

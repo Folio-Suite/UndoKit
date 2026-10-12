@@ -48,6 +48,9 @@ framework, opens a history store through UndoKit's public API, submits a
 grouped Command, performs Undo and Redo, closes and reopens the store, and
 records the host receipts. Its evidence includes the selected runtime binary,
 model and privacy-manifest hashes, toolchain, host OS, and the consumer report.
+It verifies the bundle against its adjacent producer provenance and records
+the producer source separately from the consumer-harness source, so testing an
+older candidate from a newer checkout cannot misattribute the binary.
 The generated app receives an ad-hoc local signature so macOS can launch it;
 the XCFramework itself remains unsigned. Consumer evidence is retained beside
 the candidate.

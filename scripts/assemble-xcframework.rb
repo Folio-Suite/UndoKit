@@ -165,7 +165,8 @@ module UndoKit
     end
 
     def validate_archive_versions!(framework, options)
-      info = Assembly.capture!("plutil", "-convert", "json", "-o", "-", File.join(framework, "Info.plist"))
+      info = Assembly.capture!("plutil", "-convert", "json", "-o", "-",
+                               File.join(Assembly.framework_resource_root(framework), "Info.plist"))
       bundle = JSON.parse(info)
       unless bundle.fetch("CFBundleShortVersionString") == options.fetch(:version) &&
              bundle.fetch("CFBundleVersion").to_s == options.fetch(:build_number)

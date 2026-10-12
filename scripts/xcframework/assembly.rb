@@ -125,7 +125,8 @@ module UndoKit
         ensure_file!(path, "#{architecture} textual Swift interface")
         [interface, Digest::SHA256.file(path).hexdigest]
       end
-      ensure_file!(File.join(framework, "Modules", "module.modulemap"), "framework module map")
+      # This Swift-only framework intentionally omits the Objective-C header and
+      # Clang module map. Its distribution contract is the Swift interfaces.
 
       resources = framework_resource_root(framework)
       model = File.join(resources, "History.momd")

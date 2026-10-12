@@ -165,11 +165,12 @@ import MachO
         observations.append("During pending document acceptance, actual enabled toolbar controls follow focused local UITextView Undo/Redo; returning focus to the document restores the semantic barrier.")
         var peer: NotesSceneOwner?
         if UIApplication.shared.supportsMultipleScenes {
+            let existingScenes = Set(app.owners.keys)
             app.requestNewScene()
             try await waitUntil("Actual iPad scene activation failed; \(app.events)") {
-                app.owners.values.contains { $0.id != first.id && $0.state == .active && $0.scene?.activationState == .foregroundActive }
+                app.owners.values.contains { !existingScenes.contains($0.id) && $0.state == .active && $0.scene?.activationState == .foregroundActive }
             }
-            peer = app.owners.values.first { $0.id != first.id && $0.state == .active && $0.scene?.activationState == .foregroundActive }
+            peer = app.owners.values.first { !existingScenes.contains($0.id) && $0.state == .active && $0.scene?.activationState == .foregroundActive }
             guard let peer, let peerController = peer.controller, let peerSession = peer.session else {
                 throw CheckFailure.observation("Second UIWindowScene lacks its independent owner")
             }

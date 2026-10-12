@@ -151,3 +151,14 @@ then failed at the native framework build. Its diagnostic filter omitted the
 underlying error. The consumer runner now emits the complete output of a failed
 command so fresh CI retains the actual cause; no speculative build-setting or
 plugin-trust change is included.
+
+Fresh consumer runs also passed all eight route/platform/configuration cases
+after cleanup, with `alpha-beta`, three receipts and six member applications in
+every report. Retained local evidence:
+
+- Debug: `DerivedData/Consumers/kept-20261012T052158Z-22ff70/ConsumerEvidence.json`
+- Release: `DerivedData/Consumers/kept-20261012T052409Z-0a4143/ConsumerEvidence.json`
+
+These runs cover the reviewed Swift cleanup; the subsequent runner change only
+expands output on failure. Separate follow-up standards/spec reviews of that
+runner diagnostic change and this evidence record found no actionable issues.

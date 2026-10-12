@@ -244,7 +244,20 @@ Dir.mktmpdir("undokit-consumer-", temporary_parent) do |temporary|
   selected_simulator = nil
   simulator_created = false
   simulator_booted_here = false
+  simulator_evidence = []
   at_exit do
+    simulator_evidence.each do |entry|
+      system("xcrun", "simctl", "terminate", entry.fetch(:device), entry.fetch(:bundle), out: File::NULL, err: File::NULL)
+      directory = entry.fetch(:directory)
+      next unless File.directory?(directory)
+      if options.keep
+        retained = File.join(temporary_parent, "simulator-#{Time.now.utc.strftime('%Y%m%dT%H%M%SZ')}-#{SecureRandom.uuid}")
+        FileUtils.cp_r(directory, retained)
+        puts "Retained simulator stores and reports: #{retained}"
+      end
+      # This exact UUID directory was allocated by this invocation, not a user container.
+      FileUtils.rm_rf(directory)
+    end
     if simulator_created && selected_simulator
       system("xcrun", "simctl", "delete", selected_simulator["udid"], out: File::NULL, err: File::NULL)
     elsif simulator_booted_here && selected_simulator
@@ -369,6 +382,7 @@ Dir.mktmpdir("undokit-consumer-", temporary_parent) do |temporary|
         # Every installed launch gets fresh stores and reports, including reused devices.
         evidence_directory = File.join(container, "Library", "Application Support",
                                        "UndoKitConsumerEvidence-#{evidence_route}-#{SecureRandom.uuid}")
+        simulator_evidence << {device: selected_simulator["udid"], bundle: bundle_id, directory: evidence_directory}
         run!("xcrun", "simctl", "launch", "--terminate-running-process", selected_simulator["udid"], bundle_id,
              env: {"SIMCTL_CHILD_UNDOkit_CONSUMER_ROOT" => evidence_directory})
         report_path = nil

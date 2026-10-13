@@ -118,7 +118,11 @@ UIKit controls and an independent durable host. They observe coarse receipts,
 live Undo/Redo at baseline, active rejection/no-change and restored-decision gates,
 marked/editor-switch boundaries, pending delegate/inverse barriers, Debug exact
 reconciliation, reopen and weak controller/binding/control teardown while the
-lease remains blocked. Unexpected facade registrations retain evidence across
+lease remains blocked. Injected protected-data false/true and budget expiry during
+actual delayed delivery verify UI hiding, retained exclusive ownership, complete
+closure and no replay. Moving closed storage verifies refusal without replacement
+and reopening of the original scope after return; these are separate from real
+Settings transitions and do not claim physical lock or OS expiry qualification. Unexpected facade registrations retain evidence across
 disconnect until explicit certification. CheckStage.txt localizes failed cases. On iPad they
 request a second actual `UIWindowScene`, edit its independent scope while the
 first outcome waits, and verify peer focus survives. The runner activates

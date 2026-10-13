@@ -191,6 +191,10 @@ import MachO
         observations.append("Uncertain finalization preserves text/local history and blocks inverses until exact accepted intent is recovered once.")
         #endif
 
+        try await injectedLifecycleChecks(first: first, controller: controller, binding: binding,
+            session: session, lease: lease, app: app)
+        observations.append("Injected protected-data and budget-expiry policy during actual delayed delivery hides content, blocks editing, retains exclusive ownership, then closes and reopens exactly one accepted effect. This is not physical lock or OS expiry proof.")
+        observations.append("Moved document storage refuses existing-only reopening without replacement; restoring the original directory preserves scope, content, and receipt bytes. Protected-data false/true separately closes, hides, and reopens without replay.")
         stage("durable reopen", app: app)
         let beforeClose = try await lease.read()
         _ = await first.close(reason: "check reopen"); await first.openIfAvailable()
@@ -230,6 +234,78 @@ import MachO
                 "No hardware shortcuts, physical IME/device, device-lock, or forced-termination qualification."])
         try JSONEncoder().encode(report).write(to: app.root.appendingPathComponent("Report.json"), options: .atomic)
         exit(EXIT_SUCCESS)
+    }
+    static func injectedLifecycleChecks(first: NotesSceneOwner, controller: NotesUIKitController,
+        binding: NativeHistoryUIKitBinding<NotesDocumentLease>, session: NativeHistorySession<NotesDocumentLease>,
+        lease: NotesDocumentLease, app: NotesUIKitApp) async throws {
+        stage("injected protected-data and expiry", app: app)
+        let beforeDelivery = try await lease.read().applicationCount
+        let scope = lease.history?.snapshot.scope
+        try require(scope != nil, "Lifecycle check lacks an owned scope")
+        await lease.delayNextDelivery()
+        let delayed = Task { await binding.applyDraft(Note(title: "Lifecycle", body: "Accepted during closure")) }
+        let deadline = Date().addingTimeInterval(30)
+        while !(await lease.isDeliveryDelayed()) {
+            guard Date() < deadline else { throw CheckFailure.observation("Lifecycle delivery gate did not begin") }
+            try await pause()
+        }
+        first.setProtectedDataAvailable(false)
+        try await waitUntil("Injected protected-data closure was not requested") {
+            first.events.contains("Closure requested: protected data unavailable") && !binding.isAvailable
+        }
+        first.backgroundExpired()
+        try require(controller.view.isHidden && lease.history != nil && session.status.phase != .closed
+            && app.sessions.session(for: first.directory) === session && !binding.undoManager.canUndo,
+            "Injected expiry released the pending owner, exposed protected content, or enabled inverse input")
+        try require(!binding.textView(controller.bodyEditor, shouldChangeTextIn: NSRange(location: 0, length: 0), replacementText: "blocked"),
+            "Protected pending state allowed native editing")
+        let duplicate = NotesDocumentLease(directory: first.directory)
+        do {
+            try await duplicate.open(.existing)
+            try await duplicate.close()
+            throw CheckFailure.observation("Pending protected owner admitted another writer")
+        } catch let failure as HistoryFailure {
+            try require(failure.cause == .busy, "Unexpected duplicate-writer refusal")
+            try await duplicate.close()
+        }
+        await lease.resumeDelivery(); _ = await delayed.value
+        try await waitUntil("Protected-data drain did not complete") { session.status.phase == .closed && lease.history == nil }
+        first.setProtectedDataAvailable(true)
+        try await waitUntil("Protected-data restoration did not reopen") { session.status.phase == .ready && !controller.view.isHidden }
+        let accepted = try await lease.read()
+        try require(accepted.note == Note(title: "Lifecycle", body: "Accepted during closure")
+            && accepted.applicationCount == beforeDelivery + 1 && lease.history?.snapshot.scope == scope,
+            "Injected policy reopening lost identity or replayed the accepted outcome")
+
+        stage("moved storage refusal and return", app: app)
+        let evidenceURL = first.directory.appendingPathComponent("Note.json")
+        let receiptBytes = try Data(contentsOf: evidenceURL)
+        await first.setStorageAvailable(false)
+        try require(session.status.phase == .closed && lease.history == nil, "Storage gate retained an open writer")
+        let displaced = first.directory.appendingPathExtension("unavailable")
+        try FileManager.default.moveItem(at: first.directory, to: displaced)
+        await first.setStorageAvailable(true)
+        try require(session.status.phase == .blocked && !FileManager.default.fileExists(atPath: first.directory.path),
+            "Unavailable history was replaced by a new document")
+        try FileManager.default.moveItem(at: displaced, to: first.directory)
+        await first.openIfAvailable()
+        try require(session.status.phase == .ready && lease.history?.snapshot.scope == scope,
+            "Restored original storage did not reopen the retained scope")
+        let returned = try await lease.read()
+        let returnedBytes = try Data(contentsOf: evidenceURL)
+        try require(matches(returned, accepted) && returnedBytes == receiptBytes,
+            "Storage return changed accepted content or receipt evidence")
+
+        stage("injected protected-data false and true", app: app)
+        first.setProtectedDataAvailable(false)
+        try await waitUntil("Protected-data gate did not close") { session.status.phase == .closed && lease.history == nil }
+        await first.openIfAvailable()
+        try require(controller.view.isHidden && session.status.phase == .closed && !binding.isAvailable,
+            "Protected-data false reopened or exposed protected UI")
+        first.setProtectedDataAvailable(true)
+        try await waitUntil("Protected-data true did not restore") { session.status.phase == .ready && !controller.view.isHidden }
+        try require(matches(try await lease.read(), accepted) && lease.history?.snapshot.scope == scope,
+            "Protected-data transition changed scope or replayed accepted content")
     }
     static func unknownRegistrationCheck(root: URL) async throws {
         let directory = root.appendingPathComponent("UnknownRegistration")

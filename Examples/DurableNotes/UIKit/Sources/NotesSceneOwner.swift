@@ -42,6 +42,7 @@ import UndoKit
     func openIfAvailable() async {
         guard foreground, protectedData, storageAvailable, let app else { return }
         if let session {
+            if session.status.phase == .blocked { await session.close() }
             if session.status.phase == .closed { await app.sessions.reopen(session) }
             controller?.lifecycleChanged()
             return

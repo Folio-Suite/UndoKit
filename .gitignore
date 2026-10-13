@@ -18,6 +18,7 @@
 build/
 /Build/
 DerivedData/
+/DerivedData
 /.derived-data-log-*
 xcuserdata/
 *.xcuserstate

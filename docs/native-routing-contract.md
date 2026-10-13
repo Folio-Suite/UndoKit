@@ -7,11 +7,19 @@ SPDX-License-Identifier: MIT
 
 Accepted by the maintainer on 2026-09-29 through
 [Folio issue #44](https://github.com/Folio-Suite/Folio/issues/44).
+The maintainer's 2026-10-12 [UIKit live/durable Undo decision](adr/0006-uikit-live-and-durable-undo.md)
+revises the persisted typing granularity and supported UIKit binding ownership
+below. Earlier advanced-router and other-platform obligations remain in force.
+
 This contract extends [durable acceptance](durable-acceptance-contract.md),
 [history retention](history-retention-contract.md) and the
 [typed host interface](typed-interface-contract.md).
-It specifies required behavior. The native bridge and durable history engine
-remain unimplemented; interface compilation does not establish native behavior.
+It records the original proof requirements. The durable engine and portable
+native session foundation are now implemented; the supported UIKit original-manager
+facade is documented in [UIKit binding](uikit-history-binding.md) and
+[ADR 0006](adr/0006-uikit-live-and-durable-undo.md). Their actual validation and
+remaining platform/input limits are recorded separately. Interface compilation
+alone does not establish native behavior.
 
 ## Framework guarantees and host obligations
 
@@ -29,8 +37,14 @@ The host supplies a thin adapter with explicit application policy.
 | Interpret payloads, validate and compensate atomically, preserve authoritative outcomes | Host under the durable-acceptance contract |
 | Refresh affected views and choose navigation/reveal behavior | Host |
 
-UndoKit does not interpret affected-content metadata or manipulate application
-views. Host obligations are part of the public integration contract and must
+The advanced router leaves these controls to the host. For a supported UIKit
+binding, UndoKit owns generic control settlement, barriers, draft preservation
+and connection lifecycle through the host's draft mapping. The host retains
+semantic validation, scope selection, feedback and navigation policy.
+
+UndoKit does not interpret affected-content metadata. Framework-owned UIKit
+bindings may read and render connected native control values under that explicit
+mapping; they must preserve native selection/composition and avoid stealing focus. Host obligations are part of the public integration contract and must
 appear in eventual normative DocC, with examples and failure handling.
 
 ## Invocation, ordering and the editing barrier
@@ -43,7 +57,12 @@ ordered submission queue remains available under its existing contract.
 
 Before submission, the host settles the current native editing group according
 to the control's editing rules and submits the resulting Command. Preserve
-native typing coalescing and marked-text composition rules. Queue Undo after
+marked-text composition rules. Native typing coalescing remains a live-editing
+concern; supported UIKit durable bindings persist the editing transactions in
+[ADR 0006](adr/0006-uikit-live-and-durable-undo.md), not every local typing step.
+A binding must distinguish live local Undo from durable group Undo and prove
+its routing and retirement boundaries; losing live typing Undo is not implied
+permission to claim full native integration. Queue Undo after
 prior edits and resolve its target when it reaches the head of the queue;
 a menu's earlier availability snapshot cannot select a stale target.
 
@@ -135,8 +154,10 @@ registrations that may represent user work. A bridge mismatch alone does not
 establish store corruption, an Unresolved host outcome or suspension of unrelated
 scopes.
 
-The concrete native mechanism remains subject to proof: an UndoManager subclass,
-command-routing adapter or other implementation has not been selected. Native
+The original contract left the mechanism subject to proof. UIKit now uses a
+getter-only standard-control adapter with an original-manager facade; the linked
+binding contract defines live versus durable routing. This does not qualify every
+native input path or select the supported AppKit binding mechanism. Native
 synchronous callbacks cannot claim completed asynchronous acceptance merely by
 starting a task. Native stack changes, notifications, action names and document
 change counts must reflect the agreed completion boundary. The proof must observe

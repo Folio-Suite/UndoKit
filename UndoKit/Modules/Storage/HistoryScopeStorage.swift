@@ -67,7 +67,12 @@ import Foundation
         case .retention: return false
         }
         return context.insertedObjects.union(context.updatedObjects).contains { object in
-            (object as? HistoryTransactionRecord)?.stage == stage
+            guard let transaction = object as? HistoryTransactionRecord, transaction.stage == stage else { return false }
+            if let identity = HistoryEngine.injectedFinalizationIdentity {
+                return ObjectIdentifier(self) == identity.owner && scope == identity.scope
+                    && transaction.commandID == identity.command.uuidString
+            }
+            return true
         }
     }
     #endif

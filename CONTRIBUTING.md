@@ -41,8 +41,9 @@ when changing imported template material.
 ## Build and validation
 
 Use Xcode 27.0 (27A266a), Apple Swift 6.4 and Swift 6 language mode with complete
-concurrency checking. Run `ruby scripts/check-toolchain.rb`, `swift test` and
-`swift test -c release`. Source/project targets explicitly use macOS 14 and
+concurrency checking. Run `ruby scripts/check-toolchain.rb`, then
+`scripts/test-package.sh` and `scripts/test-package.sh -c release`.
+Source/project targets explicitly use macOS 14 and
 iOS/iPadOS 17 floors; macOS and simulator products cover arm64/x86_64, and
 device products arm64. These settings are declarations, not hardware qualification.
 
@@ -52,8 +53,23 @@ independent package/native consumers, grouped transactions, host receipts,
 Undo/Redo and reopen on macOS and an installed iOS simulator app. The native
 macOS framework must contain both architectures and the installed consumers
 must carry the compiled model and privacy manifest. Build output belongs under
-the repository's ignored `DerivedData/`; the consumer runner uses this location
-and `--keep` retains its evidence there.
+`~/Library/Developer/Xcode/DerivedData/UndoKit`, shared across checkouts.
+Set `UNDOKIT_DERIVED_DATA` to override this root (for example on CI).
+The package runner reuses a locked `Package` scratch directory; concurrent
+package runs wait for its owner rather than sharing mutable build state.
+Consumer runs reuse locked build databases under `Consumers/Build` and remove
+temporary stores/projects on completion; `--keep` retains stores, generated
+projects and reports, without duplicating the shared build caches. Build-product
+paths in reports describe that run and may be overwritten by the next run.
+Use Xcode's default Derived Data location in workspace settings. Avoid
+checkout-local build caches and retain large consumer artifacts only when needed.
+To use a particular installed iOS runtime, add `--device UDID` with `--platform
+both` or `ios-simulator`. The consumer runner refuses other booted simulators,
+boots the selected device only when needed, and shuts it down on exit only if
+it booted it. It never deletes a supplied device. Each launch uses fresh isolated
+stores and reports. Without `--device`, CI retains its latest-runtime selection
+and creates and deletes its own simulator. For the tracked iPadOS 27 simulator
+failure (FB25165352), use the available 26.5 device for local runtime checks.
 CI repeats both configurations. Debug-only injected failure cases do not exist
 in Release; all ordinary durability and consumer cases run in both. Floor-OS,
 Intel runtime, physical device and binary distribution acceptance remain later

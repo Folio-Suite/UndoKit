@@ -48,6 +48,6 @@ jobs:
       - name: Test package
         env:
           CONFIGURATION: ${{ matrix.configuration }}
-        run: swift test --configuration "$(echo "$CONFIGURATION" | tr '[:upper:]' '[:lower:]')"
+        run: scripts/test-package.sh --configuration "$(echo "$CONFIGURATION" | tr '[:upper:]' '[:lower:]')"
       - name: Run independent package and native consumers on macOS and iOS simulator
         run: scripts/check-consumer.sh --route both --platform both --configuration ${{ matrix.configuration }}

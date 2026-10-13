@@ -9,17 +9,20 @@ require "json"
 require "securerandom"
 require "digest"
 require "time"
+require_relative "build-support"
 
-Options = Struct.new(:route, :platform, :configuration, :keep, keyword_init: true)
+Options = Struct.new(:route, :platform, :configuration, :keep, :device, keyword_init: true)
 options = Options.new(route: "package", platform: "macos", configuration: "Debug", keep: false)
 OptionParser.new do |parser|
   parser.banner = "Usage: scripts/check-consumer.sh [options]"
   parser.on("--route ROUTE", %w[package native both], "package, native, or both (default package)") { |v| options.route = v }
   parser.on("--platform PLATFORM", %w[macos ios-simulator both], "macos, ios-simulator, or both (default macos)") { |v| options.platform = v }
   parser.on("--configuration CONFIG", %w[Debug Release], "Debug or Release (default Debug)") { |v| options.configuration = v }
+  parser.on("--device UDID", "reuse an available iOS simulator; refuse other booted simulators") { |v| options.device = v }
   parser.on("--keep", "retain generated projects, builds, stores, and reports") { options.keep = true }
   parser.on("-h", "--help") { puts parser; exit 0 }
 end.parse!
+abort "--device requires --platform ios-simulator or both" if options.device && options.platform == "macos"
 
 ROOT = File.expand_path("..", __dir__)
 FIXTURE = File.join(__dir__, "consumer", "HostFixture.swift")
@@ -60,12 +63,13 @@ def run!(*command, env: {}, label: nil)
     File.write(log, output)
     warn "Full command output: #{log}"
     if command[1, 2] == ["simctl", "launch"]
-      simulator_log = Open3.capture2e("xcrun", "simctl", "spawn", command[3], "log", "show", "--last", "5m",
+      simulator_id = command[3] == "--terminate-running-process" ? command[4] : command[3]
+      simulator_log = Open3.capture2e("xcrun", "simctl", "spawn", simulator_id, "log", "show", "--last", "5m",
                                       "--style", "compact", "--predicate", "process == 'Consumer'").first
       File.write(File.join($consumer_temporary, "simulator-launch.log"), simulator_log)
     end
     if $consumer_keep
-      failed_evidence = File.join(ROOT, "DerivedData", "Consumers", "failed-#{Time.now.utc.strftime('%Y%m%dT%H%M%SZ')}-#{SecureRandom.hex(3)}")
+      failed_evidence = File.join(UndoKitBuild.directory("Consumers"), "failed-#{Time.now.utc.strftime('%Y%m%dT%H%M%SZ')}-#{SecureRandom.hex(3)}")
       FileUtils.cp_r($consumer_temporary, failed_evidence)
       warn "Failed consumer artifacts and reports retained: #{failed_evidence}"
     end
@@ -212,8 +216,13 @@ def generated_project(directory, root, route, platform, configuration, framework
   path
 end
 
-temporary_parent = File.join(ROOT, "DerivedData", "Consumers")
+temporary_parent = UndoKitBuild.directory("Consumers")
 FileUtils.mkdir_p(temporary_parent)
+# Reuse build databases across runs/worktrees; serialize their mutation.
+consumer_lock = File.open(File.join(temporary_parent, "build.lock"), File::RDWR | File::CREAT, 0o600)
+consumer_lock.flock(File::LOCK_EX)
+build_root = UndoKitBuild.directory("Consumers", "Build")
+at_exit { consumer_lock.close }
 Dir.mktmpdir("undokit-consumer-", temporary_parent) do |temporary|
   $consumer_temporary = temporary
   $consumer_keep = options.keep
@@ -234,9 +243,25 @@ Dir.mktmpdir("undokit-consumer-", temporary_parent) do |temporary|
   }
   selected_simulator = nil
   simulator_created = false
+  simulator_booted_here = false
+  simulator_evidence = []
   at_exit do
+    simulator_evidence.each do |entry|
+      system("xcrun", "simctl", "terminate", entry.fetch(:device), entry.fetch(:bundle), out: File::NULL, err: File::NULL)
+      directory = entry.fetch(:directory)
+      next unless File.directory?(directory)
+      if options.keep
+        retained = File.join(temporary_parent, "simulator-#{Time.now.utc.strftime('%Y%m%dT%H%M%SZ')}-#{SecureRandom.uuid}")
+        FileUtils.cp_r(directory, retained)
+        puts "Retained simulator stores and reports: #{retained}"
+      end
+      # This exact UUID directory was allocated by this invocation, not a user container.
+      FileUtils.rm_rf(directory)
+    end
     if simulator_created && selected_simulator
       system("xcrun", "simctl", "delete", selected_simulator["udid"], out: File::NULL, err: File::NULL)
+    elsif simulator_booted_here && selected_simulator
+      system("xcrun", "simctl", "shutdown", selected_simulator["udid"], out: File::NULL, err: File::NULL)
     end
   end
 
@@ -245,16 +270,31 @@ Dir.mktmpdir("undokit-consumer-", temporary_parent) do |temporary|
       app_route = route == "native" || platform == "ios-simulator"
       if platform == "ios-simulator" && !selected_simulator
         runtimes = JSON.parse(`xcrun simctl list runtimes --json`).fetch("runtimes")
-        runtime = runtimes.select { |entry| entry["isAvailable"] && entry["identifier"].start_with?("com.apple.CoreSimulator.SimRuntime.iOS-") }
-          .max_by { |entry| entry.fetch("version", "0").scan(/\d+/).map(&:to_i) }
-        device_types = JSON.parse(`xcrun simctl list devicetypes --json`).fetch("devicetypes")
-        device_type = device_types.find { |entry| entry["name"] == "iPhone 17" } || device_types.find { |entry| entry["name"].start_with?("iPhone") }
-        raise "no available iOS runtime or iPhone simulator device type found" unless runtime && device_type
-        udid = `xcrun simctl create "UndoKit Consumer #{SecureRandom.hex(4)}" #{device_type['identifier']} #{runtime['identifier']}`.strip
-        raise "could not create an owned iOS simulator" unless $?.success? && !udid.empty?
-        selected_simulator = {"udid" => udid, "name" => "UndoKit Consumer", "runtimeIdentifier" => runtime["identifier"], "runtimeVersion" => runtime["version"]}
-        simulator_created = true
-        puts "Owned iOS simulator: #{device_type['name']} / #{runtime['name']} (#{runtime['version']}) / #{udid}"
+        if options.device
+          devices = JSON.parse(run!("xcrun", "simctl", "list", "devices", "available", "--json")).fetch("devices")
+          runtime_id, entries = devices.find { |_key, values| values.any? { |entry| entry["udid"] == options.device } }
+          device = entries&.find { |entry| entry["udid"] == options.device }
+          runtime = runtimes.find { |entry| entry["identifier"] == runtime_id && entry["isAvailable"] }
+          unless device && device["isAvailable"] && runtime && runtime_id.start_with?("com.apple.CoreSimulator.SimRuntime.iOS-")
+            raise "requested simulator is not an available iOS device: #{options.device}"
+          end
+          other = devices.values.flatten.find { |entry| entry["state"] == "Booted" && entry["udid"] != options.device }
+          raise "another simulator is booted: #{other['udid']}; shut it down before --device validation" if other
+          selected_simulator = {"udid" => device["udid"], "name" => device["name"], "runtimeIdentifier" => runtime_id,
+                                "runtimeVersion" => runtime["version"], "reused" => true}
+          puts "Selected existing iOS simulator: #{device['name']} / #{runtime['name']} / #{device['udid']}"
+        else
+          runtime = runtimes.select { |entry| entry["isAvailable"] && entry["identifier"].start_with?("com.apple.CoreSimulator.SimRuntime.iOS-") }
+            .max_by { |entry| entry.fetch("version", "0").scan(/\d+/).map(&:to_i) }
+          device_types = JSON.parse(`xcrun simctl list devicetypes --json`).fetch("devicetypes")
+          device_type = device_types.find { |entry| entry["name"] == "iPhone 17" } || device_types.find { |entry| entry["name"].start_with?("iPhone") }
+          raise "no available iOS runtime or iPhone simulator device type found" unless runtime && device_type
+          udid = `xcrun simctl create "UndoKit Consumer #{SecureRandom.hex(4)}" #{device_type['identifier']} #{runtime['identifier']}`.strip
+          raise "could not create an owned iOS simulator" unless $?.success? && !udid.empty?
+          selected_simulator = {"udid" => udid, "name" => "UndoKit Consumer", "runtimeIdentifier" => runtime["identifier"], "runtimeVersion" => runtime["version"]}
+          simulator_created = true
+          puts "Owned iOS simulator: #{device_type['name']} / #{runtime['name']} (#{runtime['version']}) / #{udid}"
+        end
       end
       scratch = File.join(temporary, "#{route}-#{platform}")
       FileUtils.mkdir_p(scratch)
@@ -273,10 +313,10 @@ Dir.mktmpdir("undokit-consumer-", temporary_parent) do |temporary|
         report = File.join(evidence_root, "#{route}-#{platform}-report.json")
         root = File.join(evidence_root, "#{route}-#{platform}-host")
         FileUtils.mkdir_p(root)
-        build = File.join(temporary, "package-build")
+        build = File.join(build_root, "Package")
         run!("swift", "run", "--configuration", options.configuration.downcase, "--package-path", scratch,
              "--scratch-path", build, "Consumer", env: {"UNDOkit_CONSUMER_ROOT" => root, "UNDOkit_CONSUMER_REPORT" => report,
-               "CLANG_MODULE_CACHE_PATH" => File.join(temporary, "clang-module-cache")},
+               "CLANG_MODULE_CACHE_PATH" => File.join(build_root, "ModuleCache")},
              label: "SwiftPM source consumer: #{platform} #{options.configuration}")
         puts "Evidence: #{JSON.parse(File.read(report)).inspect}"
         resource_paths = verify_resources!(build, "package")
@@ -289,7 +329,7 @@ Dir.mktmpdir("undokit-consumer-", temporary_parent) do |temporary|
 
       framework_path = nil
       if route == "native"
-        derived = File.join(temporary, "native-derived-#{platform}")
+        derived = File.join(build_root, "Native")
         destination = platform == "ios-simulator" ? "generic/platform=iOS Simulator" : "generic/platform=macOS"
         command = ["xcodebuild", "-project", File.join(ROOT, "UndoKit.xcodeproj"), "-scheme", "UndoKit",
                    "-configuration", options.configuration, "-destination", destination,
@@ -301,10 +341,8 @@ Dir.mktmpdir("undokit-consumer-", temporary_parent) do |temporary|
         command.insert(1, "-skipPackagePluginValidation") if ENV["GITHUB_ACTIONS"] == "true"
         run!(*command, label: "Native framework build: #{platform} universal").
           tap { |output| raise "expected native framework build output" if output.empty? }
-        products = Dir.glob(File.join(derived, "Build", "Products", "**", "UndoKit.framework"))
-        framework_path = products.find do |path|
-          platform == "ios-simulator" ? path.include?("iphonesimulator") : !path.include?("iphonesimulator")
-        end
+        product_configuration = options.configuration + (platform == "ios-simulator" ? "-iphonesimulator" : "")
+        framework_path = File.join(derived, "Build", "Products", product_configuration, "UndoKit.framework")
         raise "native framework missing under #{File.join(derived, 'Build', 'Products')}" unless framework_path && File.directory?(framework_path)
         architectures, lipo_status = Open3.capture2("lipo", "-archs", File.join(framework_path, "UndoKit"))
         raise "could not inspect native framework architectures" unless lipo_status.success?
@@ -315,32 +353,40 @@ Dir.mktmpdir("undokit-consumer-", temporary_parent) do |temporary|
 
       project = generated_project(scratch, ROOT, route == "native" ? "native-framework" : "source-package",
                                   platform, options.configuration, framework_path)
-      derived = File.join(temporary, "consumer-derived-#{route}-#{platform}")
+      derived = File.join(build_root, "Host")
       destination = platform == "ios-simulator" ? "id=#{selected_simulator['udid']}" : "generic/platform=macOS"
       run!("xcodebuild", "-project", project, "-scheme", "Consumer", "-configuration", options.configuration,
            "-destination", destination, "-derivedDataPath", derived,
            "CODE_SIGNING_ALLOWED=YES", "CODE_SIGN_IDENTITY=-", "build",
            label: "Independent #{route} app build: #{platform} #{options.configuration}")
-      app_candidates = Dir.glob(File.join(derived, "Build", "Products", "**", "Consumer.app"))
-      app = app_candidates.find do |path|
-        platform == "ios-simulator" ? path.include?("iphonesimulator") : !path.include?("iphonesimulator")
-      end
+      product_configuration = options.configuration + (platform == "ios-simulator" ? "-iphonesimulator" : "")
+      app = File.join(derived, "Build", "Products", product_configuration, "Consumer.app")
       raise "consumer app missing under #{File.join(derived, 'Build', 'Products')}" unless app && File.directory?(app)
       resource_paths = verify_resources!(app, route)
       puts "Installed #{route} resources: #{resource_paths.inspect}"
       macho_evidence = verify_macho!(app, platform)
       bundle_id = "org.foliosuite.undokit.consumer.#{route == 'native' ? 'nativeframework' : 'package'}.#{platform.gsub('-', '')}"
       if platform == "ios-simulator"
-        booted = `xcrun simctl list devices booted --json`
-        run!("xcrun", "simctl", "boot", selected_simulator["udid"]) unless booted.include?(selected_simulator["udid"])
+        booted = JSON.parse(run!("xcrun", "simctl", "list", "devices", "booted", "--json")).fetch("devices").values.flatten
+        if options.device && booted.any? { |entry| entry["udid"] != selected_simulator["udid"] }
+          raise "another simulator became booted; refusing to start a second simulator"
+        end
+        unless booted.any? { |entry| entry["udid"] == selected_simulator["udid"] }
+          simulator_booted_here = true
+          run!("xcrun", "simctl", "boot", selected_simulator["udid"])
+        end
         run!("xcrun", "simctl", "bootstatus", selected_simulator["udid"], "-b")
         run!("xcrun", "simctl", "install", selected_simulator["udid"], app)
-        run!("xcrun", "simctl", "launch", selected_simulator["udid"], bundle_id)
+        container = run!("xcrun", "simctl", "get_app_container", selected_simulator["udid"], bundle_id, "data").strip
+        evidence_route = route == "native" ? "native-framework" : "source-package"
+        # Every installed launch gets fresh stores and reports, including reused devices.
+        evidence_directory = File.join(container, "Library", "Application Support",
+                                       "UndoKitConsumerEvidence-#{evidence_route}-#{SecureRandom.uuid}")
+        simulator_evidence << {device: selected_simulator["udid"], bundle: bundle_id, directory: evidence_directory}
+        run!("xcrun", "simctl", "launch", "--terminate-running-process", selected_simulator["udid"], bundle_id,
+             env: {"SIMCTL_CHILD_UNDOkit_CONSUMER_ROOT" => evidence_directory})
         report_path = nil
         60.times do
-          container = `xcrun simctl get_app_container #{selected_simulator['udid']} #{bundle_id} data 2>/dev/null`.strip
-          evidence_route = route == "native" ? "native-framework" : "source-package"
-          evidence_directory = File.join(container, "Library", "Application Support", "UndoKitConsumerEvidence-#{evidence_route}")
           candidate = File.join(evidence_directory, "ConsumerReport.json")
           failure = File.join(evidence_directory, "ConsumerFailure.txt")
           raise "simulator consumer failed: #{File.read(failure)}" if File.file?(failure)
@@ -387,6 +433,6 @@ Dir.mktmpdir("undokit-consumer-", temporary_parent) do |temporary|
     FileUtils.cp_r(temporary, destination)
     puts "Retained consumer evidence: #{destination}"
   else
-    puts "Consumer harness passed; owned temporary stores and generated builds were removed"
+    puts "Consumer harness passed; temporary stores/projects removed; shared build cache retained at #{build_root}"
   end
 end

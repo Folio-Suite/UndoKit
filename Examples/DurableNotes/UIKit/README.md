@@ -49,62 +49,60 @@ opening/creating state; restored documents use an existing-only open path.
 
 ## Editing and routing
 
-**Apply grouped example** edits title and body as one durable group. Toolbar
-Undo/Redo works without an editor first responder. Focused semantic `UITextView`
-Cmd-Z/Shift-Cmd-Z routes through the native responder chain to its scene's
-history. **Local scratch** uses UIKit's transient text undo manager and consumes
-local Undo even with an empty stack.
+The [framework UIKit binding](../../../docs/uikit-history-binding.md) supplies
+`NativeHistoryTextView`, a standard UITextView adapter overriding only its manager
+getter. UIKit owns input, selection, paste, marked composition and the original
+fine-grained live Undo stack. No text-input/action overrides or custom Undo key
+commands are installed. Native assistant Undo/Redo uses that live stack until an
+explicit editing transaction settles, including Redo after Undo reaches baseline.
 
-Typing stays provisional across event turns. **Commit / retry typing**, changing
-editor focus, Undo/Redo or graceful lifecycle closure settles one semantic edit.
-Native event-group closure alone does not submit each keystroke. Marked text
-defers settlement and Undo until composition ends. This bounded sample is not a
-complete text editor or broad IME qualification.
+**Commit / retry typing**, ending editing or moving to another bound editor, and
+an explicit semantic action define coarse persisted boundaries. Pauses and
+punctuation do not. **Apply grouped example** settles prior typing then proposes
+a two-field Note group. Toolbar Undo/Redo follows the focused editor or document;
+**Local scratch** remains an ordinary, independent UITextView and empty local
+history never falls through to document history.
 
-**Reject next edit** records proof of no effect. Rejected/failed settlement keeps
-the provisional draft and requires explicit retry or discard. An Undo that
-encounters rejection does not fall through to preceding accepted history.
-**Delay next edit** creates a controlled pending delivery; **Release delayed
-outcome** completes it. Delegate and native text-input barriers refuse semantic
-changes and repeated inverses while preserving focus/selection. Local controls
-and other scene scopes retain their own routing. Toolbar Undo/Redo availability
-follows the focused history owner: local text can undo/redo during document
-acceptance; returning focus to a semantic editor restores the pending barrier.
-The other semantic buttons remain barred.
+**Reject next edit** records authoritative proof of no effect. Active rejection
+preserves usable local Undo/Redo and exact rejected evidence; a later explicit
+boundary may prepare a new Command. Uncertainty blocks editing/inverses without
+clearing live history or losing focus. Restored journals require explicit retry
+or discard before new editing, including journals containing rejected intent.
+Marked text prevents settlement without forced unmarking.
 
-Debug exposes **Accept then fail finalization** using the real production save
-failure seam. The host first atomically writes the effect and receipt; history
-then fails finalization and suspends. **Close / reopen** reconciles that receipt
-without another effect or changed receipt bytes. The failure API/control is
-absent in Release.
+**Delay next edit** and **Release delayed outcome** exercise asynchronous
+acceptance. The framework delegate barrier blocks native user editing while
+admitted work is pending; host programmatic edits use the binding API. Scratch
+and other scene scopes remain independent. Debug's finalization-failure seam
+preserves accepted receipt evidence for exact retry; it is absent in Release.
+No hardware keyboard or physical IME proof follows from programmatic checks.
 
-## Scenes and lifecycle
+## Scenes, ownership, and recovery
 
-**New independent scene** requests a real UIKit scene. iPad supports simultaneous
-independent windows; iPhone can report multiple scenes unavailable. Activation
-errors remain visible. Commands stay bound to their original owner when another
-scene becomes active.
+The app owns `NativeHistorySessions`. The domain lease owns Note meaning,
+receipts and exclusive document acquisition; UndoKit owns draft journaling,
+admission, settlement, draining and recovery retention. Scene adapters supply
+platform availability, restoration mapping, protected-content visibility and
+background-task budgets. They do not recreate generic queues or journal files.
 
-Background/disconnect settles nonmarked input, retains uncommitted/marked
-drafts, drains outcomes and closes the store. Foreground reopens the existing
-scope. Draft storage is nonauthoritative and requires a decision after reopening;
-it is never replayed as an accepted effect. Opening/closing operations serialize
-across callbacks. Availability is rechecked after asynchronous opening before
-the owner becomes editable.
+**New independent scene** requests an actual UIKit scene; its durable scope
+remains independent. Background drains admitted work and preserves unsettled or
+marked values before complete closure; foreground reopens existing history.
+A genuine presentation disconnect captures synchronously and releases recognized
+local callbacks and controls even when the session's lease remains blocked.
+Micro-history belongs to the live presentation, not the recovery journal.
 
-Background lease expiry reports closure as incomplete, disables semantic edits
-and retains the owner until pending outcome and close finish. It does not
-certify closure or release the writer merely because time expired. Protected
-data callbacks hide content and request the same drain/close path. The storage
-gate demonstrates policy; checks additionally move a closed document directory
-away, verify restoration refuses replacement, then return the original files.
+Existing plain `{title,body}` Draft.json files from the former sample are refused
+and preserved as incompatible evidence. Opening, retry or discard never silently
+migrates, deletes, or replaces their bytes. Preserve Note.json, History.sqlite,
+Owner.lock and available draft evidence together. No missing-document recovery
+creates an empty replacement.
 
-The host requests complete file protection for directories, note/receipts,
-ownership/history files and atomic replacements. Simulators may not report
-that attribute. Reports preserve the observation. Injected protection/expiry
-callbacks test owner policy, not physical lock or actual OS budget expiration.
-Real lock/unlock, protected-storage failure and hardware keyboard/IME behavior
-remain separate gates.
+Complete file protection is requested for the document directory, current store
+files/ownership files, atomic host replacements and typed journal. Simulator
+attributes are recorded as observations; physical device-lock behavior remains
+unqualified. Background budget expiry does not cancel delivered work or certify
+closure merely because time elapsed.
 
 ## Checks and evidence
 
@@ -115,22 +113,24 @@ is written only after all owners close successfully. It records runtime,
 installed library path, scene identities, observations, lifecycle journals,
 protection attribute and limitations. Failed fixtures/logs remain failures.
 
-Checks run inside the installed UIKit app using real `UITextView`, `UITextInput`,
-toolbar controls and responder dispatch. They cover grouped Undo/Redo,
-provisional/marked typing, rejected drafts, local Undo, pending input/focus,
-Debug receipt reconciliation, reopen and unavailable storage. On iPad they
+Checks run inside the installed UIKit app through the public binding with actual
+UIKit controls and an independent durable host. They observe coarse receipts,
+live Undo/Redo at baseline, active rejection/no-change and restored-decision gates,
+marked/editor-switch boundaries, pending delegate/inverse barriers, Debug exact
+reconciliation, reopen and weak controller/binding/control teardown while the
+lease remains blocked. Unexpected facade registrations retain evidence across
+disconnect until explicit certification. CheckStage.txt localizes failed cases. On iPad they
 request a second actual `UIWindowScene`, edit its independent scope while the
 first outcome waits, and verify peer focus survives. The runner activates
 Settings, waits for an actual UIKit background drain/close journal, then returns
 the sample and verifies unchanged scope/application count. Injected policy
 observations are labeled separately from those OS transitions.
 
-A prefinal independent DeviceHub UI review on iPhone used the actual on-screen
-keyboard for a typing run and one Undo, reopened the same receipt count,
-observed empty local Undo isolation, and returned through Home to the same scene.
-It exposed toolbar Undo without editor focus, now covered by a regression.
-Those observations precede the final checkpoint and are not physical-keyboard,
-broad human-IME or final immutable-head evidence.
+The standalone iPadOS 26.5 refined probe used actual software-keyboard keys and
+assistant Undo/Redo to establish original-manager routing. Its seeded counter
+was only a synchronous stand-in; installed production binding receipts/recovery
+and interactive keyboard observations are recorded separately. Historical
+prefinal UI observations do not qualify the final source checkpoint.
 
 Final selected-simulator results are recorded in the issue/PR with exact source
 identity and retained report paths. This sample does not qualify the iOS floor,

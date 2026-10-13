@@ -2,9 +2,19 @@
 // SPDX-License-Identifier: MIT
 
 import UIKit
+import DurableNotesCore
+import UndoKit
 
 @main @MainActor final class NotesUIKitApp: UIResponder, UIApplicationDelegate {
     var owners: [String: NotesSceneOwner] = [:]
+    let sessions = NativeHistorySessions<NotesDocumentLease>()
+    private var leaseReferences: [URL: WeakNotesLease] = [:]
+    func domainLease(at directory: URL) -> NotesDocumentLease {
+        if let lease = leaseReferences[directory]?.value { return lease }
+        let lease = NotesDocumentLease(directory: directory)
+        leaseReferences[directory] = WeakNotesLease(lease)
+        return lease
+    }
     var checksStarted = false
     var events: [String] = []
     var root: URL {
@@ -43,6 +53,8 @@ import UIKit
         Task { @MainActor in
             var closed = true
             for owner in owners.values { closed = await owner.close(reason: "explicit finish") && closed }
+            await sessions.closeAll()
+            closed = closed && sessions.entries.allSatisfy { $0.status.phase == .closed }
             if closed { exit(EXIT_SUCCESS) }
             else { owners.values.forEach { $0.controller?.showMessage("Finish refused: an owner still requires recovery") } }
         }
@@ -57,7 +69,7 @@ import UIKit
                 for owner in self.owners.values {
                     // A failed fixture must release its deterministic test-only
                     // delay before asking the real owner to drain and close.
-                    await owner.session?.resumeDelivery()
+                    await owner.lease?.resumeDelivery()
                     closed = await owner.close(reason: "failed native check cleanup") && closed
                 }
                 try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -88,11 +100,16 @@ import UIKit
     }
     func sceneDidEnterBackground(_ scene: UIScene) { owner?.enteredBackground() }
     func sceneWillEnterForeground(_ scene: UIScene) { owner?.enteredForeground() }
-    func sceneDidDisconnect(_ scene: UIScene) { owner?.disconnected(); window?.isHidden = true; window = nil }
+    func sceneDidDisconnect(_ scene: UIScene) { owner?.disconnected(); window?.isHidden = true; window = nil; owner = nil }
     func stateRestorationActivity(for scene: UIScene) -> NSUserActivity? {
         let activity = NSUserActivity(activityType: "app.foliosuite.UndoKit.DurableNotes.restore")
         activity.userInfo = ["sceneID": scene.session.persistentIdentifier,
             "fixture": owner?.app?.root.lastPathComponent ?? "Interactive"]
         return activity
     }
+}
+
+@MainActor private final class WeakNotesLease {
+    weak var value: NotesDocumentLease?
+    init(_ value: NotesDocumentLease) { self.value = value }
 }

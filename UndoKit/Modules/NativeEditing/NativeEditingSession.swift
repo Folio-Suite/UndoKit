@@ -13,6 +13,7 @@ import Foundation
     private(set) var status = NativeHistoryStatus(phase: .opening, canUndo: false, canRedo: false, issue: nil, requiresDraftDecision: false)
     private(set) var hasConnection = false
     var ownerChanged: (() -> Void)?
+    var settlementDidComplete: (() -> Void)?
     private let lease: Lease
     private let codec: HistoryCodec<Lease.Draft>
     private let codecVersion: Int
@@ -50,6 +51,7 @@ import Foundation
     private var journalCompatible = true
     private var prepared: HistoryCommand?
     private var provedRejected = false
+    private var liveRejectionEditable = false
     private var proposedRevision = UUID().uuidString.data(using: .utf8)!
     private let manager: NativeSessionUndoManager
 
@@ -60,7 +62,7 @@ import Foundation
         manager.owner = self; manager.levelsOfUndo = 1
     }
     func open(_ mode: NativeHistoryOpenMode) async {
-        epoch = UUID(); phase = .opening; issue = nil; closing = false; publish()
+        epoch = UUID(); phase = .opening; issue = nil; closing = false; liveRejectionEditable = false; publish()
         defer { let waiters = operationFinished; operationFinished = []; waiters.forEach { $0.resume() } }
         do {
             try await lease.open(mode)
@@ -96,6 +98,7 @@ import Foundation
                 do { try self.updateDraft(captured.value, isComposing: captured.isComposing) } catch { }
             }
             self.capture = nil; self.present = nil; self.presentStatus = nil
+            self.liveRejectionEditable = false
             self.connectionID = nil; self.hasConnection = false
             if !self.unexplainedNativeRegistration { self.manager.removeAllActions() }
             self.publish()
@@ -133,7 +136,7 @@ import Foundation
         guard journalCompatible, phase == .ready || phase == .suspended || (phase == .blocked && base != nil) else { return .failure(failure(.busy)) }
         guard !closing, !unexplainedNativeRegistration else { return .failure(nativeRegistrationFailure()) }
         requiresDecision = false; composing = false
-        if provedRejected { prepared = nil; provedRejected = false }
+        if provedRejected { prepared = nil; provedRejected = false; liveRejectionEditable = false }
         phase = .busy; issue = nil; publish(); defer { finish() }
         if needsReopen {
             do { try await reopenLease() } catch { block(error); return .failure(issue!) }
@@ -221,6 +224,7 @@ import Foundation
                 guard let command = try await lease.makeCommand(from: base, to: proposed, generation: generation) else {
                     try removeJournal()
                     draft = base.value; composing = false; requiresDecision = false
+                    settlementDidComplete?() // Explicit host-declared no change, never value-equality inference.
                     if let draft { present?(draft) }
                     return .rejected
                 }
@@ -233,7 +237,9 @@ import Foundation
             #else
             result = await engine.submit(prepared!)
             #endif
-            if case .rejected = result { provedRejected = true; requiresDecision = true; try persistDraft() }
+            if case .rejected = result {
+                provedRejected = true; liveRejectionEditable = true; requiresDecision = true; try persistDraft()
+            }
             await refresh(after: result); return result
         } catch { block(error); return .failure(issue!) }
     }
@@ -254,8 +260,9 @@ import Foundation
         if case .accepted = result {
             do { let refreshed = try await lease.readDraft(); try removeJournal()
                 base = refreshed; draft = refreshed.value; composing = false
-                prepared = nil; provedRejected = false; requiresDecision = false
+                prepared = nil; provedRejected = false; liveRejectionEditable = false; requiresDecision = false
                 if !unexplainedNativeRegistration { manager.removeAllActions() }
+                settlementDidComplete?() // Accepted and successfully refreshed; failures retain live presentation.
                 if let draft { present?(draft) }
             } catch { block(error) }
         } else if case .failure(let failure) = result { issue = failure }
@@ -332,8 +339,48 @@ import Foundation
     }
 }
 
+// Supported bindings may recapture proved-rejected live intent without erasing its receipt.
+extension NativeEditingSession {
+    var permitsKnownLiveEditing: Bool {
+        phase == .ready && !closing && !unexplainedNativeRegistration && (!requiresDecision || (provedRejected && liveRejectionEditable))
+    }
+    func captureKnownLiveDraft(_ value: NativeDraftCapture<Lease.Draft>) throws {
+        guard permitsKnownLiveEditing else { throw failure(.busy) }
+        draft = value.value; composing = value.isComposing; journalDirty = true
+        proposedRevision = Data(UUID().uuidString.utf8)
+        // Keep the exact rejected Command until the next explicit attempt. Its host receipt
+        // remains authoritative even when native Undo changes the proposed value.
+        do { try persistDraft() } catch { block(error); throw error }
+        publish()
+    }
+    func undoKnownLiveDraft() async -> HistoryResult {
+        if provedRejected {
+            guard permitsKnownLiveEditing, !composing else { return .failure(failure(.busy)) }
+            prepared = nil; provedRejected = false; liveRejectionEditable = false; requiresDecision = false
+        }
+        return await undo()
+    }
+    func redoKnownLiveDraft() async -> HistoryResult {
+        if provedRejected {
+            guard permitsKnownLiveEditing, !composing else { return .failure(failure(.busy)) }
+            prepared = nil; provedRejected = false; liveRejectionEditable = false; requiresDecision = false
+        }
+        return await redo()
+    }
+    func commitKnownLiveDraft() async -> HistoryResult {
+        if provedRejected {
+            guard permitsKnownLiveEditing, !composing else { return .failure(failure(.busy)) }
+            prepared = nil; provedRejected = false; liveRejectionEditable = false; requiresDecision = false
+        }
+        return await commit()
+    }
+}
+
 // Native callback reconciliation is separate from ordinary editing admission.
 extension NativeEditingSession {
+    func waitForOpening() async {
+        if phase == .opening { await withCheckedContinuation { operationFinished.append($0) } }
+    }
     func nativeRegistrationObserved() {
         unexplainedNativeRegistration = true; nativeRegistrationEpoch += 1
         // Preserve all unexplained groups until the host can identify their authored work.

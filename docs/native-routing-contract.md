@@ -14,8 +14,12 @@ below. Earlier advanced-router and other-platform obligations remain in force.
 This contract extends [durable acceptance](durable-acceptance-contract.md),
 [history retention](history-retention-contract.md) and the
 [typed host interface](typed-interface-contract.md).
-It specifies required behavior. The native bridge and durable history engine
-remain unimplemented; interface compilation does not establish native behavior.
+It records the original proof requirements. The durable engine and portable
+native session foundation are now implemented; the supported UIKit original-manager
+facade is documented in [UIKit binding](uikit-history-binding.md) and
+[ADR 0006](adr/0006-uikit-live-and-durable-undo.md). Their actual validation and
+remaining platform/input limits are recorded separately. Interface compilation
+alone does not establish native behavior.
 
 ## Framework guarantees and host obligations
 
@@ -150,8 +154,10 @@ registrations that may represent user work. A bridge mismatch alone does not
 establish store corruption, an Unresolved host outcome or suspension of unrelated
 scopes.
 
-The concrete native mechanism remains subject to proof: an UndoManager subclass,
-command-routing adapter or other implementation has not been selected. Native
+The original contract left the mechanism subject to proof. UIKit now uses a
+getter-only standard-control adapter with an original-manager facade; the linked
+binding contract defines live versus durable routing. This does not qualify every
+native input path or select the supported AppKit binding mechanism. Native
 synchronous callbacks cannot claim completed asynchronous acceptance merely by
 starting a task. Native stack changes, notifications, action names and document
 change counts must reflect the agreed completion boundary. The proof must observe

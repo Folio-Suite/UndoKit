@@ -31,8 +31,11 @@ let session = await sessions.open(
 
 Select `.create` explicitly for a new document. All recovery and reopening use
 `.existing`; missing authoritative data is never replaced with an empty document.
-Opening returns an owning session even on failure. Inspect `status` rather than
-catching an error that would lose partially acquired ownership.
+Opening returns an owning session even on failure. Parallel opening calls await
+the retained owner's acquisition. Canonical URL keys discard the incidental
+file-versus-directory trailing-slash flag, including when directory creation changes
+Foundation's appended URL. Inspect `status` rather than catching an error that
+would lose partially acquired ownership.
 
 | Interface | Responsibility |
 | --- | --- |
@@ -121,7 +124,9 @@ require another explicit reconciliation. Close drains this recovery work and
 rechecks registrations before and after complete lease closure, retaining the owner
 and callback objects if closure cannot certify their preservation.
 
-Supported AppKit/UIKit bindings are the following slice. They must classify the
+The supported [UIKit binding](uikit-history-binding.md) supplies live original-manager
+routing and coarse editing-transaction boundaries under ADR 0006. Supported AppKit
+binding migration remains a separate slice. Bindings must classify the
 stock controls' editing registrations, preserve unrelated native registrations,
 project accepted host action names, and settle native typing coalescing and group
 boundaries before capture. They must preserve marked-text composition and local

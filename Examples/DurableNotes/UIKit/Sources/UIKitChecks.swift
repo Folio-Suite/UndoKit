@@ -7,302 +7,330 @@ import UndoKit
 import Darwin
 import MachO
 
+/// Installed public binding checks. Actual keyboard assistant interaction is separate evidence.
 @MainActor enum UIKitChecks {
     struct Report: Codable {
         let runtime: String
         let model: String
-        let architecture: String
         let installedRuntime: String
         let installedResources: String
         let sceneIDs: [String]
+        let fileProtectionObservation: String
         let observations: [String]
         let events: [String: [String]]
-        let fileProtectionObservation: String
         let limitations: [String]
     }
     enum CheckFailure: Error { case observation(String) }
     static func require(_ condition: Bool, _ message: String) throws {
         guard condition else { throw CheckFailure.observation(message) }
     }
-    private static func waitUntil(_ message: String, timeout: TimeInterval = 30,
-                                  condition: @MainActor () -> Bool) async throws {
-        let deadline = Date().addingTimeInterval(timeout)
+    static func waitUntil(_ message: String, condition: @MainActor () -> Bool) async throws {
+        let deadline = Date().addingTimeInterval(30)
         while !condition() {
             guard Date() < deadline else { throw CheckFailure.observation(message) }
             try await Task.sleep(for: .milliseconds(40))
         }
     }
-    private static func activate(_ owner: NotesSceneOwner, app: NotesUIKitApp) async throws {
+    static func matches(_ lhs: NotesReadout, _ rhs: NotesReadout) -> Bool {
+        lhs.note == rhs.note && lhs.applicationCount == rhs.applicationCount && lhs.receiptCount == rhs.receiptCount
+    }
+    static func pause() async throws { try await Task.sleep(for: .milliseconds(120)) }
+    static func activate(_ owner: NotesSceneOwner) async throws {
         guard let sceneSession = UIApplication.shared.openSessions.first(where: { $0.persistentIdentifier == owner.id }) else {
-            throw CheckFailure.observation("Persistent scene session was lost")
+            throw CheckFailure.observation("Persistent scene session lost")
         }
-        UIApplication.shared.requestSceneSessionActivation(sceneSession, userActivity: nil, options: nil) { error in
-            Task { @MainActor in app.events.append("Existing scene activation rejected: \(error)") }
-        }
-        try await waitUntil("Existing scene did not restore; \(app.events)") {
+        UIApplication.shared.requestSceneSessionActivation(sceneSession, userActivity: nil, options: nil)
+        try await waitUntil("Existing scene failed to reactivate") {
             owner.state == .active && owner.scene?.activationState == .foregroundActive
         }
     }
+    static func stage(_ name: String, app: NotesUIKitApp) {
+        try? Data(name.utf8).write(to: app.root.appendingPathComponent("CheckStage.txt"), options: .atomic)
+    }
     static func run(first: NotesSceneOwner, app: NotesUIKitApp) async throws {
         var observations: [String] = []
-        let runtime = (0..<_dyld_image_count()).compactMap { index -> String? in
+        let images = (0..<_dyld_image_count()).compactMap { index -> String? in
             guard let name = _dyld_get_image_name(index) else { return nil }
             let path = String(cString: name)
-            return path.hasSuffix("/UndoKit.framework/UndoKit") ? URL(fileURLWithPath: path).standardizedFileURL.path : nil
+            return path.hasSuffix("/UndoKit.framework/UndoKit") ? path : nil
         }
-        try require(runtime.count == 1 && runtime[0].hasPrefix(Bundle.main.bundlePath + "/Frameworks/"),
-            "Expected exactly one installed UndoKit runtime; images=\(runtime); bundle=\(Bundle.main.bundlePath)")
+        try require(images.count == 1 && images[0].hasPrefix(Bundle.main.bundlePath + "/Frameworks/"), "Installed runtime closure failed")
         let resources = Bundle.main.bundleURL.appendingPathComponent("UndoKit_UndoKit.bundle")
         try require(FileManager.default.fileExists(atPath: resources.appendingPathComponent("History.momd").path)
-            && FileManager.default.fileExists(atPath: resources.appendingPathComponent("PrivacyInfo.xcprivacy").path),
-            "Installed package model/privacy resources are missing")
-        guard let controller = first.controller, let session = first.session else {
-            throw CheckFailure.observation("Missing live UIWindowScene owner")
-        }
-        try require((await session.read()).note == Note(), "Checks need a fresh fixture")
-        controller.apply(title: "Shopping", body: "Tea and bread")
-        await controller.waitForOperations()
-        try require((await session.read()).applicationCount == 1, "Grouped native edit did not apply once")
-        controller.view.endEditing(true)
-        controller.undoButton.sendActions(for: .touchUpInside)
-        await controller.waitForOperations()
-        try require((await session.read()).note == Note(), "Toolbar Undo without an editor first responder failed")
-        controller.redoButton.sendActions(for: .touchUpInside)
-        await controller.waitForOperations()
-        try require((await session.read()).note == Note(title: "Shopping", body: "Tea and bread"), "Toolbar Redo without focus failed")
+            && FileManager.default.fileExists(atPath: resources.appendingPathComponent("PrivacyInfo.xcprivacy").path), "Installed resources missing")
+        guard let controller = first.controller, let binding = controller.binding, let session = first.session,
+              let lease = first.lease else { throw CheckFailure.observation("Missing public binding") }
+        stage("initial host read", app: app)
+        try require(try await lease.read().note == Note(), "Checks require a fresh independent host")
+        stage("first grouped action", app: app)
+        _ = await binding.applyDraft(Note(title: "Shopping", body: "Tea and bread"))
+        try require(try await lease.read().applicationCount == 1, "Grouped edit did not apply once")
+        _ = await binding.undoDocument()
+        try require(try await lease.read().note == Note(), "Durable Undo did not reverse both fields")
+        _ = await binding.redoDocument()
+        try require(try await lease.read().note == Note(title: "Shopping", body: "Tea and bread"), "Durable Redo failed")
+        observations.append("Public binding accepts and reverses one two-member group against independent host receipts.")
+
+        stage("live typing", app: app)
         controller.bodyEditor.becomeFirstResponder()
-        try require(UIApplication.shared.sendAction(#selector(NotesTextView.notesUndo(_:)), to: nil,
-            from: controller, for: nil), "UIKit responder chain did not route Undo")
-        await controller.waitForOperations()
-        try require((await session.read()).note == Note(), "UIKit Undo did not reverse both fields")
-        try require(UIApplication.shared.sendAction(#selector(NotesTextView.notesRedo(_:)), to: nil,
-            from: controller, for: nil), "UIKit responder chain did not route Redo")
-        await controller.waitForOperations()
-        try require((await session.read()).note == Note(title: "Shopping", body: "Tea and bread"), "UIKit Redo failed")
-        observations.append("UIControl toolbar Undo/Redo works without editor focus; focused UITextView UIResponder Undo/Redo reverses the complete two-member group.")
+        controller.bodyEditor.selectedRange = NSRange(location: 13, length: 0)
+        let beforeTyping = try await lease.read()
+        controller.bodyEditor.insertText(" live"); try await pause()
+        try require(binding.hasLiveTransaction && controller.bodyEditor.undoManager?.canUndo == true, "Native typing did not offer local Undo")
+        controller.bodyEditor.undoManager?.undo(); try await pause()
+        try require(controller.bodyEditor.text == "Tea and bread", "Live Undo did not restore baseline")
+        try require(try await lease.read().applicationCount == beforeTyping.applicationCount,
+            "Live native text Undo crossed durable acceptance; micro-edits must remain local until an explicit transaction boundary")
+        try require(binding.hasLiveTransaction && controller.bodyEditor.undoManager?.canRedo == true, "Baseline lost local Redo or implicitly settled")
+        controller.bodyEditor.undoManager?.redo(); try await pause()
+        try require(controller.bodyEditor.text == "Tea and bread live", "Local Redo failed")
+        _ = await binding.commit()
+        try require(!binding.hasLiveTransaction && controller.bodyEditor.isFirstResponder, "Acceptance lost focus or retained live work")
+        try require(try await lease.read().applicationCount == beforeTyping.applicationCount + 1, "Explicit boundary split the coarse group")
+        observations.append("UIKit insertion Undo/Redo stays local, including Redo at baseline; explicit acceptance persists one coarse group with focus intact.")
 
-        let beforeTyping = await session.read().applicationCount
-        controller.bodyEditor.selectedRange = NSRange(location: controller.bodyEditor.text.utf16.count, length: 0)
-        controller.bodyEditor.insertText(" and")
-        try await Task.sleep(for: .milliseconds(60))
-        controller.bodyEditor.insertText(" milk")
-        try await Task.sleep(for: .milliseconds(60))
-        try require((await session.read()).applicationCount == beforeTyping, "Native typing event groups committed prematurely")
-        _ = UIApplication.shared.sendAction(#selector(NotesTextView.notesUndo(_:)), to: nil, from: controller, for: nil)
-        await controller.waitForOperations()
-        try require((await session.read()).note.body == "Tea and bread", "Typing Undo did not settle and reverse the entire run")
-        try require((await session.read()).applicationCount == beforeTyping + 2, "Typing group was split")
-        observations.append("Actual UITextView insertions across event turns stay provisional; one native Undo settles and reverses the typing run.")
+        stage("active rejection", app: app)
+        await lease.rejectNextDelivery()
+        controller.bodyEditor.insertText(" rejected"); try await pause()
+        let beforeRejected = try await lease.read()
+        try require(await binding.commit() == .rejected, "Host rejection missing")
+        try require(try await lease.read().applicationCount == beforeRejected.applicationCount, "Rejection produced an effect")
+        controller.bodyEditor.undoManager?.undo(); try await pause()
+        try require(controller.bodyEditor.text == "Tea and bread live" && controller.bodyEditor.undoManager?.canRedo == true, "Rejection destroyed local Undo/Redo")
+        let receipts = try await lease.read().receiptCount
+        _ = await binding.commit()
+        try require(!binding.hasLiveTransaction && !session.status.requiresDraftDecision, "Explicit no-change did not settle")
+        try require(try await lease.read().receiptCount == receipts, "No-change redelivered older rejected intent")
+        observations.append("Rejected intent retains usable local callbacks and exact evidence; host-declared no change retires them without redelivery.")
 
-        controller.bodyEditor.selectedRange = NSRange(location: controller.bodyEditor.text.utf16.count, length: 0)
+        stage("rejected redo boundary", app: app)
+        await lease.rejectNextDelivery()
+        controller.bodyEditor.insertText(" redo"); try await pause()
+        _ = await binding.commit()
+        let beforeRejectedRedo = try await lease.read().applicationCount
+        _ = await binding.redoDocument()
+        let afterRejectedRedo = try await lease.read()
+        try require(!session.status.requiresDraftDecision && !binding.hasLiveTransaction
+            && afterRejectedRedo.applicationCount == beforeRejectedRedo + 1 && afterRejectedRedo.note.body.hasSuffix(" redo"),
+            "Explicit Redo did not settle active rejected intent once")
+        _ = await binding.undoDocument() // Restore the worked baseline for the composition cases.
+        stage("marked composition", app: app)
         controller.bodyEditor.setMarkedText(" composition", selectedRange: NSRange(location: 12, length: 0))
-        try require(controller.bodyEditor.markedTextRange != nil, "UITextView did not form a marked range")
-        let beforeMarked = await session.read().applicationCount
-        _ = UIApplication.shared.sendAction(#selector(NotesTextView.notesUndo(_:)), to: nil, from: controller, for: nil)
-        try await Task.sleep(for: .milliseconds(60))
-        let afterMarkedAttempt = await session.read()
-        try require(controller.router.pendingInvocationID == nil && afterMarkedAttempt.applicationCount == beforeMarked,
-            "Marked text entered semantic Undo before settlement")
-        controller.bodyEditor.unmarkText()
-        _ = controller.settleEditing(); await controller.waitForOperations()
-        try require((await session.read()).note.body == "Tea and bread composition", "Settled marked text was lost")
-        _ = UIApplication.shared.sendAction(#selector(NotesTextView.notesUndo(_:)), to: nil, from: controller, for: nil)
-        await controller.waitForOperations()
-        observations.append("Real UITextInput marked text defers semantic Undo, then commits as one undoable change after unmarking.")
-
-        await session.rejectNextDelivery()
-        controller.bodyEditor.selectedRange = NSRange(location: controller.bodyEditor.text.utf16.count, length: 0)
-        controller.bodyEditor.insertText(" rejected")
-        let beforeRejected = await session.read().applicationCount
-        _ = UIApplication.shared.sendAction(#selector(NotesTextView.notesUndo(_:)), to: nil, from: controller, for: nil)
-        await controller.waitForOperations()
-        try require(controller.lastResult == .rejected, "Queued typing was not rejected")
-        try require((await session.read()).applicationCount == beforeRejected, "Rejected settlement fell through to earlier Undo")
-        try require(controller.bodyEditor.text.hasSuffix(" rejected"), "Rejected provisional draft was discarded")
-        await controller.discardDraft()
-        observations.append("Rejected typing preserves an explicit uncommitted draft; that same Undo invocation does not reverse preceding accepted history.")
-
-        controller.scratch.becomeFirstResponder(); controller.scratch.localHistory.removeAllActions()
-        let beforeLocal = await session.read().applicationCount
-        controller.undoButton.sendActions(for: .touchUpInside)
-        try require((await session.read()).applicationCount == beforeLocal, "Empty local history fell through to document toolbar Undo")
-        let local = controller.scratch.localHistory; local.groupsByEvent = false; local.beginUndoGrouping()
-        controller.scratch.insertText("local"); local.endUndoGrouping()
-        _ = UIApplication.shared.sendAction(#selector(NotesTextView.notesUndo(_:)), to: nil, from: controller, for: nil)
-        try await Task.sleep(for: .milliseconds(60))
-        try require(controller.scratch.text.isEmpty,
-            "Local UIKit text Undo failed; text=\(controller.scratch.text ?? "nil"); localUndo=\(local.canUndo); redo=\(local.canRedo); focus=\(controller.scratch.isFirstResponder)")
-        try require((await session.read()).applicationCount == beforeLocal, "Local text mutated the domain")
-        observations.append("Focused local UITextView consumes keyboard and toolbar Undo, including empty local history, independently of document history.")
-
+        try require(controller.bodyEditor.markedTextRange != nil, "UIKit did not form marked text")
+        let beforeMarked = try await lease.read().applicationCount
+        _ = await binding.commit()
+        let markedCount = try await lease.read().applicationCount
+        try require(controller.bodyEditor.markedTextRange != nil && markedCount == beforeMarked, "Composition was forcibly settled")
+        controller.bodyEditor.unmarkText(); _ = await binding.commit()
+        try require(try await lease.read().note.body == "Tea and bread live composition", "Unmarked text was lost")
+        let beforeSwitch = try await lease.read().applicationCount
+        controller.bodyEditor.setMarkedText(" switch", selectedRange: NSRange(location: 7, length: 0))
+        try require(controller.bodyEditor.markedTextRange != nil, "Switch fixture lost marked text")
+        controller.titleEditor.becomeFirstResponder()
+        if controller.bodyEditor.markedTextRange != nil {
+            try require(try await lease.read().applicationCount == beforeSwitch, "Editor switch forced marked settlement")
+            controller.bodyEditor.unmarkText()
+            controller.titleEditor.selectedRange = NSRange(location: 0, length: 0)
+        }
+        try await pause(); await binding.waitForOperations()
+        try require(try await lease.read().applicationCount == beforeSwitch + 1 && !binding.hasLiveTransaction,
+            "Editor switch did not settle after native composition ended")
         controller.bodyEditor.becomeFirstResponder()
-        await session.delayNextDelivery(); controller.apply(title: "Delayed", body: "Pending effect")
-        let delayDeadline = Date().addingTimeInterval(10)
-        while !(await session.isDeliveryDelayed()) && Date() < delayDeadline { try await Task.sleep(for: .milliseconds(40)) }
-        try require(await session.isDeliveryDelayed(), "Controlled delayed delivery did not start")
+        observations.append("Marked ranges prevent settlement; moving to another bound editor settles exactly once after UIKit ends composition, without framework-forced unmarking.")
+
+        stage("delayed acceptance", app: app)
+        await lease.delayNextDelivery()
+        let delayed = Task { await binding.applyDraft(Note(title: "Delayed", body: "Pending effect")) }
+        let deliveryDeadline = Date().addingTimeInterval(30)
+        while !(await lease.isDeliveryDelayed()) {
+            guard Date() < deliveryDeadline else { throw CheckFailure.observation("Actual delayed host delivery missing") }
+            try await pause()
+        }
+        try require(session.status.phase == .busy, "Actual delivery gate did not retain busy admission")
         let pendingText = controller.bodyEditor.text
-        controller.bodyEditor.insertText(" blocked")
-        _ = UIApplication.shared.sendAction(#selector(NotesTextView.notesUndo(_:)), to: nil, from: controller, for: nil)
-        try require(controller.router.isEditingBlocked && controller.bodyEditor.text == pendingText,
-            "Pending native editing barrier allowed another semantic input")
-        try require(controller.bodyEditor.isFirstResponder, "Pending barrier lost native text focus")
-        let beforePendingLocal = await session.read().applicationCount
-        controller.scratch.becomeFirstResponder()
-        let pendingLocal = controller.scratch.localHistory
-        pendingLocal.beginUndoGrouping(); controller.scratch.insertText("pending local"); pendingLocal.endUndoGrouping()
-        controller.lifecycleChanged()
-        try require(controller.undoButton.isEnabled, "Focused local toolbar Undo was disabled by document pending state")
-        controller.undoButton.sendActions(for: .touchUpInside)
-        try require(controller.scratch.text.isEmpty && controller.redoButton.isEnabled,
-            "Enabled local toolbar Undo did not reverse native text or expose local Redo")
-        controller.redoButton.sendActions(for: .touchUpInside)
-        try require(controller.scratch.text == "pending local", "Enabled local toolbar Redo failed during document pending state")
-        try require((await session.read()).applicationCount == beforePendingLocal && controller.router.isEditingBlocked,
-            "Local toolbar invocation affected pending document history")
-        controller.bodyEditor.becomeFirstResponder()
-        try require(!controller.undoButton.isEnabled && !controller.redoButton.isEnabled,
-            "Document toolbar inverses became enabled while acceptance was pending")
-        observations.append("During pending document acceptance, actual enabled toolbar controls follow focused local UITextView Undo/Redo; returning focus to the document restores the semantic barrier.")
+        try require(!binding.textView(controller.bodyEditor, shouldChangeTextIn: NSRange(location: 0, length: 0), replacementText: "blocked"), "Delegate barrier permitted native user editing")
+        controller.bodyEditor.undoManager?.undo()
+        try require(controller.bodyEditor.text == pendingText && controller.bodyEditor.isFirstResponder, "Pending inverse changed text or focus")
+        controller.scratch.becomeFirstResponder(); controller.scratch.insertText("local"); try await pause()
+        let beforeScratch = try await lease.read().applicationCount
+        binding.undoManager.undo(); try await pause()
+        let afterScratch = try await lease.read().applicationCount
+        try require(controller.scratch.text.isEmpty && beforeScratch == afterScratch, "Scratch affected document history")
         var peer: NotesSceneOwner?
         if UIApplication.shared.supportsMultipleScenes {
-            let existingScenes = Set(app.owners.keys)
-            app.requestNewScene()
-            try await waitUntil("Actual iPad scene activation failed; \(app.events)") {
-                app.owners.values.contains { !existingScenes.contains($0.id) && $0.state == .active && $0.scene?.activationState == .foregroundActive }
+            let oldIDs = Set(app.owners.keys); app.requestNewScene()
+            try await waitUntil("Independent scene missing") {
+                app.owners.values.contains { !oldIDs.contains($0.id) && $0.state == .active }
             }
-            peer = app.owners.values.first { !existingScenes.contains($0.id) && $0.state == .active && $0.scene?.activationState == .foregroundActive }
-            guard let peer, let peerController = peer.controller, let peerSession = peer.session else {
-                throw CheckFailure.observation("Second UIWindowScene lacks its independent owner")
-            }
-            try require(UIApplication.shared.connectedScenes.count >= 2 && peerSession.engine.snapshot.scope != session.engine.snapshot.scope,
-                "iPad scene request did not create independent connected scene scopes")
-            peerController.apply(title: "Independent", body: "Peer edits while first waits")
-            await peerController.waitForOperations()
-            peerController.bodyEditor.becomeFirstResponder()
-            try require((await peerSession.read()).applicationCount == 1, "Independent scene could not edit during pending acceptance")
+            peer = app.owners.values.first { !oldIDs.contains($0.id) && $0.state == .active }
+            guard let peerBinding = peer?.controller?.binding, let peerLease = peer?.lease else { throw CheckFailure.observation("Peer binding missing") }
+            _ = await peerBinding.applyDraft(Note(title: "Independent", body: "Peer scope"))
+            peer?.controller?.bodyEditor.becomeFirstResponder()
+            try require(try await peerLease.read().applicationCount == 1, "Peer blocked with first scope")
         }
-        await session.resumeDelivery(); await controller.waitForOperations()
-        try require((await session.read()).note == Note(title: "Delayed", body: "Pending effect"), "Delayed group did not finish atomically")
-        observations.append("Delayed acceptance refuses repeated native semantic input while preserving UITextView focus and selection.")
+        await lease.resumeDelivery(); _ = await delayed.value
+        try require(try await lease.read().note == Note(title: "Delayed", body: "Pending effect"), "Delayed group failed")
         if let peer {
-            try require(peer.controller?.bodyEditor.isFirstResponder == true, "First scope completion stole focus from the independent scene")
-            try await activate(first, app: app)
-            observations.append("Actual iPad scene activation created two connected UIWindowScenes with distinct durable scopes; peer edits/focus survived first-scene pending acceptance and background closure.")
-        } else {
-            observations.append("Runtime reports multiple scenes unavailable on this iPhone; actual iPad multi-scene check runs on iPad separately.")
+            try require(peer.controller?.bodyEditor.isFirstResponder == true, "Completion stole peer focus")
+            try await activate(first)
+            observations.append("Actual independent UIWindowScenes preserve peer edits and focus during delayed first-scope acceptance.")
         }
         controller.bodyEditor.becomeFirstResponder()
-        guard let activeSession = first.session else { throw CheckFailure.observation("Original scene did not return") }
-
-        let beforeLifecycle = await activeSession.read().applicationCount
-        await activeSession.delayNextDelivery()
-        controller.apply(title: "Lifecycle", body: "Accepted during closure")
-        let lifecycleDeadline = Date().addingTimeInterval(10)
-        while !(await activeSession.isDeliveryDelayed()) && Date() < lifecycleDeadline {
-            try await Task.sleep(for: .milliseconds(40))
-        }
-        try require(await activeSession.isDeliveryDelayed(), "Lifecycle delayed delivery did not start")
-        first.setProtectedDataAvailable(false)
-        try await waitUntil("Protected-data closure did not start") { first.state == .closing }
-        first.backgroundExpired()
-        try require(first.state == .blocked && first.session != nil && controller.view.isHidden,
-            "Expired closure released the pending owner or exposed protected content")
-        do {
-            let duplicate = try await NotesSession.openExisting(at: first.directory)
-            try await duplicate.close()
-            throw CheckFailure.observation("Pending expired owner allowed a second writer")
-        } catch let failure as HistoryFailure {
-            try require(failure.cause == .busy, "Pending owner refusal had unexpected cause: \(failure)")
-        }
-        await activeSession.resumeDelivery()
-        try require(await first.close(reason: "injected lifecycle completion"), "Pending lifecycle closure failed")
-        first.setProtectedDataAvailable(true); await first.openIfAvailable()
-        guard let lifecycleSession = first.session else { throw CheckFailure.observation("Lifecycle gate did not restore") }
-        try require((await lifecycleSession.read()).applicationCount == beforeLifecycle + 1,
-            "Protected-data/expired closure duplicated or lost the accepted effect")
-        observations.append("Injected protected-data and background-expiry policy during delayed delivery hides content and retains the writer until outcome drain; reopening retains exactly one accepted effect. This is not physical lock or OS expiry evidence.")
+        observations.append("Pending admission refuses the public native delegate and inverse routes, preserving focus; scratch remains independent.")
 
         #if DEBUG
-        let beforeFailure = await lifecycleSession.read().applicationCount
-        controller.apply(title: "Recovered", body: "Accepted once", injectFailure: true)
-        await controller.waitForOperations()
-        try require(controller.router.routingState == .suspended, "Finalization failure did not suspend native history")
-        let receiptBytes = try Data(contentsOf: first.directory.appendingPathComponent("Note.json"))
-        try require(await first.close(reason: "recovery check"), "Recovery close failed")
-        await first.openIfAvailable()
-        guard let recovered = first.session else { throw CheckFailure.observation("Recovery reopen failed") }
-        try require((await recovered.read()).applicationCount == beforeFailure + 1, "Recovery duplicated the host effect")
-        try require(try Data(contentsOf: first.directory.appendingPathComponent("Note.json")) == receiptBytes,
-            "Reopen changed authoritative receipt bytes")
-        try require(controller.router.canUndo, "Recovery did not rebuild native availability")
-        observations.append("Production Debug finalization failure follows durable acceptance; graceful reopening reconciles unchanged receipts without repeating effects.")
+        stage("uncertain finalization", app: app)
+        controller.bodyEditor.insertText(" uncertain"); try await pause()
+        let failure = await binding.demonstrateFinalizationFailure()
+        if case .failure = failure { } else { throw CheckFailure.observation("Finalization failure missing") }
+        let acceptedOnce = try await lease.read()
+        try require(binding.hasLiveTransaction && !binding.undoManager.canUndo && controller.bodyEditor.text.hasSuffix(" uncertain"), "Uncertain result reset live presentation")
+        _ = await binding.retryDraft()
+        try require(session.status.phase == .ready && !binding.hasLiveTransaction, "Exact recovery failed")
+        try require(try await lease.read().applicationCount == acceptedOnce.applicationCount, "Recovery accepted twice")
+        observations.append("Uncertain finalization preserves text/local history and blocks inverses until exact accepted intent is recovered once.")
         #endif
-        guard let current = first.session else { throw CheckFailure.observation("Missing active session") }
-        let identity = current.engine.snapshot.scope
-        let beforeReopen = await current.read()
-        try require(await first.close(reason: "reopen check"), "Native close failed")
-        await first.openIfAvailable()
-        guard let reopened = first.session else { throw CheckFailure.observation("Native reopen failed") }
-        let reopenedReadout = await reopened.read()
-        try require(reopened.engine.snapshot.scope == identity && reopenedReadout.applicationCount == beforeReopen.applicationCount,
-            "Native reopen changed identity or duplicated an effect")
 
-        await first.setStorageAvailable(false)
-        let displaced = first.directory.appendingPathExtension("unavailable")
-        try FileManager.default.moveItem(at: first.directory, to: displaced)
-        await first.setStorageAvailable(true)
-        try require(first.state == .blocked && first.session == nil && !FileManager.default.fileExists(atPath: first.directory.path),
-            "Unavailable storage was replaced by a new scope")
-        try FileManager.default.moveItem(at: displaced, to: first.directory)
-        await first.openIfAvailable()
-        try require(first.session?.engine.snapshot.scope == identity, "Returning storage changed the scene scope")
-        observations.append("Actual document-directory unavailability refuses restoration without replacement; returning original files restores the same scope.")
-
-        let attributes = try FileManager.default.attributesOfItem(atPath: first.directory.appendingPathComponent("Note.json").path)
-        let protection = attributes[.protectionKey].map { String(describing: $0) } ?? "unreported by simulator"
+        stage("durable reopen", app: app)
+        let beforeClose = try await lease.read()
+        _ = await first.close(reason: "check reopen"); await first.openIfAvailable()
+        try require(matches(try await lease.read(), beforeClose) && session.status.phase == .ready, "Reopen changed content or receipts")
+        let protection = try FileManager.default.attributesOfItem(atPath: first.directory.appendingPathComponent("Note.json").path)
+        let protectionObservation = protection[.protectionKey].map { String(describing: $0) } ?? "unreported by simulator"
         #if !targetEnvironment(simulator)
-        try require(attributes[.protectionKey] as? String == FileProtectionType.complete.rawValue,
-            "Physical host state lacks complete file protection: \(protection)")
+        try require(protection[.protectionKey] as? String == FileProtectionType.complete.rawValue, "Physical lease protection lost")
         #endif
-        first.setProtectedDataAvailable(false)
-        _ = await first.close(reason: "simulated protected-data gate")
-        await first.openIfAvailable()
-        try require(first.session == nil && controller.view.isHidden, "Protected-data gate reopened or exposed note content")
-        first.setProtectedDataAvailable(true); await first.openIfAvailable()
-        try require(first.session?.engine.snapshot.scope == identity && !controller.view.isHidden, "Protected-data gate did not restore original scope")
-        observations.append("Complete file protection requested; runtime attribute observation: \(protection). Injected protected-data gate closes/hides content and restores the same scope; no physical lock proof follows.")
-
-        guard let foregroundSession = first.session else { throw CheckFailure.observation("Missing foreground scope") }
-        let beforeBackground = await foregroundSession.read()
-        let backgroundCount = first.events.filter { $0 == "UIKit scene entered background" }.count
+        stage("blocked teardown", app: app)
+        try await teardownCheck(scene: first.scene!, root: app.root)
+        stage("unknown registration", app: app)
+        try await unknownRegistrationCheck(root: app.root)
+        stage("restored rejection", app: app)
+        try await restoredRejectionCheck(root: app.root)
+        observations.append("Weak presenter/binding/control release while blocked lease and captured draft remain recoverable; repair retires the session.")
+        observations.append("Unexpected facade registrations remain retained across disconnect and block admission/close until explicit certification; reopened rejected evidence requires a new explicit decision.")
         let stage: [String: String] = ["phase": "background", "scene": first.id,
             "priorBackgroundClosures": String(first.events.filter { $0 == "Outcome drained and store closed: background" }.count)]
+        let beforeBackground = first.events.filter { $0 == "UIKit scene entered background" }.count
         try JSONEncoder().encode(stage).write(to: app.root.appendingPathComponent("Stage.json"), options: .atomic)
-        try await waitUntil("Actual UIKit background callback was not observed", timeout: 90) {
-            first.events.filter { $0 == "UIKit scene entered background" }.count > backgroundCount
+        try await waitUntil("Real Settings transition missing") {
+            first.events.filter { $0 == "UIKit scene entered background" }.count > beforeBackground
+                && first.scene?.activationState == .foregroundActive && first.state == .active
         }
-        try await waitUntil("Application did not return to foreground", timeout: 90) { UIApplication.shared.applicationState == .active }
-        if first.state != .active || first.scene?.activationState != .foregroundActive { try await activate(first, app: app) }
-        try await waitUntil("Foreground did not restore the existing document") { first.state == .active && first.session != nil }
-        let afterBackground = await first.session!.read()
-        try require(first.session?.engine.snapshot.scope == identity && afterBackground.applicationCount == beforeBackground.applicationCount,
-            "Real background/foreground changed scope identity or duplicated an effect")
-        try require(first.events.contains("Outcome drained and store closed: background"), "Background did not complete graceful closure")
-        observations.append("Runner activated Settings then returned to the app: actual UIKit background/foreground callbacks drained/closed and restored the same scope without another host effect.")
-
-        for owner in Array(app.owners.values) { try require(await owner.close(reason: "native check complete"), "Check closure did not complete") }
-        #if arch(arm64)
-        let architecture = "arm64"
-        #else
-        let architecture = "x86_64"
-        #endif
-        let report = Report(runtime: UIDevice.current.systemVersion, model: UIDevice.current.model, architecture: architecture,
-            installedRuntime: runtime[0], installedResources: resources.path,
-            sceneIDs: app.owners.keys.sorted(), observations: observations,
-            events: app.owners.mapValues(\.events), fileProtectionObservation: protection,
-            limitations: ["Selected current simulator; no floor OS, Intel, physical lock/device or abrupt-termination qualification.",
-                "Programmatic native controls and responder actions; human keyboard/IME observations remain separate."])
+        try require(matches(try await lease.read(), beforeClose), "Lifecycle replay changed host state")
+        observations.append("Real Settings background/foreground closes and reopens the same scope without replay.")
+        for owner in Array(app.owners.values) {
+            try require(await owner.close(reason: "native check completion"), "Native check closure incomplete")
+        }
+        await app.sessions.closeAll()
+        try require(app.sessions.entries.allSatisfy { $0.status.phase == .closed }, "Recovery owner remained unclosed")
+        let report = Report(runtime: UIDevice.current.systemVersion, model: UIDevice.current.model,
+            installedRuntime: images[0], installedResources: resources.path, sceneIDs: app.owners.keys.sorted(),
+            fileProtectionObservation: protectionObservation, observations: observations,
+            events: app.owners.mapValues(\.events), limitations: ["Public programmatic UIKit binding seam; software-keyboard assistant observation is separate.",
+                "No hardware shortcuts, physical IME/device, device-lock, or forced-termination qualification."])
         try JSONEncoder().encode(report).write(to: app.root.appendingPathComponent("Report.json"), options: .atomic)
         exit(EXIT_SUCCESS)
     }
+    static func unknownRegistrationCheck(root: URL) async throws {
+        let directory = root.appendingPathComponent("UnknownRegistration")
+        let owners = NativeHistorySessions<NotesDocumentLease>()
+        let lease = NotesDocumentLease(directory: directory)
+        let session = await owners.open(documentURL: directory, mode: .create, codec: .json(),
+            draftURL: directory.appendingPathComponent("Draft.json")) { lease }
+        var presenter: BindingCheckPresenter? = BindingCheckPresenter()
+        try presenter!.attach(session)
+        let target = UnknownUndoTarget()
+        var marker: NSObject? = NSObject()
+        weak let weakMarker = marker
+        presenter!.binding!.undoManager.registerUndo(withTarget: target, selector: #selector(UnknownUndoTarget.restore(_:)), object: marker!)
+        marker = nil
+        try require(weakMarker != nil && session.status.isEditingBlocked, "Facade lost or ignored unknown registration")
+        _ = await presenter!.binding!.commit()
+        try require(try await lease.read().applicationCount == 0, "Unknown native work allowed semantic acceptance")
+        weak let weakPresenter = presenter
+        weak let weakControl = presenter?.editor
+        presenter?.binding?.disconnect(); presenter = nil
+        try require(weakPresenter == nil && weakControl == nil && weakMarker != nil, "Disconnect discarded unknown work or retained known view")
+        await session.close()
+        try require(session.status.phase != .closed && weakMarker != nil, "Close silently erased unknown work")
+        try await session.reconcileNativeRegistrations()
+        try require(weakMarker == nil && target.invocations == 0, "Certification executed or retained unknown callbacks")
+        await session.close()
+        try require(owners.entries.isEmpty, "Certified owner did not retire")
+    }
+    static func restoredRejectionCheck(root: URL) async throws {
+        let directory = root.appendingPathComponent("RestoredRejection")
+        let draftURL = directory.appendingPathComponent("Draft.json")
+        let owners = NativeHistorySessions<NotesDocumentLease>()
+        let firstLease = NotesDocumentLease(directory: directory)
+        let first = await owners.open(documentURL: directory, mode: .create, codec: .json(), draftURL: draftURL) { firstLease }
+        try first.updateDraft(Note(title: "", body: "Rejected"))
+        await firstLease.rejectNextDelivery(); _ = await first.commit(); await first.close()
+        let evidence = try Data(contentsOf: draftURL)
+        let lease = NotesDocumentLease(directory: directory)
+        let reopened = await owners.open(documentURL: directory, mode: .existing, codec: .json(), draftURL: draftURL) { lease }
+        let presenter = BindingCheckPresenter(); try presenter.attach(reopened)
+        try require(reopened.status.requiresDraftDecision && presenter.binding?.undoManager.canUndo == false,
+            "Restored rejection implicitly authorized live history")
+        try require(presenter.binding?.textView(presenter.editor, shouldChangeTextIn: NSRange(location: 0, length: 0), replacementText: "new") == false,
+            "Restored rejection allowed a new intent before explicit decision")
+        _ = await presenter.binding?.redoDocument()
+        try require(try Data(contentsOf: draftURL) == evidence, "Attachment or Redo rewrote restored rejected evidence")
+        try require(try await lease.read().applicationCount == 0, "Restored Redo implicitly accepted draft intent")
+        _ = await presenter.binding?.retryDraft()
+        let accepted = try await lease.read()
+        try require(accepted.note.body == "Rejected" && accepted.applicationCount == 1 && accepted.receiptCount == 2,
+            "Explicit restored retry did not retain rejection and accept exactly once")
+        presenter.binding?.disconnect(); await reopened.close()
+    }
+    static func teardownCheck(scene: UIWindowScene, root: URL) async throws {
+        let directory = root.appendingPathComponent("Teardown")
+        let draftParent = directory.appendingPathComponent("Drafts")
+        try FileManager.default.createDirectory(at: draftParent, withIntermediateDirectories: true)
+        let owners = NativeHistorySessions<NotesDocumentLease>()
+        var lease: NotesDocumentLease? = NotesDocumentLease(directory: directory)
+        weak let weakLease = lease
+        var session: NativeHistorySession<NotesDocumentLease>? = await owners.open(documentURL: directory, mode: .create,
+            codec: .json(), draftURL: draftParent.appendingPathComponent("Draft.json")) { lease! }
+        weak let weakSession = session
+        var presenter: BindingCheckPresenter? = BindingCheckPresenter()
+        let window = UIWindow(windowScene: scene); window.rootViewController = presenter
+        window.makeKeyAndVisible()
+        try presenter!.attach(session!)
+        weak let weakPresenter = presenter
+        weak let weakEditor = presenter?.editor
+        weak let weakBinding = presenter?.binding
+        try FileManager.default.removeItem(at: draftParent)
+        try Data("blocked path".utf8).write(to: draftParent)
+        presenter?.editor.becomeFirstResponder(); presenter?.editor.insertText("Unsettled")
+        try await pause()
+        try require(session?.status.phase == .blocked && session?.draft == Note(title: "", body: "Unsettled"), "Fault did not retain captured draft")
+        presenter?.binding?.disconnect(); window.endEditing(true); window.rootViewController = nil; window.isHidden = true; presenter = nil
+        try await pause()
+        try require(weakPresenter == nil && weakEditor == nil && weakBinding == nil, "Blocked recovery retained UIKit presentation graph")
+        lease = nil
+        try require(weakLease != nil && owners.entries.count == 1, "Blocked owner lost its recovery lease")
+        try FileManager.default.removeItem(at: draftParent)
+        try FileManager.default.createDirectory(at: draftParent, withIntermediateDirectories: true)
+        _ = await session?.discardDraft(); await session?.close(); session = nil
+        try require(owners.entries.isEmpty && weakSession == nil && weakLease == nil, "Repaired owner or lease did not retire")
+        (scene.delegate as? NotesSceneDelegate)?.window?.makeKeyAndVisible()
+    }
+}
+
+@MainActor private final class BindingCheckPresenter: UIViewController {
+    let editor = NativeHistoryTextView()
+    var binding: NativeHistoryUIKitBinding<NotesDocumentLease>?
+    override func loadView() { view = UIView(); view.addSubview(editor); editor.frame = CGRect(x: 0, y: 0, width: 300, height: 150) }
+    func attach(_ session: NativeHistorySession<NotesDocumentLease>) throws {
+        loadViewIfNeeded()
+        binding = try session.connectUIKit(owner: self, editors: [editor],
+            captureDraft: { NativeDraftCapture(value: Note(title: "", body: $0.editor.text ?? "")) },
+            draftDidChange: { $0.editor.text = $1.body })
+    }
+}
+
+@MainActor private final class UnknownUndoTarget: NSObject {
+    var invocations = 0
+    @objc func restore(_ object: NSObject) { invocations += 1 }
 }

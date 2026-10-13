@@ -41,6 +41,13 @@ import UndoKit
             mode: mode == .create ? .create : .existing)
         self.store = store
         history = try await store.openScope(identity.scope, mode: mode == .create ? .create : .existing, host: host)
+        #if os(iOS)
+        // Failure leaves all acquired resources retained for the owning session's close.
+        for url in [directory] + (try FileManager.default.contentsOfDirectory(at: directory,
+            includingPropertiesForKeys: nil)) {
+            try FileManager.default.setAttributes([.protectionKey: FileProtectionType.complete], ofItemAtPath: url.path)
+        }
+        #endif
     }
     public func close() async throws {
         try await history?.close()

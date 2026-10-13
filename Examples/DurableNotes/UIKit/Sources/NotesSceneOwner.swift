@@ -3,16 +3,18 @@
 
 import UIKit
 import DurableNotesCore
+import UndoKit
 
+/// Thin platform adapter. The app-owned framework collection retains recovery leases.
 @MainActor final class NotesSceneOwner {
     enum State: String { case opening, active, closing, closed, blocked }
     let id: String
     weak var scene: UIWindowScene?
     weak var app: NotesUIKitApp?
+    weak var controller: NotesUIKitController?
     private let restoring: Bool
-    var controller: NotesUIKitController?
-    private(set) var session: NotesSession?
-    private(set) var state = State.closed
+    private(set) var session: NativeHistorySession<NotesDocumentLease>?
+    private(set) var lease: NotesDocumentLease?
     private(set) var events: [String] = [] {
         didSet {
             guard let app else { return }
@@ -20,108 +22,70 @@ import DurableNotesCore
                 options: [.atomic, .completeFileProtection])
         }
     }
-    var directory: URL { app!.root.appendingPathComponent(id.replacingOccurrences(of: "/", with: "_")) }
+    var directory: URL { app!.root.appendingPathComponent(id.replacingOccurrences(of: "/", with: "_"), isDirectory: true) }
     private var protectedData = UIApplication.shared.isProtectedDataAvailable
     private var storageAvailable = true
     private var foreground = true
-    private var closing: Task<Bool, Never>?
-    private var opening: Task<Void, Never>?
     private var backgroundLease: UIBackgroundTaskIdentifier = .invalid
-
+    var state: State {
+        switch session?.status.phase {
+        case .opening: .opening
+        case .ready, .busy: .active
+        case .closing: .closing
+        case .blocked, .suspended: .blocked
+        case .closed, nil: .closed
+        }
+    }
     init(id: String, scene: UIWindowScene, app: NotesUIKitApp, restoring: Bool) {
         self.id = id; self.scene = scene; self.app = app; self.restoring = restoring
     }
     func openIfAvailable() async {
-        if let closing { _ = await closing.value }
-        if let opening { await opening.value; return }
-        if session != nil && state == .blocked && foreground && protectedData && storageAvailable {
-            guard await close(reason: "retry closure after availability returned") else { return }
+        guard foreground, protectedData, storageAvailable, let app else { return }
+        if let session {
+            if session.status.phase == .closed { await app.sessions.reopen(session) }
+            controller?.lifecycleChanged()
+            return
         }
-        guard session == nil, foreground, protectedData, storageAvailable else { return }
-        state = .opening; controller?.lifecycleChanged()
-        let operation = Task { @MainActor in await self.performOpen() }
-        opening = operation
-        await operation.value
-        opening = nil
-    }
-    private func performOpen() async {
-        var opened: NotesSession?
         do {
-            let root = app!.root
-            let registry = root.appendingPathComponent("SceneRegistry.json")
-            var known: [String] = []
-            if FileManager.default.fileExists(atPath: registry.path) {
-                known = try JSONDecoder().decode([String].self, from: Data(contentsOf: registry))
-            }
+            let registry = app.root.appendingPathComponent("SceneRegistry.json")
+            var known = FileManager.default.fileExists(atPath: registry.path)
+                ? try JSONDecoder().decode([String].self, from: Data(contentsOf: registry)) : []
             let restored = restoring || known.contains(id)
-            let candidate = try await (restored ? NotesSession.openExisting(at: directory) : NotesSession.open(at: directory))
-            opened = candidate
-            guard foreground, protectedData, storageAvailable else {
-                try await candidate.close(); state = .closed
-                events.append("Open drained after lifecycle availability changed")
-                controller?.lifecycleChanged(); return
+            let lease = app.domainLease(at: directory)
+            self.lease = lease
+            let session = await app.sessions.open(documentURL: directory, mode: restored ? .existing : .create,
+                codec: .json(), draftURL: directory.appendingPathComponent("Draft.json")) { lease }
+            self.session = session
+            try controller?.attach()
+            guard session.status.phase == .ready else {
+                events.append("Open refused; original document preserved")
+                controller?.showMessage("Open refused: \(String(describing: session.status.issue))"); return
             }
-                if !restored {
-                    // Another scene can have committed while this open awaited.
-                    if FileManager.default.fileExists(atPath: registry.path) {
-                        known = try JSONDecoder().decode([String].self, from: Data(contentsOf: registry))
-                    }
-                    if !known.contains(id) { known.append(id) }
-                    try JSONEncoder().encode(known).write(to: registry, options: [.atomic, .completeFileProtection])
+            if !restored {
+                if FileManager.default.fileExists(atPath: registry.path) {
+                    known = try JSONDecoder().decode([String].self, from: Data(contentsOf: registry))
                 }
-                session = candidate
-                events.append(restored ? "Restored same document scope" : "Created new scene document")
-                try controller?.attach()
-                await controller?.refresh()
-                try controller?.restoreDraft()
-                guard foreground, protectedData, storageAvailable else {
-                    try await candidate.close(); session = nil; state = .closed
-                    events.append("Opened scope closed before becoming editable")
-                    controller?.lifecycleChanged(); return
-                }
-                state = .active
-                app?.sceneReady(self)
+                if !known.contains(id) { known.append(id) }
+                try JSONEncoder().encode(known).write(to: registry, options: [.atomic, .completeFileProtection])
+            }
+            events.append(restored ? "Restored same document scope" : "Created new scene document")
+            if foreground, protectedData, storageAvailable { app.sceneReady(self) }
+            else { _ = await close(reason: "availability changed during open") }
         } catch {
-            if let opened {
-                do { try await opened.close(); session = nil }
-                catch { session = opened; events.append("Failed opening retained its unclosed owner: \(error)") }
-            }
-            state = .blocked
             controller?.showMessage("Open refused; original document preserved: \(error)")
-            events.append("Open refused: \(error)")
+            _ = await close(reason: "failed scene attachment")
         }
         controller?.lifecycleChanged()
     }
     func close(reason: String) async -> Bool {
-        if let opening { await opening.value }
-        if let closing { return await closing.value }
-        guard let session else { state = .closed; controller?.lifecycleChanged(); return true }
-        state = .closing
+        guard let session else { return true }
         events.append("Closure requested: \(reason)")
-        _ = controller?.settleEditing(forLifecycle: true)
+        if let binding = controller?.binding { await binding.close() }
+        else { await session.close() }
+        let closed = session.status.phase == .closed
+        events.append(closed ? "Outcome drained and store closed: \(reason)" : "Closure incomplete; owner retained: \(reason)")
         controller?.lifecycleChanged()
-        let operation = Task { @MainActor [weak self] () -> Bool in
-            guard let self else { return false }
-            await self.controller?.waitForOperations()
-            do {
-                try self.controller?.persistDraftIfNeeded()
-                try await session.close()
-                self.session = nil; self.state = .closed
-                self.events.append("Outcome drained and store closed: \(reason)")
-                self.controller?.lifecycleChanged()
-                return true
-            } catch {
-                self.state = .blocked
-                self.events.append("Closure incomplete; owner retained: \(error)")
-                self.controller?.showMessage("Closure incomplete; owner retained: \(error)")
-                self.controller?.lifecycleChanged()
-                return false
-            }
-        }
-        closing = operation
-        let result = await operation.value
-        closing = nil
-        return result
+        return closed
     }
     func enteredBackground() {
         foreground = false; events.append("UIKit scene entered background")
@@ -143,6 +107,9 @@ import DurableNotesCore
     }
     func disconnected() {
         foreground = false; events.append("UIKit scene disconnected")
+        controller?.binding?.disconnect()
+        controller = nil
+        app?.owners.removeValue(forKey: id)
         Task { _ = await close(reason: "scene disconnect") }
     }
     func setProtectedDataAvailable(_ available: Bool) {
@@ -159,11 +126,11 @@ import DurableNotesCore
     }
     func backgroundExpired() {
         events.append("Background budget expired; closure not certified")
-        state = .blocked; controller?.lifecycleChanged()
+        controller?.binding?.isAvailable = false; controller?.lifecycleChanged()
         endBackgroundLease()
     }
     private func endBackgroundLease() {
         if backgroundLease != .invalid { UIApplication.shared.endBackgroundTask(backgroundLease); backgroundLease = .invalid }
     }
-    var mayEdit: Bool { state == .active && protectedData && storageAvailable && foreground }
+    var mayEdit: Bool { protectedData && storageAvailable && foreground && session?.status.phase != .closed }
 }

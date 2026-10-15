@@ -11,6 +11,13 @@ import AppKit
     weak var editingAdmission: (any AppKitEditingAdmission)?
     var originalUndoManager: UndoManager? { super.undoManager }
     public override var undoManager: UndoManager? { historyFacade ?? super.undoManager }
+    @objc public func undo(_ sender: Any?) { undoManager?.undo() }
+    @objc public func redo(_ sender: Any?) { undoManager?.redo() }
+    public override func validateUserInterfaceItem(_ item: any NSValidatedUserInterfaceItem) -> Bool {
+        if item.action == #selector(undo(_:)) { return undoManager?.canUndo ?? false }
+        if item.action == #selector(redo(_:)) { return undoManager?.canRedo ?? false }
+        return super.validateUserInterfaceItem(item)
+    }
     public override func shouldChangeText(inRanges affectedRanges: [NSValue], replacementStrings: [String]?) -> Bool {
         guard editingAdmission?.admitChange(in: self) ?? true else { return false }
         return super.shouldChangeText(inRanges: affectedRanges, replacementStrings: replacementStrings)

@@ -43,3 +43,28 @@ The supported binding must establish
 how local callbacks and durable groups coexist, retire only known local work
 after authoritative acceptance, and state any remaining native limitations.
 No idle-timer approximation or private typing-stack serialization is adopted.
+
+## AppKit extension
+
+The maintainer explicitly authorized the same live/durable distinction for
+AppKit in [issue #40](https://github.com/Folio-Suite/UndoKit/issues/40).
+Standard `NSTextView` keeps fine native Undo/Redo, including Redo at the original
+baseline. An explicit commit, actual editing end/focus transfer, or host semantic
+action settles one coarse durable editing transaction; native event-group closure,
+pauses, punctuation, stack exhaustion and equal draft values do not settle it.
+Explicit durable Undo first accepts that transaction and then reverses its group;
+rejection, uncertainty or failed authoritative refresh stops the invocation.
+
+The supported getter-only `NativeHistoryAppKitTextView` exposes an Undo facade.
+AppKit registers text operations directly through that manager, so the binding
+uses a dedicated live manager rather than UIKit's original-manager routing.
+Only registrations targeting the exact bound editor or its public `textStorage`
+are recognized live work. Other registrations enter the shared session's retained
+evidence barrier; ordinary acceptance or disconnection never clears them.
+Hosts must not register unrelated operations against the bound editor/text storage.
+The adapter supplies standard `undo:`/`redo:` responder actions and validation;
+it does not replace native input or install keyboard shortcuts.
+
+[AppKit binding guidance](../appkit-history-binding.md) records lifecycle,
+recovery and the separate method/native/human-interaction evidence boundaries.
+This extension adds no persisted schema, private API or typing-stack serialization.

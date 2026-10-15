@@ -5,7 +5,9 @@ SPDX-License-Identifier: MIT
 
 # Durable Notes
 
-A small runnable AppKit host for UndoKit. Two document windows edit separate
+A small runnable AppKit host using UndoKit's supported
+[AppKit binding](../../docs/appkit-history-binding.md) and shared native session.
+Two document windows edit separate
 persisted notes, each with a title and body. `DurableNotesCore` is a bounded,
 Foundation-only host module shared with the [UIKit shell](UIKit/README.md).
 It contains no AppKit routing or UI code.
@@ -49,7 +51,12 @@ UNDOKIT_NOTES_ROOT=/tmp/UndoKit-Notes-Example \
 
 An existing fixture reopens its own history. Do not delete or replace one half of
 a document to reset it: host state and history have independent durable roles.
-Missing/corrupt state is refused, rather than replaced with an empty note. Quit
+`KnownDocuments.json` records discovery outside the document directories before
+initial creation. A previously known missing document or any partial existing
+artifact always selects existing-only acquisition, including across app relaunch;
+missing/corrupt state is refused without replacement. Keep this registry with the
+app root. Loss of the entire registry and root cannot establish prior identity and
+is outside this bounded sample's discovery model. Quit
 an interactive app before rebuilding its generated bundle.
 
 ## Repeatable observations
@@ -60,12 +67,13 @@ applications/receipts.
 1. Click **Apply grouped example** in A. The title becomes `Shopping` and the
    body `Tea and bread`; applications and receipts become one. Focus the body
    and press Cmd-Z: both fields become blank together. Shift-Cmd-Z restores both.
-2. Type ` and milk` at the end of the body. Text stays provisional while AppKit
-   coalesces the typing run. **Commit typing**, changing editor focus, Undo,
-   reopening, or graceful app termination settles the group. One Cmd-Z after
-   typing commits then reverses that entire run. Native runloop group closure
-   alone does not submit every keystroke. This sample chooses explicit semantic
-   settlement boundaries; it is not a complete text-editor implementation.
+2. Type ` and milk` at the end of the body. Cmd-Z/Shift-Cmd-Z use fine native
+   live Undo/Redo, including Redo after returning to the committed baseline. No
+   durable delivery occurs for those live steps. **Commit typing**, an actual
+   editing-end/focus boundary or a host semantic action persists the whole editing
+   transaction as one durable group. Native event-group closure alone does not
+   persist each keystroke. The explicit `undoDocument()` API settles then reverses
+   the newly accepted transaction; rejection or uncertainty stops that invocation.
 3. Focus **Local scratch**. Its text has independent, nonpersisted native Undo.
    Cmd-Z with empty local history does nothing to the durable note. Copying,
    selection, and scrolling remain native AppKit operations.
@@ -85,16 +93,23 @@ applications/receipts.
    The host note changes to `Recovery` / `Durably accepted once`, its application
    count increases once, and a receipt is persisted. History finalization
    actually fails at its production Core Data save boundary. Semantic editing
-   remains suspended. Click **Close / reopen**: history consults the existing
-   host receipt, restores availability and leaves the host application count and
-   receipt bytes unchanged. Cmd-Z reverses the complete recovered group.
+   remains suspended. Click **Retry draft**: history consults the existing host
+   receipt using the exact prepared Command, restores availability and leaves
+   the host application count and receipt bytes unchanged. **Close / reopen**
+   also retains that draft for an explicit Retry/Discard decision. Cmd-Z reverses
+   the complete recovered group once recovery has succeeded.
    The injection method/button is absent in Release.
 8. Undo, then **Close / reopen**. Redo remains available from the committed
    position. Opening and native attachment must not apply a host edit or replay
    native callbacks. Quit and launch again to observe ordinary persisted reopening.
 
 The close button hides a window but retains its owner until graceful app
-termination. A pending accepted outcome retains its original scope. This sample
+termination. Closing or disconnecting preserves unsettled draft evidence;
+reopening that evidence requires **Retry draft** or **Discard draft**. A pending
+or uncertain prepared Command cannot be discarded until its authoritative outcome
+permits it. The sample keeps no generic editing queue: `NotesDocumentLease` owns
+Note semantics and receipts, while `NativeHistorySession` and the binding own
+admission, journaling, settlement, callback cleanup and recovery. A pending accepted outcome retains its original scope. This sample
 does not redirect a transaction to whichever window is currently focused.
 
 ## Ownership and receipts
@@ -150,15 +165,26 @@ existing-only restoration without replacement storage creation. The root
 busy refusal and inherited task-local isolation when independently owned stores
 reuse both scope and Command IDs. Injection binds the selected engine owner too.
 
-On 2026-10-12, the source-package installed app ran on an arm64 Mac with macOS
-27.0.1 (26A434), Xcode 27.0 (27A266a)/Swift 6.4. Debug and Release host/native
-checks passed. A separate CUA keyboard review observed grouped Cmd-Z/Shift-Cmd-Z,
-complete native typing followed by one Cmd-Z, and empty local-history Undo
-without document fallthrough. Visual review found readable, unclipped native
-controls. The first keyboard review exposed premature per-event typing
-submission; the corrected native regression checks that event-group closure
-keeps typing provisional. The screenshot was displayed inline in the review;
-the CUA API did not provide a file export.
+On 2026-10-15, the migrated source-package installed AppKit host passed Debug
+and Release public-session and native-control checks on the selected arm64 Mac
+with macOS 27.0.1 (26A434), Xcode 27.0 (27A266a)/Swift 6.4. The runner now includes
+all `Notes` host, native-session and AppKit-binding tests. Binding checks cover
+failed authoritative refresh/exact retry, unknown callback retention through
+blocked closure until explicit reconciliation, unavailable storage without
+replacement, weak owner teardown, and retained-draft retry decisions.
+
+Separate actual CUA keyboard/menu review typed `Alpha`, used repeated Cmd-Z to
+reach its baseline, observed Undo disabled/Redo enabled in the real Edit menu,
+clicked menu Redo and used Shift-Cmd-Z to restore `Alpha`. Independent `Note.json`
+reads showed zero durable deliveries for live editing, exactly one application and
+receipt after Commit typing, and three after durable Undo/Redo. Native scratch
+Undo to empty plus extra Cmd-Z left the document and its three receipts unchanged.
+The first review exposed missing standard responder actions/menu availability;
+the corrected adapter and public regression address that failure. CUA's image
+surface was unavailable during this review, so no new visual-layout qualification
+is claimed. Programmatic control/responder checks are recorded separately from
+that actual keyboard evidence. Their source hashes, runtime identity and exact
+commands are retained by each runner invocation.
 
 These are selected-current-Mac observations, not macOS-floor, Intel, iOS,
 physical-device, native-project, downloadable-binary, publisher-signing,

@@ -125,8 +125,10 @@ rechecks registrations before and after complete lease closure, retaining the ow
 and callback objects if closure cannot certify their preservation.
 
 The supported [UIKit binding](uikit-history-binding.md) supplies live original-manager
-routing and coarse editing-transaction boundaries under ADR 0006. Supported AppKit
-binding migration remains a separate slice. Bindings must classify the
+routing and coarse editing-transaction boundaries under ADR 0006. The supported
+[AppKit binding](appkit-history-binding.md) supplies standard text-view responder
+actions, known native registration routing and the accepted AppKit extension of
+that distinction. Bindings must classify the
 stock controls' editing registrations, preserve unrelated native registrations,
 project accepted host action names, and settle native typing coalescing and group
 boundaries before capture. They must preserve marked-text composition and local
@@ -136,7 +138,7 @@ actual native command routing, typing groups and deallocation. The portable
 text-editing system or custom text mutations are outside this design.
 
 The existing `NativeHistoryRouter` remains available for advanced integrations.
-The published AppKit sample's `NotesSession` is retained during this foundation
-slice; its controller migration and supported binding qualification are separate.
+The AppKit sample now uses the shared session and complete `NotesDocumentLease`;
+its legacy `NotesSession` remains available for focused host examples and tests.
 Swift public-session tests prove durable coordination and ownership, not installed
 AppKit/UIKit acceptance, device-lock protection, or keyboard-shortcut behavior.

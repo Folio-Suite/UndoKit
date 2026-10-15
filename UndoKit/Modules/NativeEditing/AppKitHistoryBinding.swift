@@ -147,7 +147,7 @@ import AppKit
         if liveTransaction { return liveManager }
         return session.undoManager
     }
-    func canUndo(for editor: NativeHistoryAppKitTextView?) -> Bool { return undoManager(for: editor)?.canUndo ?? false }
+    func canUndo(for editor: NativeHistoryAppKitTextView?) -> Bool { undoManager(for: editor)?.canUndo ?? false }
     func canRedo(for editor: NativeHistoryAppKitTextView?) -> Bool { undoManager(for: editor)?.canRedo ?? false }
     func name(for editor: NativeHistoryAppKitTextView?, undo: Bool) -> String {
         guard let manager = undoManager(for: editor) else { return "" }

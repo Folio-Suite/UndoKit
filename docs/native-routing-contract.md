@@ -8,7 +8,8 @@ SPDX-License-Identifier: MIT
 Accepted by the maintainer on 2026-09-29 through
 [Folio issue #44](https://github.com/Folio-Suite/Folio/issues/44).
 The maintainer's 2026-10-12 [UIKit live/durable Undo decision](adr/0006-uikit-live-and-durable-undo.md)
-revises the persisted typing granularity and supported UIKit binding ownership
+and its ticket-authorized AppKit extension revise persisted typing granularity and
+supported native binding ownership
 below. Earlier advanced-router and other-platform obligations remain in force.
 
 This contract extends [durable acceptance](durable-acceptance-contract.md),
@@ -38,11 +39,12 @@ The host supplies a thin adapter with explicit application policy.
 | Refresh affected views and choose navigation/reveal behavior | Host |
 
 The advanced router leaves these controls to the host. For a supported UIKit
+or AppKit
 binding, UndoKit owns generic control settlement, barriers, draft preservation
 and connection lifecycle through the host's draft mapping. The host retains
 semantic validation, scope selection, feedback and navigation policy.
 
-UndoKit does not interpret affected-content metadata. Framework-owned UIKit
+UndoKit does not interpret affected-content metadata. Framework-owned UIKit/AppKit
 bindings may read and render connected native control values under that explicit
 mapping; they must preserve native selection/composition and avoid stealing focus. Host obligations are part of the public integration contract and must
 appear in eventual normative DocC, with examples and failure handling.
@@ -58,7 +60,7 @@ ordered submission queue remains available under its existing contract.
 Before submission, the host settles the current native editing group according
 to the control's editing rules and submits the resulting Command. Preserve
 marked-text composition rules. Native typing coalescing remains a live-editing
-concern; supported UIKit durable bindings persist the editing transactions in
+concern; supported UIKit/AppKit durable bindings persist the editing transactions in
 [ADR 0006](adr/0006-uikit-live-and-durable-undo.md), not every local typing step.
 A binding must distinguish live local Undo from durable group Undo and prove
 its routing and retirement boundaries; losing live typing Undo is not implied
@@ -156,8 +158,9 @@ scopes.
 
 The original contract left the mechanism subject to proof. UIKit now uses a
 getter-only standard-control adapter with an original-manager facade; the linked
-binding contract defines live versus durable routing. This does not qualify every
-native input path or select the supported AppKit binding mechanism. Native
+binding contract defines live versus durable routing. The supported [AppKit binding](appkit-history-binding.md) routes recognized native
+text-storage callbacks through its dedicated live manager. Neither mechanism
+qualifies every native input path. Native
 synchronous callbacks cannot claim completed asynchronous acceptance merely by
 starting a task. Native stack changes, notifications, action names and document
 change counts must reflect the agreed completion boundary. The proof must observe

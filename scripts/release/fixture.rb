@@ -145,7 +145,11 @@ module CandidateFixture
         else
           puts 'Authority=Apple Distribution: Synthetic Fixture (TESTTEAM01)'
           puts 'TeamIdentifier=TESTTEAM01'
-          puts 'Timestamp=Oct 15, 2026 at 12:00:00 PM' unless ENV['UNDOKIT_FIXTURE_NO_TIMESTAMP'] == '1'
+          if ENV['UNDOKIT_FIXTURE_NO_TIMESTAMP'] == '1'
+            puts 'Signed Time=Oct 15, 2026 at 12:00:00 PM'
+          else
+            puts 'Timestamp=' + ENV.fetch('UNDOKIT_FIXTURE_TIMESTAMP_TEXT', 'Oct 15, 2026 at 12:00:00 PM')
+          end
         end
       when 'plutil'
         puts File.read(ARGV.last)

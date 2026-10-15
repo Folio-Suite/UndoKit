@@ -171,7 +171,11 @@ scripts/release/candidate.rb verify --candidate /absolute/path/to/candidate
 ```
 
 Verification reads the retained bytes and verifies the signature, approved
-publisher and secure timestamp again. Temporary extraction/certificate inspection
+publisher and secure timestamp again. Original human-readable timestamp output
+remains retained provenance; locale or timezone display changes do not change
+candidate identity. Verification still requires a secure timestamp in the actual
+verified signature, the same signed bundle bytes, and approved leaf/team identity.
+A local `Signed Time=` value cannot substitute. Temporary extraction/certificate inspection
 uses an isolated temporary directory. Verification does not rebuild, sign,
 repack, rewrite manifests or repair a modified candidate. Checksums and manifest
 hashes identify bytes; approval must bind their trusted values separately.

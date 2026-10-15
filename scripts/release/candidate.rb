@@ -263,7 +263,9 @@ module UndoKitCandidate
     approval = approval!(File.join(root, 'inputs', 'publisher-approval.json'))
     Dir.mktmpdir('undokit-candidate-verify-') do |temporary|
       signature = signature!(bundle, approval, File.join(temporary, 'certificates'))
-      %w[certificateSHA256 publisher teamIdentifier secureTimestampEvidence].each do |field|
+      # Timestamp text is locale-dependent display evidence. signature! verifies
+      # actual secure timestamp presence; the signed tree already binds its bytes.
+      %w[certificateSHA256 publisher teamIdentifier].each do |field|
         fail!("verified signature #{field} differs from candidate") unless signature.fetch(field) == manifest.fetch('signing').fetch(field)
       end
       unpacked = File.join(temporary, 'unpacked')

@@ -246,6 +246,28 @@ class ReleaseCandidateCommandTest < Minitest::Test
     end
   end
 
+  def test_timestamp_display_changes_preserve_identity_but_actual_timestamp_is_still_required
+    Dir.mktmpdir('undokit-candidate-test-') do |directory|
+      options = fixture(directory)
+      artifacts(options)
+      environment = boundary_tools(directory)
+      text, result = candidate_command(options, environment)
+      assert result.success?, text
+      candidate_hash = UndoKit::XCFrameworkAssembly.tree_sha256(options[:output])
+      alternate = environment.merge('UNDOKIT_FIXTURE_TIMESTAMP_TEXT' => '15 Oct 2026 19:00:00 UTC')
+      text, result = Open3.capture2e(alternate, RbConfig.ruby, '--disable-gems', COMMAND, 'verify', '--candidate', options[:output])
+      assert result.success?, text
+      assert_equal candidate_hash, UndoKit::XCFrameworkAssembly.tree_sha256(options[:output])
+      manifest = JSON.parse(File.read(File.join(options[:output], 'manifest.json')))
+      assert_equal 'Oct 15, 2026 at 12:00:00 PM', manifest.fetch('signing').fetch('secureTimestampEvidence')
+      text, result = Open3.capture2e(environment.merge('UNDOKIT_FIXTURE_NO_TIMESTAMP' => '1'), RbConfig.ruby,
+        '--disable-gems', COMMAND, 'verify', '--candidate', options[:output])
+      refute result.success?
+      assert_includes text, 'no secure timestamp'
+      assert_equal candidate_hash, UndoKit::XCFrameworkAssembly.tree_sha256(options[:output])
+    end
+  end
+
   def test_missing_publisher_approval_fails_with_retained_diagnostic
     Dir.mktmpdir('undokit-candidate-test-') do |directory|
       output = File.join(directory, 'attempt')

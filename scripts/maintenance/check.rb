@@ -176,23 +176,75 @@ end
 def markdown_check
   paths = tracked_or_present_paths('**/*.md')
   missing = []
-  pattern = /\[[^\]]*\]\((<[^>]*>|[^)\s]+)(?:\s+[^)]*)?\)/
+  inline_link = /\[[^\]]*\]\((<[^>]*>|[^)\s]+)(?:\s+[^)]*)?\)/
+  reference_use = /!?\[([^\]]+)\](?:\[([^\]]*)\])?/
+  reference_definition = /^ {0,3}\[([^\]]+)\]:[ \t]*(<[^>\r\n]*>|[^ \t\r\n]+)(?:[ \t]+(?:"[^"]*"|'[^']*'|\([^)]*\)))?[ \t]*$/
   paths.each do |source|
-    File.read(source).scan(pattern).flatten.each do |target_text|
-      target = target_text.delete_prefix('<').delete_suffix('>')
+    lines = markdown_without_fenced_code(File.readlines(source, chomp: true))
+    references = {}
+    lines.each_with_index do |line, index|
+      match = reference_definition.match(line)
+      next unless match
+
+      label = normalize_reference_label(match[1])
+      references[label] ||= [match[2].delete_prefix('<').delete_suffix('>'), index + 1]
+    end
+
+    destinations = lines.each_with_index.flat_map do |line, index|
+      inline = line.scan(inline_link).map { |match| [match.fetch(0), index + 1] }
+      references_used = line.scan(reference_use).map do |text, reference|
+        label = normalize_reference_label(reference.to_s.empty? ? text : reference)
+        references[label]
+      end.compact
+      inline + references_used
+    end
+    destinations.concat(references.values)
+
+    destinations.uniq.each do |target, line_number|
       next if target.empty? || target.match?(/\A[a-z][a-z0-9+.-]*:/i) || target.start_with?('#')
 
       local_destination = URI::DEFAULT_PARSER.unescape(target.split(/[?#]/, 2).first)
       destination = local_destination.start_with?('/') ?
         File.join(ROOT, local_destination.delete_prefix('/')) :
         File.expand_path(local_destination, File.dirname(source))
-      missing << "#{relative_path(source)}: #{target}" unless File.file?(destination) || File.directory?(destination)
+      unless File.file?(destination) || File.directory?(destination)
+        missing << "#{relative_path(source)}:#{line_number}: #{target}"
+      end
     end
   end
   return true if missing.empty?
 
   $failures << "Missing local Markdown destinations (external links and anchors are excluded):\n  #{missing.join("\n  ")}"
   false
+end
+
+def normalize_reference_label(label)
+  label.strip.gsub(/[ \t\r\n]+/, ' ').downcase
+end
+
+def markdown_without_fenced_code(lines)
+  fence_character = nil
+  fence_width = 0
+  lines.each_with_object([]) do |line, visible_lines|
+    if fence_character
+      closing = /^ {0,3}#{Regexp.escape(fence_character)}{#{fence_width},}[ \t]*$/
+      if closing.match?(line)
+        fence_character = nil
+        fence_width = 0
+      end
+      visible_lines << ''
+      next
+    end
+
+    opening = /^ {0,3}(`{3,}|~{3,})/
+    if (match = opening.match(line))
+      fence_character = match[1][0]
+      fence_width = match[1].length
+      visible_lines << ''
+    else
+      visible_lines << line
+    end
+  end
 end
 
 def script_syntax_check

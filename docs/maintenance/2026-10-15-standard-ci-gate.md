@@ -35,7 +35,9 @@ the native editing test suite.
 
 The remaining checks validate local Markdown destinations, Ruby and shell
 syntax for maintained runners under `scripts/`, and SHA-256 values in
-`docs/imported-design/preservation-checksums.json`. File and directory
+`docs/imported-design/preservation-checksums.json`. The local-link scanner
+supports inline links and single-line reference definitions, including angle
+brackets around destinations with spaces and optional titles. File and directory
 destinations are accepted. External URLs and fragment-only anchors are ignored;
 the gate does not contact external sites or validate remote links. It reads
 preserved artifacts without modifying them. Historical prototype sources are

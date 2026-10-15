@@ -19,7 +19,7 @@ SwiftLint rules, thresholds, or source inventory. Lint coverage is the framework
 and production tests selected by `.swiftlint.yml`; prototypes and generated
 build output are outside that inventory.
 
-The checked-in baseline records each reviewed finding with its rule, source
+The checked-in baseline records each reviewed finding with its rule, severity, source
 line and adjacent context, the lint message, and a disposition. The gate matches
 the trimmed source context and rule at that path, counting duplicate findings
 separately. A new or changed finding fails with its location and source line.
@@ -27,6 +27,11 @@ When a finding is fixed, remove its baseline entry in the same change; stale
 entries fail so exemptions do not accumulate. The baseline also records its
 source revision and the exact configuration hash. Rule or threshold changes
 require explicit review and a corresponding baseline update.
+
+One existing error-severity `type_body_length` finding is recorded as reviewed
+debt: `NativeHistorySessionTests` spans 650 lines against the configured 350-line
+error threshold. The test fixture remains cohesive today; revisit this debt with
+the native editing test suite.
 
 The remaining checks validate local Markdown destinations, Ruby and shell
 syntax for maintained runners under `scripts/`, and SHA-256 values in
@@ -37,7 +42,9 @@ preserved artifacts without modifying them. Historical prototype sources are
 not built or executed by this command.
 
 The prerequisites are macOS with the repository's pinned Xcode 27.0 / Swift
-6.4 toolchain, Ruby, Bash, and the pinned SwiftLint package artifact. The same
-command and lint configuration run locally and in CI. Package Debug/Release
+6.4 toolchain, Ruby 2.6 or later, Bash, and the pinned SwiftLint package
+artifact. The runner uses Ruby's standard library only and is compatible with
+the Ruby 2.6 runtime available to contributors. The same command and lint
+configuration run locally and in CI. Package Debug/Release
 tests and independent consumer checks remain separate existing CI checks;
 native project and Release qualification remains scoped to issue #13.

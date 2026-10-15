@@ -120,11 +120,13 @@ def lint_check
     expected_identity = Digest::SHA256.hexdigest(
       [entry.fetch('file'), entry.fetch('rule'), context.map(&:strip).join("\n")].join("\0")
     )
-    expected_identity != entry.fetch('identity') || entry.fetch('disposition').empty? || entry.fetch('rationale').empty?
+    expected_identity != entry.fetch('identity') ||
+      !%w[reviewed-existing reviewed-debt].include?(entry.fetch('disposition')) ||
+      !%w[Warning Error].include?(entry.fetch('severity')) || entry.fetch('rationale').empty?
   end
   return fail_check("Malformed reviewed baseline entry: #{malformed.inspect}") if malformed
 
-  approved = entries.group_by { |entry| entry.fetch('identity') }.transform_values(&:length)
+  approved = entries.group_by { |entry| [entry.fetch('identity'), entry.fetch('severity')] }.transform_values(&:length)
   seen = Hash.new(0)
   new_findings = []
   diagnostics.each do |diagnostic|
@@ -133,18 +135,23 @@ def lint_check
     line = diagnostic.fetch('line')
     context = lint_context(path, line)
     identity = lint_identity(path, rule, context)
-    if seen[identity] < approved.fetch(identity, 0)
-      seen[identity] += 1
+    approval_key = [identity, diagnostic.fetch('severity')]
+    if seen[approval_key] < approved.fetch(approval_key, 0)
+      seen[approval_key] += 1
     else
       new_findings << [relative_path(path), line, rule, diagnostic.fetch('reason'), context[1]]
     end
   end
 
   # A repeated identity is an independent finding and must match the same number of baseline records.
-  stale = entries.group_by { |entry| entry.fetch('identity') }.flat_map do |identity, matches|
+  stale = entries.group_by { |entry| [entry.fetch('identity'), entry.fetch('severity')] }.flat_map do |approval_key, matches|
     seen_count = diagnostics.count do |diagnostic|
-      lint_identity(diagnostic.fetch('file'), diagnostic.fetch('rule_id'),
-                    lint_context(diagnostic.fetch('file'), diagnostic.fetch('line'))) == identity
+      diagnostic_key = [
+        lint_identity(diagnostic.fetch('file'), diagnostic.fetch('rule_id'),
+                      lint_context(diagnostic.fetch('file'), diagnostic.fetch('line'))),
+        diagnostic.fetch('severity')
+      ]
+      diagnostic_key == approval_key
     end
     seen_count < matches.length ? matches.drop(seen_count) : []
   end

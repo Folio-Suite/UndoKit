@@ -22,7 +22,8 @@
         "        actionName: String = \"\","
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its declaration context. The parameter grouping remains readable for the native or typed API; this whitespace-only adjustment is deferred to an owning feature edit."
+      "rationale": "Reviewed in its declaration context. The parameter grouping remains readable for the native or typed API; this whitespace-only adjustment is deferred to an owning feature edit.",
+      "severity": "Warning"
     },
     {
       "identity": "bbc778c934c996d948c12b384070c3ac4266b34f4cfc41193e72da66858d925f",
@@ -36,7 +37,8 @@
         "        captureDraft: @escaping @MainActor (Owner) -> NativeDraftCapture<Lease.Draft>?,"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its declaration context. The parameter grouping remains readable for the native or typed API; this whitespace-only adjustment is deferred to an owning feature edit."
+      "rationale": "Reviewed in its declaration context. The parameter grouping remains readable for the native or typed API; this whitespace-only adjustment is deferred to an owning feature edit.",
+      "severity": "Warning"
     },
     {
       "identity": "a0c6fc0d8d32975af590649799fc99274e45dc25fd71414991c052e267a90a06",
@@ -50,7 +52,8 @@
         "        draftDidChange: @escaping @MainActor (Owner, Lease.Draft) -> Void,"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its declaration context. The parameter grouping remains readable for the native or typed API; this whitespace-only adjustment is deferred to an owning feature edit."
+      "rationale": "Reviewed in its declaration context. The parameter grouping remains readable for the native or typed API; this whitespace-only adjustment is deferred to an owning feature edit.",
+      "severity": "Warning"
     },
     {
       "identity": "cb4af856ba72d5b5ee1a509a2e66c57a8f72792e036a1d6d05e80186cbe2f240",
@@ -64,7 +67,8 @@
         "        statusDidChange: (@MainActor (Owner, NativeHistoryStatus) -> Void)? = nil"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its declaration context. The parameter grouping remains readable for the native or typed API; this whitespace-only adjustment is deferred to an owning feature edit."
+      "rationale": "Reviewed in its declaration context. The parameter grouping remains readable for the native or typed API; this whitespace-only adjustment is deferred to an owning feature edit.",
+      "severity": "Warning"
     },
     {
       "identity": "7aac9838751c2f2265a850688f44b1920ce9a8f631a89a23109a8f49a1db2a63",
@@ -78,7 +82,8 @@
         "    ) throws -> NativeHistoryAppKitBinding<Lease> {"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its declaration context. The parameter grouping remains readable for the native or typed API; this whitespace-only adjustment is deferred to an owning feature edit."
+      "rationale": "Reviewed in its declaration context. The parameter grouping remains readable for the native or typed API; this whitespace-only adjustment is deferred to an owning feature edit.",
+      "severity": "Warning"
     },
     {
       "identity": "bb0c5db85fd90a84d34f185a8eb03e772bee6b4d94ee87adafb61a4045e39ebe",
@@ -92,7 +97,8 @@
         "}"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "16294e54107de558fe965f093d054bea0001bf4382f05fea8022943319e4effc",
@@ -106,7 +112,8 @@
         "            .sorted { $0.documentURL.path < $1.documentURL.path }"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "6996af90cad8b2ea0c5e9403f87ce6eccad247c95527eec1d34e1203e802067e",
@@ -120,7 +127,8 @@
         "        editing = NativeEditingSession(documentURL: documentURL, lease: lease, codec: codec, codecVersion: codecVersion, draftURL: draftURL)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "723fb6bade911062d0e95d9f0b6ffcddbd5ed3330b6b07062f876a6c48590095",
@@ -134,7 +142,8 @@
         "    }"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "cd6bf0c40be2f330293251843d09c12f3fa6772fb535cdcc67592b4a23f3de51",
@@ -148,7 +157,8 @@
         "        draftDidChange: @escaping @MainActor (Owner, Lease.Draft) -> Void,"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its declaration context. The parameter grouping remains readable for the native or typed API; this whitespace-only adjustment is deferred to an owning feature edit."
+      "rationale": "Reviewed in its declaration context. The parameter grouping remains readable for the native or typed API; this whitespace-only adjustment is deferred to an owning feature edit.",
+      "severity": "Warning"
     },
     {
       "identity": "82ca515aa8d8fd505d484120e7b91487dfe9e43d7420d26df134617a3229d226",
@@ -162,7 +172,8 @@
         "        statusDidChange: (@MainActor (Owner, NativeHistoryStatus) -> Void)? = nil) throws -> NativeHistoryConnection {"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its declaration context. The parameter grouping remains readable for the native or typed API; this whitespace-only adjustment is deferred to an owning feature edit."
+      "rationale": "Reviewed in its declaration context. The parameter grouping remains readable for the native or typed API; this whitespace-only adjustment is deferred to an owning feature edit.",
+      "severity": "Warning"
     },
     {
       "identity": "98b8fe58720dd6f6d398237531f31cde36452ca9d553e6756939c557e53880dc",
@@ -176,7 +187,8 @@
         "        try editing.connect(owner: owner, captureDraft: captureDraft, draftDidChange: draftDidChange, statusDidChange: statusDidChange)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its declaration context. The parameter grouping remains readable for the native or typed API; this whitespace-only adjustment is deferred to an owning feature edit."
+      "rationale": "Reviewed in its declaration context. The parameter grouping remains readable for the native or typed API; this whitespace-only adjustment is deferred to an owning feature edit.",
+      "severity": "Warning"
     },
     {
       "identity": "eeae0d2c68737b5a4aa15c22e47bce18b8419e6c469a7cf65525fc7ea90befe3",
@@ -190,7 +202,8 @@
         "    }"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "29aa065dbde66bfb82aea895d452344047747cac9036555a057998218a286d26",
@@ -204,7 +217,8 @@
         "    public func submit(_ command: HistoryCommand) async -> HistoryResult { await editing.submit(command) }"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "2fdb9865de63451624c78c18bbdf5d32c09b111375ce03c2bfc776475689ae2f",
@@ -218,7 +232,8 @@
         "    #endif"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "b1b6b7b7b7fa3a8f3be887c6a5e1f91a334ad4c17f2e1e4e8fd71ebbd3d2a391",
@@ -232,7 +247,8 @@
         "        ])"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its collection context. The elements and their ordering are clear; add the required comma when the owning source is next edited."
+      "rationale": "Reviewed in its collection context. The elements and their ordering are clear; add the required comma when the owning source is next edited.",
+      "severity": "Warning"
     },
     {
       "identity": "56d862bc9ddc38dda6bfdc29bf44a69f364e7739643fd5890f4a42842d8cd8ad",
@@ -246,7 +262,8 @@
         "        ]"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its collection context. The elements and their ordering are clear; add the required comma when the owning source is next edited."
+      "rationale": "Reviewed in its collection context. The elements and their ordering are clear; add the required comma when the owning source is next edited.",
+      "severity": "Warning"
     },
     {
       "identity": "9b06b075c43bacef5fe3eb283104d915b0c5141d04c7a7937c963347ee96374c",
@@ -260,7 +277,8 @@
         "    private let scrollView = NSScrollView(frame: .zero)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "ca27f8c20d3fb327dc37e9a7024213f08dff3547f033a12f698b4d5fdc5cfc92",
@@ -274,7 +292,8 @@
         "        ])"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its collection context. The elements and their ordering are clear; add the required comma when the owning source is next edited."
+      "rationale": "Reviewed in its collection context. The elements and their ordering are clear; add the required comma when the owning source is next edited.",
+      "severity": "Warning"
     },
     {
       "identity": "25393c82b9f7880bceb93dddd5681960903cadc3a69fe53da17502cfabfae530",
@@ -288,7 +307,8 @@
         "        ])"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its collection context. The elements and their ordering are clear; add the required comma when the owning source is next edited."
+      "rationale": "Reviewed in its collection context. The elements and their ordering are clear; add the required comma when the owning source is next edited.",
+      "severity": "Warning"
     },
     {
       "identity": "ecdcbcf9f123bdd32b36276b38f5ea6734cf95b32804b99d628b99bb3e33ff4d",
@@ -302,7 +322,8 @@
         "        captureDraft: @escaping @MainActor (Owner) -> NativeDraftCapture<Lease.Draft>?,"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its declaration context. The parameter grouping remains readable for the native or typed API; this whitespace-only adjustment is deferred to an owning feature edit."
+      "rationale": "Reviewed in its declaration context. The parameter grouping remains readable for the native or typed API; this whitespace-only adjustment is deferred to an owning feature edit.",
+      "severity": "Warning"
     },
     {
       "identity": "2d23ed68393f0d71e0d1594aaf10e8f9fcbfd689d3e2f2cc59c1cce4c6c8a077",
@@ -316,7 +337,8 @@
         "        draftDidChange: @escaping @MainActor (Owner, Lease.Draft) -> Void,"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its declaration context. The parameter grouping remains readable for the native or typed API; this whitespace-only adjustment is deferred to an owning feature edit."
+      "rationale": "Reviewed in its declaration context. The parameter grouping remains readable for the native or typed API; this whitespace-only adjustment is deferred to an owning feature edit.",
+      "severity": "Warning"
     },
     {
       "identity": "5caf11bf2ff4635f2d54b40fbfda21251df2cfe80faab6ba60a692cda4259146",
@@ -330,7 +352,8 @@
         "        statusDidChange: (@MainActor (Owner, NativeHistoryStatus) -> Void)? = nil"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its declaration context. The parameter grouping remains readable for the native or typed API; this whitespace-only adjustment is deferred to an owning feature edit."
+      "rationale": "Reviewed in its declaration context. The parameter grouping remains readable for the native or typed API; this whitespace-only adjustment is deferred to an owning feature edit.",
+      "severity": "Warning"
     },
     {
       "identity": "32d35f1785522974af8d0de3271647d2b5eba5ff303a27d02de63cc98040a6f4",
@@ -344,7 +367,8 @@
         "    ) throws -> NativeHistoryUIKitBinding<Lease> {"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its declaration context. The parameter grouping remains readable for the native or typed API; this whitespace-only adjustment is deferred to an owning feature edit."
+      "rationale": "Reviewed in its declaration context. The parameter grouping remains readable for the native or typed API; this whitespace-only adjustment is deferred to an owning feature edit.",
+      "severity": "Warning"
     },
     {
       "identity": "1044ba6dd4855e14470560ead8f5031c37448797f08f33e4d2d8d72ee61e53fb",
@@ -358,7 +382,8 @@
         "    }"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "bc7f7cfd4796d2b10c23156119a6fb056288e1d6944d2ed244e0d574f81bcf79",
@@ -372,7 +397,8 @@
         "    public var undoManager: UndoManager { documentFacade }"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "43c6daeb675e565cd24cdad7b74906910ec016a531218f96be42d75986362033",
@@ -386,7 +412,8 @@
         "        actionName: String, captureDraft: @escaping @MainActor (Owner) -> NativeDraftCapture<Lease.Draft>?,"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its declaration context. The parameter grouping remains readable for the native or typed API; this whitespace-only adjustment is deferred to an owning feature edit."
+      "rationale": "Reviewed in its declaration context. The parameter grouping remains readable for the native or typed API; this whitespace-only adjustment is deferred to an owning feature edit.",
+      "severity": "Warning"
     },
     {
       "identity": "350f5ad92bb781b92be0e1a240c82b3656ca0b2bc23ebc596b16bcd30257f480",
@@ -400,7 +427,8 @@
         "        draftDidChange: @escaping @MainActor (Owner, Lease.Draft) -> Void,"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its declaration context. The parameter grouping remains readable for the native or typed API; this whitespace-only adjustment is deferred to an owning feature edit."
+      "rationale": "Reviewed in its declaration context. The parameter grouping remains readable for the native or typed API; this whitespace-only adjustment is deferred to an owning feature edit.",
+      "severity": "Warning"
     },
     {
       "identity": "dd9fe7f95f4e304dee2b202a9b169592ee4af67d721768fd213d4ca34df8c451",
@@ -414,7 +442,8 @@
         "        statusDidChange: (@MainActor (Owner, NativeHistoryStatus) -> Void)?) throws {"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its declaration context. The parameter grouping remains readable for the native or typed API; this whitespace-only adjustment is deferred to an owning feature edit."
+      "rationale": "Reviewed in its declaration context. The parameter grouping remains readable for the native or typed API; this whitespace-only adjustment is deferred to an owning feature edit.",
+      "severity": "Warning"
     },
     {
       "identity": "1004bcbd7ffaa1679c5fd9a8796defd41dc92880ddbf32b16cc7b648eb3109bc",
@@ -428,7 +457,8 @@
         "        self.session = session; self.actionName = actionName"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its declaration context. The parameter grouping remains readable for the native or typed API; this whitespace-only adjustment is deferred to an owning feature edit."
+      "rationale": "Reviewed in its declaration context. The parameter grouping remains readable for the native or typed API; this whitespace-only adjustment is deferred to an owning feature edit.",
+      "severity": "Warning"
     },
     {
       "identity": "0c1883f4a419af970ee79db3fd3ee4f5a2fffe5821f2a6555d85174c565a36fe",
@@ -442,7 +472,8 @@
         "            control.facade = facade; editor.historyFacade = facade; editor.editingAdmission = self; controls.append(control)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "e38b9455305f635cb612dcf87a1a02516400cd3535918d0700d4b087e7ae627c",
@@ -456,7 +487,8 @@
         "        }"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "9079001416ee541fbcd652ef08d00e3d567ad096038a4bc862604064ac158058",
@@ -470,7 +502,8 @@
         "            catch { return .failure(error as? HistoryFailure ?? HistoryFailure(.storage, stage: .preparation, disposition: .suspended)) }"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in the callback implementation. The statement remains clear at its current location; restructuring is deferred to a focused native-routing change."
+      "rationale": "Reviewed in the callback implementation. The statement remains clear at its current location; restructuring is deferred to a focused native-routing change.",
+      "severity": "Warning"
     },
     {
       "identity": "f3138bdd6bb59a9b589c1e4cdf7b50f4b97ba23f01c1ea2efdd9025370eaa56c",
@@ -484,7 +517,8 @@
         "            present?(proposed)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "43dba1fcf01eca051c98dcb58b75ebd0421416d0fb45dcdbd17b36cfa9e8e8a0",
@@ -498,7 +532,8 @@
         "        if let local = localControls.first(where: { $0.editor === selected }) { return local.registrationManager }"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "8af3a4f41a5756b661fe4e429276c05752db68bd449c40561e8e181ca4446871",
@@ -512,7 +547,8 @@
         "            captureLive(); publishAvailability()"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its routing context. The conditional preserves the selected native operation; a branch rewrite is deferred to a focused routing change."
+      "rationale": "Reviewed in its routing context. The conditional preserves the selected native operation; a branch rewrite is deferred to a focused routing change.",
+      "severity": "Warning"
     },
     {
       "identity": "e3e1801c8cb79d3ee93773807acb1d10f290b6e6f0ecc5fb5836f06158bc780a",
@@ -526,7 +562,8 @@
         "        guard !pending, !disconnected, isAvailable, !hasMarkedText else { return nil }"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "3f5a1cbf6deb59676a3a614d5dfec381d681c3a34c37251634f5fe5693ab1c2d",
@@ -540,7 +577,8 @@
         "        guard let task = start(action) else { return .failure(HistoryFailure(.busy, stage: .admission, disposition: .usable)) }"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "4301d4ce72963a618087ec658b1afb3fa561837b89a11c6aa52defcc075918f8",
@@ -554,7 +592,8 @@
         "        return await task.value"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "8bd802a3ca56813ad6b0f560c66a952f65708ebd806cc1c747d5f0fbcecb62b8",
@@ -568,7 +607,8 @@
         "        let names: [Notification.Name] = [NSText.didChangeNotification, NSText.didBeginEditingNotification,"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed as an explicit state transition in this native/history boundary. Splitting it requires an owning lifecycle or recovery review, so the configured complexity threshold remains unchanged."
+      "rationale": "Reviewed as an explicit state transition in this native/history boundary. Splitting it requires an owning lifecycle or recovery review, so the configured complexity threshold remains unchanged.",
+      "severity": "Warning"
     },
     {
       "identity": "fa8013728d484cbd06e9637c870ad18a94e3883567d3d9b59f94d16d0937b888",
@@ -582,7 +622,8 @@
         "        for name in names {"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its collection context. The elements and their ordering are clear; add the required comma when the owning source is next edited."
+      "rationale": "Reviewed in its collection context. The elements and their ordering are clear; add the required comma when the owning source is next edited.",
+      "severity": "Warning"
     },
     {
       "identity": "8f644ec549ac1ddd0fc817d58ad23471327254ea0dd861317d1fef18fc9b914f",
@@ -596,7 +637,8 @@
         "                let identity = note.object.map { ObjectIdentifier($0 as AnyObject) }"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "489a29b65417d45214b813fa220f57003c9ff80839142db4ec8655e8eb1defc0",
@@ -610,7 +652,8 @@
         "                    if self.localControls.contains(where: { $0.editor === editor }) { return }"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "577d19c1aa31e049709feaff1758a15b9e4a991e3ad9590f5c8e4891329b7846",
@@ -624,7 +667,8 @@
         "                    case NSText.didBeginEditingNotification:"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "7b740c4d420126c55a6aa6551472820c14c9a286e6e1b136bebe0d3816cf723d",
@@ -638,7 +682,8 @@
         "                    case NSText.didEndEditingNotification:"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "49cba6514d4eee89f2e027d90d1e40101c65c1dc6fd3c751fbf9627882e97633",
@@ -652,7 +697,8 @@
         "        self.owner = owner; self.editor = editor; self.registrationManager = registrationManager"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its declaration context. The parameter grouping remains readable for the native or typed API; this whitespace-only adjustment is deferred to an owning feature edit."
+      "rationale": "Reviewed in its declaration context. The parameter grouping remains readable for the native or typed API; this whitespace-only adjustment is deferred to an owning feature edit.",
+      "severity": "Warning"
     },
     {
       "identity": "51ea1d6a4647f0ae3c4017988840e27306260597302ce8974918a00cfdfc9066",
@@ -666,7 +712,8 @@
         "    override var canUndo: Bool { owner?.appKitCanUndo(for: editor) ?? false }"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "856f553dbfba6d5feeddc6e0e91b539cd79016c27d0adc6fd1178b2ffd1e69ed",
@@ -680,7 +727,8 @@
         "        }"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "7c0d349dfe3358f59b76bd524592017ec2f5ce08c271beb7abb3c37d85761ec8",
@@ -694,7 +742,8 @@
         "    let documentURL: URL"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed as a cohesive session state owner or scenario fixture. Splitting it solely for the configured size threshold would add navigation without a demonstrated behavior boundary."
+      "rationale": "Reviewed as a cohesive session state owner or scenario fixture. Splitting it solely for the configured size threshold would add navigation without a demonstrated behavior boundary.",
+      "severity": "Warning"
     },
     {
       "identity": "c7da4f8fcea38c139abb603404de413ef800bb519e57e9f6caccbccd6e1fdb60",
@@ -708,7 +757,8 @@
         "    private(set) var hasConnection = false"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "2564f0fd901154b0dd791da87aaa7b77a1a790495fb12ce2f8f322c171b364ae",
@@ -722,7 +772,8 @@
         "        draftDidChange: @escaping @MainActor (Owner, Lease.Draft) -> Void,"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its declaration context. The parameter grouping remains readable for the native or typed API; this whitespace-only adjustment is deferred to an owning feature edit."
+      "rationale": "Reviewed in its declaration context. The parameter grouping remains readable for the native or typed API; this whitespace-only adjustment is deferred to an owning feature edit.",
+      "severity": "Warning"
     },
     {
       "identity": "5b75ef8ca1273c199d6e8dabd557e7ec2add7319f853d4bd8e2c280bcec4800d",
@@ -736,7 +787,8 @@
         "        statusDidChange: (@MainActor (Owner, NativeHistoryStatus) -> Void)? = nil) throws -> NativeHistoryConnection {"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its declaration context. The parameter grouping remains readable for the native or typed API; this whitespace-only adjustment is deferred to an owning feature edit."
+      "rationale": "Reviewed in its declaration context. The parameter grouping remains readable for the native or typed API; this whitespace-only adjustment is deferred to an owning feature edit.",
+      "severity": "Warning"
     },
     {
       "identity": "5e11a061c318f48f52ac81ed7e0a451ce006edf160d653388ea7aa2f6bfb2baa",
@@ -750,7 +802,8 @@
         "        guard !hasConnection, phase != .closing else { throw failure(.busy) }"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its declaration context. The parameter grouping remains readable for the native or typed API; this whitespace-only adjustment is deferred to an owning feature edit."
+      "rationale": "Reviewed in its declaration context. The parameter grouping remains readable for the native or typed API; this whitespace-only adjustment is deferred to an owning feature edit.",
+      "severity": "Warning"
     },
     {
       "identity": "f80ad9544018fcdb8d9458316257fad54839d7c3e5156cf5923c1a913485fe5f",
@@ -764,7 +817,8 @@
         "        guard !closing, !unexplainedNativeRegistration else { return .failure(nativeRegistrationFailure()) }"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "2af85f350a22b74c1b9bbf7843c9593d92be3f77c0f5154e6fbebc3422f252dc",
@@ -778,7 +832,8 @@
         "        guard !closing, phase == .ready || (phase == .blocked && lease.history != nil) else { return .failure(failure(.busy)) }"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "52713301804a2f3cbcb03ced6bdbb53b0f48bc084c9277759b1ff9b438b0bb0f",
@@ -792,7 +847,8 @@
         "        guard prepared == nil || provedRejected else { return .failure(failure(.unresolved)) }"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "3917c06ceb1f69de3e5f70c50e2af40b53c8cd354aada15381c40fb48575fd87",
@@ -806,7 +862,8 @@
         "            if let draft { present?(draft) }; return .rejected"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "a63c96162307d378889ffe0e747560457de548c0055e6bcb901e7839f897cc53",
@@ -820,7 +877,8 @@
         "        if phase == .closed { return }"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed as an explicit state transition in this native/history boundary. Splitting it requires an owning lifecycle or recovery review, so the configured complexity threshold remains unchanged."
+      "rationale": "Reviewed as an explicit state transition in this native/history boundary. Splitting it requires an owning lifecycle or recovery review, so the configured complexity threshold remains unchanged.",
+      "severity": "Warning"
     },
     {
       "identity": "3cf32906088856d356ce9c7635efcbf814d3e1fde3383c7a8396b8a824d58311",
@@ -834,7 +892,8 @@
         "        catch { closing = false; needsReopen = true; block(error) }"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in the callback implementation. The statement remains clear at its current location; restructuring is deferred to a focused native-routing change."
+      "rationale": "Reviewed in the callback implementation. The statement remains clear at its current location; restructuring is deferred to a focused native-routing change.",
+      "severity": "Warning"
     },
     {
       "identity": "f51bca809e86975dfff70ba22b706c74620276d94851b8719ff5d773bba023ae",
@@ -848,7 +907,8 @@
         "                guard let command = try await lease.makeCommand(from: base, to: proposed, generation: generation) else {"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "d41072029a242873012bba55bc947eb5f33e73a9ae74246ed6a81d82d29599a5",
@@ -862,7 +922,8 @@
         "            #else"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "0841bc2449010d6ef8a1ef82e179c283fadb9d876a2a5a5fa86ba9b1bdfc4c11",
@@ -876,7 +937,8 @@
         "            }"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "ae1028b8fa3415b317091c74bfea2f3fe8839bc91365b9b23433096b519519dc",
@@ -890,7 +952,8 @@
         "        if proposed == base.value && !composing && prepared == nil { try removeJournal(); return }"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "948aa26288c652617f6c997d533e5f859ff3f43ec6fc66038eb357494c812661",
@@ -904,7 +967,8 @@
         "        return !composing"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "d269d4b9279e6d9ba51341b6fd758c0b44565a1f043621d88d5bd585d0aa5feb",
@@ -918,7 +982,8 @@
         "    private func block(_ error: Error) {"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "76275b7fc80eaaeb221b8891cb82abdb79c4638130e137bdfa157f67f4591e77",
@@ -932,7 +997,8 @@
         "        phase = .blocked; publish()"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "0504adbfaf74f1b30d87f7c4e9566238e13a3a5a493cfc1daf3685b5531a303c",
@@ -946,7 +1012,8 @@
         "        status = NativeHistoryStatus(phase: publishedPhase,"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "3e699d36675acccbce76cb2d4ec2f33014e71f95b37a6d62d83dada077045a5b",
@@ -960,7 +1027,8 @@
         "        statusDidChange?(status); presentStatus?(status); ownerChanged?()"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "03cc4bcf647001e89a06b51a7f549b8d4e4b7102776e54e639478eeee3b1b8c5",
@@ -974,7 +1042,8 @@
         "    }"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "5827c4fffeb374d560156bee4649ee5c52d033467a81c6d9218b2c99d6a9b3b2",
@@ -988,7 +1057,8 @@
         "        guard !closing, phase == .ready || phase == .blocked || phase == .suspended else { throw failure(.busy) }"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed as an explicit state transition in this native/history boundary. Splitting it requires an owning lifecycle or recovery review, so the configured complexity threshold remains unchanged."
+      "rationale": "Reviewed as an explicit state transition in this native/history boundary. Splitting it requires an owning lifecycle or recovery review, so the configured complexity threshold remains unchanged.",
+      "severity": "Warning"
     },
     {
       "identity": "9d5e2081af1eda9b1f0011628ed8408c1802f81c9f988f816b5f042fa4249fcb",
@@ -1002,7 +1072,8 @@
         ""
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed as a cohesive session/lifecycle unit or acceptance fixture. Splitting it solely for the configured size threshold would add navigation without a demonstrated behavior boundary."
+      "rationale": "Reviewed as a cohesive session/lifecycle unit or acceptance fixture. Splitting it solely for the configured size threshold would add navigation without a demonstrated behavior boundary.",
+      "severity": "Warning"
     },
     {
       "identity": "7ef2afddab726dc7320f9b46a3043fcc203912c0b5a7349cb18d278edcee428b",
@@ -1016,7 +1087,8 @@
         "        captureDraft: @escaping @MainActor (Owner) -> NativeDraftCapture<Lease.Draft>?,"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its declaration context. The parameter grouping remains readable for the native or typed API; this whitespace-only adjustment is deferred to an owning feature edit."
+      "rationale": "Reviewed in its declaration context. The parameter grouping remains readable for the native or typed API; this whitespace-only adjustment is deferred to an owning feature edit.",
+      "severity": "Warning"
     },
     {
       "identity": "7965d30e5272550deef3a01625464bbe57b713c02cd65ba73d5eadac3ecee618",
@@ -1030,7 +1102,8 @@
         "        draftDidChange: @escaping @MainActor (Owner, Lease.Draft) -> Void,"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its declaration context. The parameter grouping remains readable for the native or typed API; this whitespace-only adjustment is deferred to an owning feature edit."
+      "rationale": "Reviewed in its declaration context. The parameter grouping remains readable for the native or typed API; this whitespace-only adjustment is deferred to an owning feature edit.",
+      "severity": "Warning"
     },
     {
       "identity": "635b830f9b35532d5e249c2715331a416af5adb77bc07082d86e96c1ba7890a1",
@@ -1044,7 +1117,8 @@
         "        statusDidChange: (@MainActor (Owner, NativeHistoryStatus) -> Void)?"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its declaration context. The parameter grouping remains readable for the native or typed API; this whitespace-only adjustment is deferred to an owning feature edit."
+      "rationale": "Reviewed in its declaration context. The parameter grouping remains readable for the native or typed API; this whitespace-only adjustment is deferred to an owning feature edit.",
+      "severity": "Warning"
     },
     {
       "identity": "8edb9a010442c01fc8307d4aec876825ebe4e94ebb3cb0b44a68be70742a5344",
@@ -1058,7 +1132,8 @@
         "    ) throws {"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its declaration context. The parameter grouping remains readable for the native or typed API; this whitespace-only adjustment is deferred to an owning feature edit."
+      "rationale": "Reviewed in its declaration context. The parameter grouping remains readable for the native or typed API; this whitespace-only adjustment is deferred to an owning feature edit.",
+      "severity": "Warning"
     },
     {
       "identity": "c3b2ad206be08c1510a69ace20e058ecc0a5a4713a87b42b4fdd2c52f4c5a2d0",
@@ -1072,7 +1147,8 @@
         "            }"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "5ec937562786b62c437d9d8df7a5155eb6542deab09a19994babd29f5e0206d0",
@@ -1086,7 +1162,8 @@
         "        controls = []; localControls = []; capture = nil; present = nil; presentStatus = nil"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "2d6af10cabceee398b49c121d155e5b5a035f2e82b2113a4064e9354d78bb27f",
@@ -1100,7 +1177,8 @@
         "        if localControls.contains(where: { $0.editor === textView }) { return true }"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "7603d0dbf0e8b8f3ce4f4ef49672d1b8c7bd38b6321c1716c50c92189ad607c0",
@@ -1114,7 +1192,8 @@
         "        if liveTransaction { return selected?.originalUndoManager }"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "1abfadcbd0cf04507b04087fbcffde571b3f9aaa49b08eb3e06bf03c1a7501fd",
@@ -1128,7 +1207,8 @@
         "            captureLive(); publishAvailability()"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its routing context. The conditional preserves the selected native operation; a branch rewrite is deferred to a focused routing change."
+      "rationale": "Reviewed in its routing context. The conditional preserves the selected native operation; a branch rewrite is deferred to a focused routing change.",
+      "severity": "Warning"
     },
     {
       "identity": "6a19dda1f430b4b1706241b5e2cf7f147afc32f8eb6e0785240d8db797d4e5b8",
@@ -1142,7 +1222,8 @@
         "        guard let task = start(action) else {"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "4268974c4cb0c28a362320b5955480568e090324b3a97c6f86b25e17c59678f5",
@@ -1156,7 +1237,8 @@
         "        guard !pending, !disconnected, isAvailable, !hasMarkedText else { return nil }"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "a57ffe0516555aa87124bb2af7dcbcfa08b953ff35b5d0691c5acf6b73f2bf41",
@@ -1170,7 +1252,8 @@
         "        for name in names {"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its collection context. The elements and their ordering are clear; add the required comma when the owning source is next edited."
+      "rationale": "Reviewed in its collection context. The elements and their ordering are clear; add the required comma when the owning source is next edited.",
+      "severity": "Warning"
     },
     {
       "identity": "c613dc28a12795f9fe2f977025e621a548cb7ee7f47ca884bced34017b7ff291",
@@ -1184,7 +1267,8 @@
         "                let identity = notification.object.map { ObjectIdentifier($0 as AnyObject) }"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its callback context. The closure parameters and routing behavior remain locally understandable; defer a formatting-only rewrite to the owning feature edit."
+      "rationale": "Reviewed in its callback context. The closure parameters and routing behavior remain locally understandable; defer a formatting-only rewrite to the owning feature edit.",
+      "severity": "Warning"
     },
     {
       "identity": "c613dc28a12795f9fe2f977025e621a548cb7ee7f47ca884bced34017b7ff291",
@@ -1198,7 +1282,8 @@
         "                let identity = notification.object.map { ObjectIdentifier($0 as AnyObject) }"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its callback context. The closure parameters and routing behavior remain locally understandable; defer a formatting-only rewrite to the owning feature edit."
+      "rationale": "Reviewed in its callback context. The closure parameters and routing behavior remain locally understandable; defer a formatting-only rewrite to the owning feature edit.",
+      "severity": "Warning"
     },
     {
       "identity": "e0ce34059721fc8fdfda31ca502a0ecf7b86b67a3aef7bb0dc9b06c9dc8f87c2",
@@ -1212,7 +1297,8 @@
         "        guard let point = Self.failSaveAt else { return false }"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed as an explicit state transition in this native/history boundary. Splitting it requires an owning lifecycle or recovery review, so the configured complexity threshold remains unchanged."
+      "rationale": "Reviewed as an explicit state transition in this native/history boundary. Splitting it requires an owning lifecycle or recovery review, so the configured complexity threshold remains unchanged.",
+      "severity": "Warning"
     },
     {
       "identity": "73bcfeedaa3e83c60642cfde49807ad76baaaea63f57e82d8b84f4bffa47ecf9",
@@ -1226,7 +1312,8 @@
         "            if let identity = HistoryEngine.injectedFinalizationIdentity {"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "444ea9cd190db53b0684c1065cfdbced36fe6c484f5a81515daa51f03bbb7ae6",
@@ -1240,7 +1327,8 @@
         "        XCTAssertEqual(failure.cause, .storage)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner."
+      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner.",
+      "severity": "Warning"
     },
     {
       "identity": "63ad4467ae9c37a217b8011198ef9ed1b0cf6e03f5c38d33b4442d9b1041536a",
@@ -1254,7 +1342,8 @@
         "        XCTAssertFalse(peer.snapshot.isSuspended)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner."
+      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner.",
+      "severity": "Warning"
     },
     {
       "identity": "6721be3fec7fa6a463c601e9592e43688b3d6b706535f7ba389f081a6d5a0347",
@@ -1268,7 +1357,8 @@
         "        XCTAssertEqual(failure.cause, .busy)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner."
+      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner.",
+      "severity": "Warning"
     },
     {
       "identity": "353578cfa90ce42237c8ea34befda48ded311d5fa860398695a97ad03fcecec5",
@@ -1282,7 +1372,8 @@
         "        XCTAssertEqual(host.value, \"ordinary\")"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner."
+      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner.",
+      "severity": "Warning"
     },
     {
       "identity": "b380917641004c23a52193dc4c425dc15a641f5246ead3be7c283c910cb2bd34",
@@ -1296,7 +1387,8 @@
         "    }"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "f7246e6b7616365fafa64079571834317353b550a4af42ab845466d17e7c4044",
@@ -1310,7 +1402,8 @@
         "        let outcome = HistoryHostOutcome.accepted(["
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in the failure-injection test context. The optional byte data is converted deliberately for the assertion; a more explicit representation belongs with that test fixture."
+      "rationale": "Reviewed in the failure-injection test context. The optional byte data is converted deliberately for the assertion; a more explicit representation belongs with that test fixture.",
+      "severity": "Warning"
     },
     {
       "identity": "17455a1e06ad3a4e0f1299b6b640b445156b0409421265e74599af5f830d490b",
@@ -1324,7 +1417,8 @@
         "        ])"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its collection context. The elements and their ordering are clear; add the required comma when the owning source is next edited."
+      "rationale": "Reviewed in its collection context. The elements and their ordering are clear; add the required comma when the owning source is next edited.",
+      "severity": "Warning"
     },
     {
       "identity": "ad785999aba86f0bff78c1fbfbdd8cdd1c23dc65b86b865333be8dd6533bf5d6",
@@ -1337,8 +1431,9 @@
         "@MainActor final class NativeHistorySessionTests: XCTestCase {",
         "    func testDirectoryFlagDoesNotCreateAnotherOwnerForTheSameDocument() async throws {"
       ],
-      "disposition": "reviewed-existing",
-      "rationale": "Reviewed as a cohesive session state owner or scenario fixture. Splitting it solely for the configured size threshold would add navigation without a demonstrated behavior boundary."
+      "disposition": "reviewed-debt",
+      "rationale": "Explicit reviewed debt: this cohesive native editing test class spans 650 lines against the configured 350-line error threshold. Splitting solely to satisfy the size rule would obscure scenario ownership; revisit with the native editing test suite.",
+      "severity": "Error"
     },
     {
       "identity": "7d27955a6136756148045f0b96d3da3a5af1643ea265e3eaafec9d04b6ae8e07",
@@ -1352,7 +1447,8 @@
         "        XCTAssertEqual(second.status.phase, .ready)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its assertion context. The existing comparison expresses the scenario result; changing matcher spelling is deferred to the test owner."
+      "rationale": "Reviewed in its assertion context. The existing comparison expresses the scenario result; changing matcher spelling is deferred to the test owner.",
+      "severity": "Warning"
     },
     {
       "identity": "7a3c040898985c2e8a85d89854d08bc493fd9b9398f7aed72dbd1e1cb322c494",
@@ -1366,7 +1462,8 @@
         "        XCTAssertEqual(returned.status.phase, .ready)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its assertion context. The existing comparison expresses the scenario result; changing matcher spelling is deferred to the test owner."
+      "rationale": "Reviewed in its assertion context. The existing comparison expresses the scenario result; changing matcher spelling is deferred to the test owner.",
+      "severity": "Warning"
     },
     {
       "identity": "dda3dea1be53fd2bd524ad0faa59e87cc69a956ba713fcd12abfa47ecd52942c",
@@ -1380,7 +1477,8 @@
         "        XCTAssertEqual(try readHost(directory).value, 7)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner."
+      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner.",
+      "severity": "Warning"
     },
     {
       "identity": "b8d8ef3522e451fcac873c0f331ae6be6736c3424ac84da9209ad5a19280108c",
@@ -1394,7 +1492,8 @@
         "        XCTAssertEqual(try readHost(directory).value, 0)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner."
+      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner.",
+      "severity": "Warning"
     },
     {
       "identity": "9772a2a3f15e4df80b55454a31995f09cec92b75e752914e7c9d8617e9f43721",
@@ -1408,7 +1507,8 @@
         "        XCTAssertEqual(try readHost(directory).value, 7)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner."
+      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner.",
+      "severity": "Warning"
     },
     {
       "identity": "d14608fcc651e4db5c839ff0f4c3565df7e6339ba80af2c5979b34269925c26b",
@@ -1422,7 +1522,8 @@
         "        XCTAssertEqual(try readHost(directory).value, 0)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner."
+      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner.",
+      "severity": "Warning"
     },
     {
       "identity": "864bf12259c106fbeeddcb98ab75b534b7d5c22498e89e657950582ad3444791",
@@ -1436,7 +1537,8 @@
         "        XCTAssertEqual(try readHost(directory).value, 11)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "d30e0b008bb207be05802df17c7920a29d573ade2a09c97706e5491e2c76c35c",
@@ -1450,7 +1552,8 @@
         "        XCTAssertEqual(try readHost(directory).value, 11)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner."
+      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner.",
+      "severity": "Warning"
     },
     {
       "identity": "5bd7af0249596475dff65141e89805e1bcca3c29451f713320f2af5109305548",
@@ -1464,7 +1567,8 @@
         "        XCTAssertEqual(failure.cause, .busy)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "f507d3601dfb27cab49a30e09898787f4568f064b2a4fca27acdab903ae3817c",
@@ -1478,7 +1582,8 @@
         "        XCTAssertEqual(failure.cause, .busy)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner."
+      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner.",
+      "severity": "Warning"
     },
     {
       "identity": "a23df1924aed7c53a33fe0574a7d78663bb1726d82213fe8edec24faa5069235",
@@ -1492,7 +1597,8 @@
         "        await session.close(); connection.disconnect()"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "d217c7fe201f2c03302b104f3a3c405eecc0bb082d8272f7214c90e12936fccb",
@@ -1506,7 +1612,8 @@
         "        XCTAssertEqual(try readHost(directory).value, 0)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner."
+      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner.",
+      "severity": "Warning"
     },
     {
       "identity": "fd8fcf770c2c54d752728f4b58a84c8806665103ae990756fcc624b0d5c78068",
@@ -1520,7 +1627,8 @@
         "            codec: .json(), draftURL: directory.appendingPathComponent(\"Draft.json\")) { lease! }"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "86651698fbba2dfeb36b0afcf434e37e8101f69d1638c966c05d0a6c89ca87fd",
@@ -1534,7 +1642,8 @@
         "        owner = nil"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "756a692241195108490f7a52a51de0c5895fa341367f3524f0295fc0b0bf63d1",
@@ -1548,7 +1657,8 @@
         "        let gate = NativeDeliveryGate(); lease.deliveryGate = gate"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "bed14705f6600b554764892df1a9f7aaa42b1789381297ca88596e1dcae80d11",
@@ -1562,7 +1672,8 @@
         "        guard case .failure(let failure) = refusal else { return XCTFail(\"Independent operation was queued\") }"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "49e2cbb39b695d4031ce280304bce6f0fe92fba06bdc91f62b2e1e17a087516f",
@@ -1576,7 +1687,8 @@
         "        XCTAssertEqual(failure.cause, .busy)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner."
+      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner.",
+      "severity": "Warning"
     },
     {
       "identity": "bf4b08c50f385040385b97c8610450b468fbb0c3089bbb6d9e82613a4b34d42c",
@@ -1590,7 +1702,8 @@
         "        owner.value = 9"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "cadbb87db5eb46858f6104ebfb4863e697ee50af6f66be353578f6315b0dac2e",
@@ -1604,7 +1717,8 @@
         "        XCTAssertEqual(try readHost(directory).value, 9)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner."
+      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner.",
+      "severity": "Warning"
     },
     {
       "identity": "e2088b6f83cc8bd95806b84158b3c14494561d0c0cc0d43115d84fe07be6b9cb",
@@ -1618,7 +1732,8 @@
         "        lease.host?.hideOutcome = true"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "5e7cc42f281adaff6f818c8475ba8050526bb7dfdabcd76a2faabe0a7fce741f",
@@ -1632,7 +1747,8 @@
         "        let accepted = try readHost(directory)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner."
+      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner.",
+      "severity": "Warning"
     },
     {
       "identity": "579d1fa456dc5e5f97b6122da99446ca61f7443009a536db28710e4a178c682c",
@@ -1646,7 +1762,8 @@
         "        XCTAssertEqual(receipt.token.command, originalCommand)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "e6c989216b424265ff5ed90ccb80c7307685a6aa9bed8231d7ae7a0fbe4c5cdf",
@@ -1660,7 +1777,8 @@
         "        XCTAssertEqual(receipt.token.command, originalCommand)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner."
+      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner.",
+      "severity": "Warning"
     },
     {
       "identity": "872e735638658ac1a55ed595b811d35f687e80b284e29a0ee0886a465599279e",
@@ -1674,7 +1792,8 @@
         "        XCTAssertEqual(failure.stage, .finalization)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "c844c5b53c3ec96d1c6ac5dc8e84489b6d25846d207c8320bbf53db5d9024d96",
@@ -1688,7 +1807,8 @@
         "        XCTAssertEqual(failure.stage, .finalization)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner."
+      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner.",
+      "severity": "Warning"
     },
     {
       "identity": "015bb918c2a50c721c497bceb39d9ecf3edc8ae3b6b4330eda27b768f3af3b8a",
@@ -1702,7 +1822,8 @@
         "        XCTAssertEqual(receipt.token.command, originalCommand)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "1af5bb7b119d08c63b961c7ae49d76305156f83b077dffeaa1a56d7f21bcf76a",
@@ -1716,7 +1837,8 @@
         "        XCTAssertEqual(receipt.token.command, originalCommand)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner."
+      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner.",
+      "severity": "Warning"
     },
     {
       "identity": "3d5b388e889d7cdf23becff6e714540e576793dbabf5ae43f4ecba96649c8406",
@@ -1730,7 +1852,8 @@
         "            NativeIntegerLease(directory: directory, scope: scope, working: working)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "5674cef148ea4c8d696f383443ab379b85f78ff5ebada7dac702c228b0dd8c5a",
@@ -1744,7 +1867,8 @@
         "        XCTAssertEqual(try Data(contentsOf: draftURL), original)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "4b2a812df2a80d62f86bc119d3b15add9fccf21b580a057c2843fcc582edb952",
@@ -1758,7 +1882,8 @@
         "        XCTAssertEqual(try Data(contentsOf: draftURL), original)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner."
+      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner.",
+      "severity": "Warning"
     },
     {
       "identity": "579644944ceec582d3b9a912ce766e84ed6248894c47794eb25e5414d36d552d",
@@ -1772,7 +1897,8 @@
         "            NativeIntegerLease(directory: directory, scope: scope, working: working)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "a731f2801addfdfd39150e6931fd0808bb714d76746aa0dacff7553323b90804",
@@ -1786,7 +1912,8 @@
         "        XCTAssertEqual(try readHost(directory).value, 29)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "6a88f22b8d77418b4b3adba2c0e57f890b5b5f99826df04eb390a905f9c933a7",
@@ -1800,7 +1927,8 @@
         "        XCTAssertEqual(try readHost(directory).value, 29)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner."
+      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner.",
+      "severity": "Warning"
     },
     {
       "identity": "a0bb75e135f2bba8fb6b013c95a41fd2ce48f62d1575453309a1f6d4a9bbdcb4",
@@ -1814,7 +1942,8 @@
         "        lease.failAfterEngineClose = false"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its assertion context. The existing comparison expresses the scenario result; changing matcher spelling is deferred to the test owner."
+      "rationale": "Reviewed in its assertion context. The existing comparison expresses the scenario result; changing matcher spelling is deferred to the test owner.",
+      "severity": "Warning"
     },
     {
       "identity": "c58c671a7a8ad1c8dcb2131d28e409bf2187340a2c27c5645cb2508d5d9234f2",
@@ -1828,7 +1957,8 @@
         "        XCTAssertEqual(try readHost(directory).value, 7)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "f8b2219a88588c4923b49edccac12200d60463c338d130b39ebdca789af453dc",
@@ -1842,7 +1972,8 @@
         "        XCTAssertEqual(try readHost(directory).value, 7)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner."
+      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner.",
+      "severity": "Warning"
     },
     {
       "identity": "e3b9341baf52d447df9df794c8ab1968dd9986bc25022ea30d22fb1041007019",
@@ -1856,7 +1987,8 @@
         "            NativeIntegerLease(directory: directory, scope: scope, working: working)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "2537dfab3dd887324cde000f39e4a42861cadbf2e2d966fe4f985347a3bcc83f",
@@ -1870,7 +2002,8 @@
         "        XCTAssertEqual(replacement.status.phase, .ready)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its assertion context. The existing comparison expresses the scenario result; changing matcher spelling is deferred to the test owner."
+      "rationale": "Reviewed in its assertion context. The existing comparison expresses the scenario result; changing matcher spelling is deferred to the test owner.",
+      "severity": "Warning"
     },
     {
       "identity": "02aa04b99f96c96d9f77883ee728cfcad92d7bff120295ff874bc0650fcaa26f",
@@ -1884,7 +2017,8 @@
         "        XCTAssertEqual(try readHost(directory).value, 0)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "fdbbbfa7f95dd2de36e22d9d2e6dc592fdf54940d30f8c67aaa1b33d001086d6",
@@ -1898,7 +2032,8 @@
         "        XCTAssertEqual(try readHost(directory).value, 0)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner."
+      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner.",
+      "severity": "Warning"
     },
     {
       "identity": "5f4c694d9dc7bf46899fa65266a8901cab23be779a8c70ca013ddff5a4134c74",
@@ -1912,7 +2047,8 @@
         "        owner.value = 22; owner.composing = true"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "8be61ea4e0199113e7d460908b8a99d276945a9dbe5577e759142970a23d4883",
@@ -1926,7 +2062,8 @@
         "        try session.updateDraft(13)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "c6ba6884932afa59e7551dd0af59c66f5c0cdb125bc573cb8ad1104e7c45671b",
@@ -1940,7 +2077,8 @@
         "        XCTAssertEqual(session.status.phase, .blocked)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "b728c41e110c1b5bfe65118f50b6abcc82f70a7a2a58b3d029d2030011bf6c01",
@@ -1954,7 +2092,8 @@
         "        XCTAssertEqual(session.status.phase, .blocked)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner."
+      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner.",
+      "severity": "Warning"
     },
     {
       "identity": "6eb0b7a105f83ea017fe27d6c80519ded7697d56b1e1c3bc19fa66d18531bd35",
@@ -1968,7 +2107,8 @@
         "        XCTAssertEqual(try readHost(directory).applicationCount, 1)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "919b6464d7ba18f0d742372b67dbcb98ef6fbf0c87fb5112aeeab2667cbd3f46",
@@ -1982,7 +2122,8 @@
         "        XCTAssertEqual(try readHost(directory).applicationCount, 1)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner."
+      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner.",
+      "severity": "Warning"
     },
     {
       "identity": "75c0cfa319c34cb229d5e0cfe84ff33b777f9e99de8120bf4dbe52085dc9c555",
@@ -1996,7 +2137,8 @@
         "        XCTAssertEqual(try readHost(directory).value, 0)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner."
+      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner.",
+      "severity": "Warning"
     },
     {
       "identity": "6a336044f0b97099f1c33a10a3a5ae848bbb81bd52e4ad531947c695138c18e1",
@@ -2010,7 +2152,8 @@
         "        // The host declares this proposal semantically equivalent to its existing domain state."
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "6b8b0e1774dd5c87382ceb103279bc01ea8663fefc3c2a27dd70da5a4f9f0c2f",
@@ -2024,7 +2167,8 @@
         "        try await session.reconcileNativeRegistrations()"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its assertion context. The existing comparison expresses the scenario result; changing matcher spelling is deferred to the test owner."
+      "rationale": "Reviewed in its assertion context. The existing comparison expresses the scenario result; changing matcher spelling is deferred to the test owner.",
+      "severity": "Warning"
     },
     {
       "identity": "a8c3fd83ec0adf15a626ce66eaba9629e7ed5eadc75cad1fb6fa8fa3141f7da4",
@@ -2038,7 +2182,8 @@
         "        var presenter: NativeIntegerPresentation? = NativeIntegerPresentation()"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "a9765aea046000ae244f02b2073793e490b9fb8aca935853751f53213722b5cc",
@@ -2052,7 +2197,8 @@
         "        let gate = NativeDeliveryGate(); lease.completeCloseGate = gate"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "2a7004c6984353246884a1f24757a62dec10b8b4a0114f96af9a05faef5188c0",
@@ -2066,7 +2212,8 @@
         "        let same = await owners.open(documentURL: directory, mode: .existing, codec: .json(), draftURL: draftURL) {"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its assertion context. The existing comparison expresses the scenario result; changing matcher spelling is deferred to the test owner."
+      "rationale": "Reviewed in its assertion context. The existing comparison expresses the scenario result; changing matcher spelling is deferred to the test owner.",
+      "severity": "Warning"
     },
     {
       "identity": "d389b11c17491d7fee7dbed43356fe13169773a197d4de060d67160970c3889b",
@@ -2080,7 +2227,8 @@
         "        try await session.reconcileNativeRegistrations()"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its assertion context. The existing comparison expresses the scenario result; changing matcher spelling is deferred to the test owner."
+      "rationale": "Reviewed in its assertion context. The existing comparison expresses the scenario result; changing matcher spelling is deferred to the test owner.",
+      "severity": "Warning"
     },
     {
       "identity": "f6ab8f841c856607217ffb67b81ec8c860074285e08c4e6faee90fce9b889a24",
@@ -2094,7 +2242,8 @@
         "        XCTAssertEqual(try readHost(directory).value, 17)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "9870776a0dde90c74ec75f01d494ed76b51fd1acc5e7a0113e2665a1d45886d0",
@@ -2108,7 +2257,8 @@
         "        XCTAssertEqual(try readHost(directory).value, 17)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner."
+      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner.",
+      "severity": "Warning"
     },
     {
       "identity": "4a53069dff5524f429e7cf379818b83e068e1209fc492cd7d9c1c7a707681d51",
@@ -2122,7 +2272,8 @@
         "        try session.updateDraft(13); lease.failReadAfterAcceptance = true"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "65f8ee3d2bc252e1ed3f34088154f59f38bd57e0300c51e7fc72b5ed5b30ad5d",
@@ -2136,7 +2287,8 @@
         "        XCTAssertEqual(session.status.phase, .blocked)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "314a361cbc124705fef76448b2c764cfd6a3badd3d462c9738d1d7875908d420",
@@ -2150,7 +2302,8 @@
         "        XCTAssertEqual(session.status.phase, .blocked)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner."
+      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner.",
+      "severity": "Warning"
     },
     {
       "identity": "d54becc87e51e1bf612103908f66d6bb870939d235242d3c894a92e5a38dad2f",
@@ -2164,7 +2317,8 @@
         "        XCTAssertEqual(receipt.token.command, originalCommand)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "11877117e4d60bdc6081b75b41a65f69db3adfe8eca167472ed590b68f1689aa",
@@ -2178,7 +2332,8 @@
         "        XCTAssertEqual(receipt.token.command, originalCommand)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner."
+      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner.",
+      "severity": "Warning"
     },
     {
       "identity": "20fb630d8f7f94e20f7f0ed1bcf8e569e703ed2604c96f68759ea936a1e0b016",
@@ -2192,7 +2347,8 @@
         "            try session.updateDraft(13, isComposing: restore)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "0a32c69266413413be47362c83a14d1749e7cd08910e6690214f4173f1202a56",
@@ -2206,7 +2362,8 @@
         "                    NativeIntegerLease(directory: directory, scope: scope, working: working)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "5801ce66e2731a0a392d7652be0808c9fada972d8eb72a6b6f43d7062e002fc9",
@@ -2220,7 +2377,8 @@
         "            XCTAssertFalse(session.status.canUndo)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "ec4cd7e0b354c0a820bb8eda1f7e8079b4177c3d946a37c667abeac0358bca19",
@@ -2234,7 +2392,8 @@
         "            XCTAssertFalse(session.status.requiresDraftDecision)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "26ea4236d4e8194fdad6282448a13805d59add88882343802132c45bdd04a16e",
@@ -2248,7 +2407,8 @@
         "            XCTAssertFalse(session.status.requiresDraftDecision)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner."
+      "rationale": "Reviewed as a test failure guard. The return preserves early exit after a failed assertion; changing the guard form is deferred to the test owner.",
+      "severity": "Warning"
     },
     {
       "identity": "7a4d5d5d69553736b3a4c26a2d0be23a432d9bebddbfc8f3e02e7bc550cd3e9c",
@@ -2262,7 +2422,8 @@
         "    let directory: URL"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "103ad93be2a3cef2969abd7a038798234a097d8ade3af36e2d152b729dee7989",
@@ -2276,7 +2437,8 @@
         "        let host = try PersistenceEvidenceHost(directory: directory, resource: Self.resource)"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "45ee3a1d6fe36bc4e7f86390dca1109bbf0ef3e4e63f33e88705f5cbeb414f05",
@@ -2290,7 +2452,8 @@
         "        guard proposed != base.value, proposed != semanticNoop else { return nil }"
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes."
+      "rationale": "Reviewed in its source context. This is a focused API call, diagnostic, or assertion whose long names or values remain understandable together; revisit wrapping when its owning feature changes.",
+      "severity": "Warning"
     },
     {
       "identity": "a3c0f36bd6b4133b19810e5006e83bf31e2a605c7311cccd5fa38f166da9092a",
@@ -2304,7 +2467,8 @@
         ""
       ],
       "disposition": "reviewed-existing",
-      "rationale": "Reviewed as a cohesive session/lifecycle unit or acceptance fixture. Splitting it solely for the configured size threshold would add navigation without a demonstrated behavior boundary."
+      "rationale": "Reviewed as a cohesive session/lifecycle unit or acceptance fixture. Splitting it solely for the configured size threshold would add navigation without a demonstrated behavior boundary.",
+      "severity": "Warning"
     }
   ]
 }

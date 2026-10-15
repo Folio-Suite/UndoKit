@@ -18,7 +18,7 @@ module UndoKit
     Assembly = XCFrameworkAssembly
     FIXTURE = File.expand_path("consumer/HostFixture.swift", __dir__)
 
-    def run(xcframework, run_id, platforms, installations, device)
+    def run(xcframework, run_id, platforms, installations, device, export_options, mixed_runtime)
       xcframework = File.expand_path(xcframework)
       raise Assembly::VerificationError, "XCFramework directory is missing: #{xcframework}" unless File.directory?(xcframework)
       provenance_path = File.join(File.dirname(xcframework), "provenance.json")
@@ -56,7 +56,7 @@ module UndoKit
           platforms.each do |platform|
             selected_installations = platform == "ios-simulator" ? ["embedded"] : installations
             build_consumer!(evidence_root, build_root, xcframework, mac_framework, toolchain,
-                            producer_identity, platform, selected_installations, simulator, run_id)
+                            producer_identity, platform, selected_installations, simulator, run_id, export_options, mixed_runtime)
           end
         end
       ensure
@@ -99,7 +99,7 @@ module UndoKit
     end
 
     def build_consumer!(evidence_root, build_root, xcframework, original_framework, toolchain,
-                        producer_identity, platform, installations, device, run_id)
+                        producer_identity, platform, installations, device, run_id, export_options, mixed_runtime)
       ios = platform == "ios-simulator"
       project_directory = File.join(evidence_root, "ConsumerProject-#{platform}")
       source_directory = File.join(project_directory, "Sources")
@@ -142,8 +142,13 @@ module UndoKit
                  "ARCHS=#{ios ? 'arm64' : architecture}", "ONLY_ACTIVE_ARCH=YES", "CODE_SIGNING_ALLOWED=YES",
                  "CODE_SIGN_IDENTITY=-", "CODE_SIGN_STYLE=Manual", "build"]
       run_command!(command, log)
+      export_evidence = nil
+      if export_options && !ios
+        export_evidence = export_macos!(project, project_directory, build_root, architecture, export_options)
+      end
       product_configuration = ios ? "Release-iphonesimulator" : "Release"
-      built_app = File.join(build_root, "Build", "Products", product_configuration, "Consumer.app")
+      built_app = export_evidence ? export_evidence.fetch("exportedApp") :
+        File.join(build_root, "Build", "Products", product_configuration, "Consumer.app")
       embedded_framework = ios ? File.join(built_app, "Frameworks", "UndoKit.framework") :
         File.join(built_app, "Contents", "Frameworks", "UndoKit.framework")
       raise Assembly::VerificationError, "binary consumer app was not produced at #{built_app}" unless File.directory?(built_app)
@@ -244,7 +249,9 @@ module UndoKit
         "consumerConfiguration" => "Release",
         "consumerPlatform" => platform,
         "consumerArchitecture" => architecture,
-        "consumerSigning" => "ad-hoc identity '-' for the local test application",
+        "consumerSigning" => export_evidence ? "Apple Development local debugging export; not release distribution" : "ad-hoc identity '-' for the local test application",
+        "macOSArchiveExport" => export_evidence,
+        "mixedRuntimeRejection" => mixed_runtime ? probe_mixed_runtime!(executable, installed_root, runtime_environment, mixed_runtime) : nil,
         "runtimeFrameworkPath" => runtime_framework,
         "selectedFrameworkBinarySHA256" => Digest::SHA256.file(File.join(selected_framework, "UndoKit")).hexdigest,
         "runtimeFrameworkSHA256" => Digest::SHA256.file(File.join(runtime_framework, "UndoKit")).hexdigest,
@@ -267,6 +274,66 @@ module UndoKit
       end
     rescue JSON::ParserError => error
       raise Assembly::VerificationError, "invalid binary consumer report: #{error.message}"
+    end
+
+    def export_macos!(project, directory, build_root, architecture, options)
+      archive = File.join(directory, "Consumer.xcarchive")
+      export_root = File.join(directory, "Exported")
+      plist = File.join(directory, "ExportOptions.plist")
+      json = File.join(directory, "ExportOptions.json")
+      File.write(json, JSON.pretty_generate({"method" => "debugging", "destination" => "export",
+        "signingStyle" => "manual", "teamID" => options.fetch(:team),
+        "signingCertificate" => options.fetch(:identity)}))
+      run_command!(["plutil", "-convert", "xml1", "-o", plist, json], File.join(directory, "export-options.log"))
+      archive_log = File.join(directory, "archive.log")
+      run_command!(["xcodebuild", "-project", project, "-scheme", "Consumer", "-configuration", "Release",
+        "-destination", "generic/platform=macOS", "-derivedDataPath", build_root, "-archivePath", archive,
+        "ARCHS=#{architecture}", "ONLY_ACTIVE_ARCH=YES", "CODE_SIGNING_ALLOWED=YES", "CODE_SIGN_STYLE=Manual",
+        "CODE_SIGN_IDENTITY=#{options.fetch(:identity)}", "DEVELOPMENT_TEAM=#{options.fetch(:team)}", "archive"], archive_log)
+      export_log = File.join(directory, "export.log")
+      run_command!(["xcodebuild", "-exportArchive", "-archivePath", archive,
+        "-exportOptionsPlist", plist, "-exportPath", export_root], export_log)
+      app = File.join(export_root, "Consumer.app")
+      raise Assembly::VerificationError, "Xcode export did not produce #{app}" unless File.directory?(app)
+      signature = run_command!(["codesign", "--verify", "--deep", "--strict", "--verbose=2", app],
+                               File.join(directory, "export-signature-verify.log"))
+      details = run_command!(["codesign", "--display", "--verbose=4", app], File.join(directory, "export-signature.log"))
+      unless details.include?("TeamIdentifier=#{options.fetch(:team)}") && details.include?("Authority=Apple Development:")
+        raise Assembly::VerificationError, "exported consumer did not retain the requested Apple Development signature"
+      end
+      {"method" => "debugging", "archivePath" => archive, "exportedApp" => app,
+       "exportOptionsPlist" => plist, "archiveLog" => archive_log, "exportLog" => export_log,
+       "signature" => details, "signatureVerification" => signature}
+    end
+
+    def probe_mixed_runtime!(executable, installed_root, runtime_environment, alternate)
+      alternate = File.expand_path(alternate)
+      unless File.file?(alternate) && File.basename(alternate) == "libUndoKit.dylib"
+        raise Assembly::VerificationError, "mixed-runtime probe requires an existing source-built libUndoKit.dylib"
+      end
+      directory = File.join(installed_root, "MixedRuntimeProbe")
+      FileUtils.mkdir_p(directory)
+      host_data = File.join(directory, "host-data")
+      environment = runtime_environment.merge("DYLD_INSERT_LIBRARIES" => alternate,
+                                              "UNDOkit_CONSUMER_ROOT" => host_data)
+      output, status = Open3.capture2e(environment, executable)
+      log = File.join(directory, "launch.log")
+      File.write(log, "$ DYLD_INSERT_LIBRARIES=#{alternate} #{executable}\n#{output}")
+      failure_path = File.join(host_data, "ConsumerFailure.txt")
+      failure = File.file?(failure_path) ? File.read(failure_path) : ""
+      expected = failure.include?("expected one loaded UndoKit runtime image") ||
+                 failure.include?("app and domain framework resolved different UndoKit HistoryStore type identities")
+      unless !status.success? && expected
+        raise Assembly::VerificationError, "mixed-runtime probe did not reach the precise identity guard (status #{status.exitstatus}, signal #{status.termsig}); see #{log}"
+      end
+      if File.file?(File.join(host_data, "History.sqlite")) || File.file?(File.join(host_data, "HostState.json"))
+        raise Assembly::VerificationError, "mixed-runtime graph mutated host/history stores before rejection"
+      end
+      {"alternateRuntimePath" => alternate, "alternateRuntimeSHA256" => Digest::SHA256.file(alternate).hexdigest,
+       "alternateRuntimeInstallName" => Assembly.capture!("xcrun", "otool", "-D", alternate),
+       "consumerExecutableSHA256" => Digest::SHA256.file(executable).hexdigest,
+       "failure" => failure, "exitStatus" => status.exitstatus, "launchLog" => log,
+       "hostAndHistoryStoresCreated" => false}
     end
 
     def verify_runtime_link!(executable, framework, platform, architecture)
@@ -413,7 +480,7 @@ module UndoKit
   end
 end
 
-options = {xcframework: nil, run_id: nil, installation: "embedded", platform: "macos", device: nil}
+options = {xcframework: nil, run_id: nil, installation: "embedded", platform: "macos", device: nil, export_macos: false, team: nil, identity: nil, mixed_runtime: nil}
 parser = OptionParser.new do |arguments|
   arguments.banner = "Usage: ruby scripts/check-binary-consumer.rb --xcframework PATH [--platform macos|ios-simulator|both] [--installation embedded|shared-macos|both] [--device UDID]"
   arguments.on("--xcframework PATH", "Assembled UndoKit.xcframework to install in an independent app") { |value| options[:xcframework] = value }
@@ -421,6 +488,10 @@ parser = OptionParser.new do |arguments|
   arguments.on("--platform PLATFORM", %w[macos ios-simulator both], "macos, ios-simulator, or both (default macos)") { |value| options[:platform] = value }
   arguments.on("--installation MODE", %w[embedded shared-macos both], "embedded, shared-macos, or both (default embedded)") { |value| options[:installation] = value }
   arguments.on("--device UDID", "required for ios-simulator; reuse this available iOS simulator") { |value| options[:device] = value }
+  arguments.on("--export-macos", "archive and export the macOS fixture for local debugging (requires team and identity)") { options[:export_macos] = true }
+  arguments.on("--development-team ID", "local export's Apple Developer team") { |value| options[:team] = value }
+  arguments.on("--signing-identity IDENTITY", "local export's installed Apple Development identity or SHA-1") { |value| options[:identity] = value }
+  arguments.on("--probe-mixed-runtime PATH", "macOS only: require rejection after loading this source-built libUndoKit.dylib") { |value| options[:mixed_runtime] = value }
   arguments.on("-h", "--help", "Show this help") { puts arguments; exit 0 }
 end
 parser.parse!
@@ -441,9 +512,19 @@ begin
   if options[:installation] == "both" && options[:platform] == "ios-simulator"
     raise UndoKit::XCFrameworkAssembly::VerificationError, "--installation both requires --platform macos or both"
   end
+  if options[:mixed_runtime] && options[:platform] != "macos"
+    raise UndoKit::XCFrameworkAssembly::VerificationError, "--probe-mixed-runtime requires --platform macos"
+  end
+  if options[:export_macos] && (options[:platform] != "macos" || options[:team].to_s.empty? || options[:identity].to_s.empty?)
+    raise UndoKit::XCFrameworkAssembly::VerificationError, "--export-macos requires --platform macos, --development-team and --signing-identity"
+  end
+  if !options[:export_macos] && (options[:team] || options[:identity])
+    raise UndoKit::XCFrameworkAssembly::VerificationError, "--development-team and --signing-identity require --export-macos"
+  end
+  export_options = options[:export_macos] ? {team: options[:team], identity: options[:identity]} : nil
   installations = options[:installation] == "both" ? %w[embedded shared-macos] : [options[:installation]]
   UndoKit::BinaryConsumer.run(options[:xcframework], options[:run_id], platform_names, installations,
-                              options[:device])
+                              options[:device], export_options, options[:mixed_runtime])
 rescue UndoKit::XCFrameworkAssembly::VerificationError => error
   warn "Binary consumer check failed: #{error.message}"
   exit 1

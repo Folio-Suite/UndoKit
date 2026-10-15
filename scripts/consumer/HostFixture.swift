@@ -111,6 +111,23 @@ private struct ConsumerReport: Codable {
 
 @MainActor
 private func runConsumerFixture(route: String) async throws -> ConsumerReport {
+    #if CONSUMER_APP
+    let sharedTypeIdentity = consumerDomainHistoryStoreTypeIdentity() == ObjectIdentifier(HistoryStore.self)
+    let loadedImages = (0..<_dyld_image_count()).compactMap { index -> String? in
+        guard let name = _dyld_get_image_name(index) else { return nil }
+        let path = String(cString: name)
+        return path.contains("UndoKit.framework") || path.hasSuffix("libUndoKit.dylib") ? path : nil
+    }
+    guard sharedTypeIdentity else {
+        throw FixtureError.assertion("app and domain framework resolved different UndoKit HistoryStore type identities")
+    }
+    guard loadedImages.count == 1 else {
+        throw FixtureError.assertion("expected one loaded UndoKit runtime image, found \(loadedImages)")
+    }
+    #else
+    let sharedTypeIdentity: Bool? = nil
+    let loadedImages: [String]? = nil
+    #endif
     let root: URL
     #if CONSUMER_APP
     root = try consumerEvidenceDirectory(route)
@@ -162,23 +179,6 @@ private func runConsumerFixture(route: String) async throws -> ConsumerReport {
         throw FixtureError.assertion("reopen state, receipts, delivery count, or grouped history did not match")
     }
     try await engine.close()
-    #if CONSUMER_APP
-    let sharedTypeIdentity = consumerDomainHistoryStoreTypeIdentity() == ObjectIdentifier(HistoryStore.self)
-    let loadedImages = (0..<_dyld_image_count()).compactMap { index -> String? in
-        guard let name = _dyld_get_image_name(index) else { return nil }
-        let path = String(cString: name)
-        return path.contains("UndoKit.framework") || path.hasSuffix("libUndoKit.dylib") ? path : nil
-    }
-    guard sharedTypeIdentity else {
-        throw FixtureError.assertion("app and domain framework resolved different UndoKit HistoryStore type identities")
-    }
-    guard loadedImages.count == 1 else {
-        throw FixtureError.assertion("expected one loaded UndoKit runtime image, found \(loadedImages)")
-    }
-    #else
-    let sharedTypeIdentity: Bool? = nil
-    let loadedImages: [String]? = nil
-    #endif
     return ConsumerReport(route: route, platform: consumerPlatform, hostValue: snapshot.value,
                           groupMemberCount: 2, receiptCount: snapshot.outcomes.count,
                           appliedDeliveries: snapshot.appliedDeliveries,

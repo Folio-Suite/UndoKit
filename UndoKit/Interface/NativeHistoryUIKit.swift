@@ -8,6 +8,13 @@ import UIKit
 /// UIKit owns input, selection, composition, paste, and live undo registrations.
 @MainActor public final class NativeHistoryTextView: UITextView {
     weak var historyFacade: UndoManager?
+    var isManagedBySwiftUI = false
+    var isTemporarilyDetachedBySwiftUI = false
+    var swiftUIPresentationGeneration: UInt = 0
+    func detachSwiftUIPresentation() {
+        isTemporarilyDetachedBySwiftUI = true
+        swiftUIPresentationGeneration &+= 1
+    }
     var originalUndoManager: UndoManager? { super.undoManager }
     public override var undoManager: UndoManager? { historyFacade ?? super.undoManager }
 }

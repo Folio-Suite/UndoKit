@@ -19,6 +19,7 @@ import UIKit
     var rendering = false
     var liveTransaction = false
     var deferredBoundary = false
+    var pendingSwiftUIEditingEnd: (() -> Void)?
     var participants: Set<ObjectIdentifier> = []
     var observers: [NSObjectProtocol] = []
     let actionName: String
@@ -123,6 +124,7 @@ import UIKit
         guard !disconnected else { return }
         captureLive()
         disconnected = true
+        pendingSwiftUIEditingEnd = nil
         connection?.disconnect(); connection = nil
         session.editing.settlementDidComplete = nil
         observers.forEach(NotificationCenter.default.removeObserver); observers = []
@@ -142,6 +144,7 @@ import UIKit
     }
     public func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
         if localControls.contains(where: { $0.editor === textView }) { return true }
+        pendingSwiftUIEditingEnd?(); pendingSwiftUIEditingEnd = nil
         guard permitsEditing else { return false }
         liveTransaction = true; participants.insert(ObjectIdentifier(textView))
         return true
@@ -153,8 +156,32 @@ import UIKit
         resumeDeferredBoundary()
         publishAvailability()
     }
-    public func textViewDidBeginEditing(_ textView: UITextView) { resumeDeferredBoundary(); publishAvailability() }
+    public func textViewDidBeginEditing(_ textView: UITextView) {
+        pendingSwiftUIEditingEnd?(); pendingSwiftUIEditingEnd = nil
+        resumeDeferredBoundary(); publishAvailability()
+    }
     public func textViewDidEndEditing(_ textView: UITextView) {
+        guard let editor = textView as? NativeHistoryTextView, editor.isManagedBySwiftUI else {
+            finishEditingBoundary(for: textView)
+            return
+        }
+        // SwiftUI can resign an editor before delivering onDisappear/dismantle.
+        // Let that synchronous presentation transition finish, retaining evidence of
+        // a detach even if the same editor has already reappeared by the next turn.
+        let generation = editor.swiftUIPresentationGeneration
+        let finish = { [weak self, weak editor] in
+            guard let self, let editor,
+                  generation == editor.swiftUIPresentationGeneration,
+                  !editor.isTemporarilyDetachedBySwiftUI, editor.window != nil else { return }
+            self.finishEditingBoundary(for: editor)
+        }
+        pendingSwiftUIEditingEnd = finish
+        DispatchQueue.main.async { [weak self] in
+            self?.pendingSwiftUIEditingEnd?()
+            self?.pendingSwiftUIEditingEnd = nil
+        }
+    }
+    private func finishEditingBoundary(for textView: UITextView) {
         if controls.contains(where: { $0.editor === textView }), liveTransaction, permitsEditing {
             deferredBoundary = true; resumeDeferredBoundary()
         }

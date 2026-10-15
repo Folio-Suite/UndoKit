@@ -7,7 +7,8 @@ SPDX-License-Identifier: MIT
 
 A small runnable AppKit host for UndoKit. Two document windows edit separate
 persisted notes, each with a title and body. `DurableNotesCore` is a bounded,
-Foundation-only host module shared with the [UIKit shell](UIKit/README.md).
+Foundation-only host module shared with the [UIKit shell](UIKit/README.md)
+and [SwiftUI iPhone/iPad shell](SwiftUI/README.md).
 It contains no AppKit routing or UI code.
 
 ## Build and run

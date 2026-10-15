@@ -74,7 +74,7 @@ physical-device distribution. See [the binary contract](binary-distribution.md).
 scripts/check-consumer.sh --route both --platform both --configuration Debug
 scripts/check-consumer.sh --route both --platform both --configuration Release
 scripts/check-consumer.sh --route both --platform macos --installation shared-macos --configuration Release
-ruby scripts/check-binary-consumer.rb --xcframework /absolute/path/UndoKit.xcframework --platform both
+ruby scripts/check-binary-consumer.rb --xcframework /absolute/path/UndoKit.xcframework --platform both --device YOUR_SIMULATOR_UDID
 ruby scripts/check-binary-consumer.rb --xcframework /absolute/path/UndoKit.xcframework --platform macos --installation shared-macos
 ```
 
@@ -83,8 +83,9 @@ bytes. Each run records its selected route, platform, architecture, source/artif
 identity and actual outcomes. Consumer evidence verifies a grouped Command,
 Undo/Redo, close/reopen and retained History against independently persisted host
 state/receipts; it also checks installed model/privacy closure and one runtime.
-Consult each command's help for retention and explicit simulator selection. Run
-only one simulator at a time; local 26.5 checks distinguish the tracked iPadOS 27
+The binary iOS check requires an explicit available simulator UDID; choose it
+from `xcrun simctl list devices available` and pass `--device`. Consult each
+command's help for evidence retention. Run only one simulator at a time; local 26.5 checks distinguish the tracked iPadOS 27
 compositor issue from framework behavior.
 
 These checks do not constitute signed downloadable-binary qualification,

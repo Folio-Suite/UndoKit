@@ -7,6 +7,17 @@ SPDX-License-Identifier: MIT
 
 Durable application history behind a native UndoManager interface.
 
+## Start here
+
+Version 0.2.0 is planned, not yet published or qualified. This catalog describes
+the selected source; a build or simulator pass is not a release qualification.
+
+- <doc:InstallingUndoKit>
+- <doc:FirstUndoGroup>
+- <doc:RecoveryAndStorage>
+- <doc:RetainedHistoryAndResources>
+- <doc:PreviewCompatibilityAndSupport>
+
 ## Ownership
 
 UndoKit orders opaque commands, persists transaction evidence and accepted action

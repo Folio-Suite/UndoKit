@@ -7,20 +7,21 @@ SPDX-License-Identifier: MIT
 
 ## Supported versions
 
-UndoKit is under active development. There is no formal version support schedule
-yet. Security fixes are prioritized for the current development version and the
-latest published release when practical; older releases may not receive fixes.
+UndoKit is under active development. Support is best effort for the latest
+published preview, with upgrade guidance for older previews. There is no response
+time guarantee or routine backport commitment. This support policy does not weaken
+the separately documented forward persisted-history continuity promise.
 
 ## Reporting a vulnerability
 
-Please report suspected security vulnerabilities privately. If GitHub provides
-the **Report a vulnerability** option on the
-[UndoKit Security tab](https://github.com/Folio-Suite/UndoKit/security), use that
-private reporting channel. If it is unavailable, contact the repository
-owner using the contact information published on their GitHub profile and
-request a private channel. Do not send sensitive details until that channel is
-established, and do not open a public issue, discussion, or pull request for an
-unpatched vulnerability.
+Please use GitHub's private
+[Report a vulnerability form](https://github.com/Folio-Suite/UndoKit/security/advisories/new).
+Private vulnerability reporting is enabled for this repository. Do not open a
+public issue, discussion or pull request for an unpatched vulnerability. If the
+private form is unavailable, contact the repository owner through their published
+GitHub profile and establish a private channel before sending sensitive details.
+Do not upload real host databases, user content or raw payloads. Use a sanitized,
+fictional reproduction.
 
 Include the affected version or commit, the impact, and steps to reproduce when
 you can do so safely. The maintainers will acknowledge reports as soon as

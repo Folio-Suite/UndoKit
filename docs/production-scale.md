@@ -6,11 +6,16 @@ SPDX-License-Identifier: MIT
 # Production scale protocol
 
 This harness implements [#20](https://github.com/Folio-Suite/UndoKit/issues/20)
-under the authoritative [#8 resolution](https://github.com/Folio-Suite/UndoKit/issues/8#issuecomment-6104499789).
+under the [#8 resolution](https://github.com/Folio-Suite/UndoKit/issues/8#issuecomment-6104499789)
+as amended by [the qualification policy](release-qualification.md).
 It is a deterministic independent Swift host using the production source package.
 A completed Mac workload is Mac evidence. Simulator smoke and an iOS build do not
-qualify physical hardware; that evidence belongs to [#27](https://github.com/Folio-Suite/UndoKit/issues/27).
-No binary, Intel, floor-OS, cold-cache or abrupt-termination claim follows.
+qualify physical hardware. The blanket physical-device/Intel matrix is waived;
+OS behavioral coverage and specific unresolved physical questions remain under
+[#27](https://github.com/Folio-Suite/UndoKit/issues/27). Full portable iOS scale
+execution in a suitable simulator/VM is acceptable under the amended policy, but
+the current smoke mode and physical-only checker do not establish that result.
+No binary, floor-OS, cold-cache or abrupt-termination claim follows.
 
 ## Fixture and independent truth
 
@@ -199,8 +204,11 @@ ruby scripts/check-scale-device-evidence.rb --evidence PATH_TO_UndoKitScaleEvide
 The inventory refuses simulator reports, missing fixtures/samples, repeat PIDs,
 failed artifacts, changed expected state and declared budget overruns. Its
 `physical_evidence_complete_for_review` result still requires maintainer review;
-observations are human evidence, not inferred from a nonempty file. Actual physical
-qualification remains deferred to #27 until that work is performed.
+observations are human evidence, not inferred from a nonempty file. This is the
+physical-evidence procedure, used when a specific physical question calls for it.
+#27 also tracks any runner work needed to execute the full portable iOS fixture
+in another accepted environment. Existing simulator smoke is not relabelled as
+completion, and resource budgets must suit the actual execution environment.
 
 Inspect one actual runtime inventory, including simulator smoke, without claiming
 physical qualification:

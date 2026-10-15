@@ -243,28 +243,282 @@ class DocumentationSiteTest < Minitest::Test
     refute File.exist?(File.join(destination, 'versions', '0.2.0'))
   end
 
-  def test_promote_requires_visible_correction_for_existing_release_and_retains_prior_snapshot
-    _, _, status = run_cli(*stage_args)
-    assert status.success?
-    destination = File.join(@tmp, 'public')
-    FileUtils.mkdir_p(File.join(destination, 'versions', '0.2.0'))
-    File.write(File.join(destination, 'versions', '0.2.0', 'old.html'), 'old')
-    File.write(File.join(destination, 'versions', '0.2.0', 'manifest.json'), JSON.generate({ sourceCommit: SHA }))
-    provenance = release_provenance
-    _, _, status = run_cli('promote', '--artifact', @artifact, '--release-provenance', provenance, '--destination', destination)
-    refute status.success?
-    site_before = Dir.glob(File.join(@artifact, 'site', '**', '*')).select { |p| File.file?(p) }.to_h { |p| [p.delete_prefix(@artifact + '/site/'), Digest::SHA256.file(p).hexdigest] }
-    out, err, status = run_cli('promote', '--artifact', @artifact, '--release-provenance', provenance,
-                               '--destination', destination, '--correction', 'Corrected a link.')
-    assert status.success?, "#{out}\n#{err}"
-    site_after = Dir.glob(File.join(destination, 'versions', '0.2.0', '**', '*')).select { |p| File.file?(p) && !%w[corrections.json manifest.json].include?(File.basename(p)) }.to_h { |p| [p.delete_prefix(File.join(destination, 'versions', '0.2.0') + '/'), Digest::SHA256.file(p).hexdigest] }
-    assert_equal site_before.keys.sort, site_after.keys.sort
-    refute_equal site_before.fetch('index.html'), site_after.fetch('index.html')
-    assert_includes File.read(File.join(destination, 'versions', '0.2.0', 'index.html')), 'Documentation correction: Corrected a link.'
-    corrections = JSON.parse(File.read(File.join(destination, 'versions', '0.2.0', 'corrections.json')))
-    assert_equal ['Corrected a link.'], corrections.fetch('corrections').map { |item| item.fetch('note') }
-    refute File.exist?(File.join(destination, 'latest'))
-    history = Dir.glob(File.join(destination, 'history', '0.2.0', '*')).first
-    assert_equal 'old', File.read(File.join(history, 'old.html'))
+  def git_source(*args)
+    out, err, status = Open3.capture3('git', '-C', @source, *args)
+    assert status.success?, err
+    out.strip
   end
+
+  def prepare_correction
+    @source = File.join(@tmp, 'source')
+    FileUtils.mkdir_p(File.join(@source, 'UndoKit', 'UndoKit.docc'))
+    git_source('init', '-q')
+    git_source('config', 'user.email', 'docs@example.invalid')
+    git_source('config', 'user.name', 'Documentation test')
+    File.write(File.join(@source, 'UndoKit', 'UndoKit.docc', 'Guide.md'), 'Original guide')
+    File.write(File.join(@source, 'Engine.swift'), 'Original API')
+    File.write(File.join(@source, 'Settings.xcconfig'), 'Original settings')
+    git_source('add', '.')
+    git_source('commit', '-qm', 'Original release')
+    @release_sha = git_source('rev-parse', 'HEAD')
+    producer = JSON.parse(File.read(@producer))
+    producer['sourceCommit'] = @release_sha
+    File.write(@producer, JSON.generate(producer))
+    _, err, status = run_cli(*stage_args)
+    assert status.success?, err
+    @released = release_provenance
+    released = JSON.parse(File.read(@released))
+    released['sourceCommit'] = @release_sha
+    File.write(@released, JSON.generate(released))
+    @destination = File.join(@tmp, 'public')
+    _, err, status = run_cli('promote', '--artifact', @artifact, '--release-provenance', @released, '--destination', @destination)
+    assert status.success?, err
+    @previous = File.join(@destination, 'versions', '0.2.0')
+    @artifact = File.join(@tmp, 'correction-artifact')
+    commit_guidance('Corrected installation instruction')
+  end
+
+  def commit_guidance(text)
+    File.write(File.join(@source, 'UndoKit', 'UndoKit.docc', 'Guide.md'), text)
+    git_source('add', '.')
+    git_source('commit', '-qm', text)
+    @doc_sha = git_source('rev-parse', 'HEAD')
+    producer = JSON.parse(File.read(@producer))
+    producer['sourceCommit'] = @doc_sha
+    File.write(File.join(@archive, 'data', 'documentation.json'), JSON.generate({ guide: text }))
+    producer['archiveTreeSHA256'] = tree_hash(@archive)
+    File.write(@producer, JSON.generate(producer))
+    File.write(File.join(@static, 'documentation', 'undokit', 'example', 'index.html'), "<body>#{text}</body>")
+  end
+
+  def correction_stage_args(note = 'Corrected <installation> & guidance.')
+    ['stage-correction', '--archive', @archive, '--producer', @producer, '--static-output', @static,
+     '--output', @artifact, '--release-provenance', @released, '--source', @source,
+     '--previous-snapshot', @previous, '--correction', note]
+  end
+
+  def correction_promote_args(approved: true)
+    args = ['promote', '--artifact', @artifact, '--release-provenance', @released,
+            '--source', @source, '--destination', @destination,
+            '--correction-provenance', File.join(@artifact, 'correction-provenance.json')]
+    args += ['--approved-correction-sha256', Digest::SHA256.file(File.join(@artifact, 'correction-provenance.json')).hexdigest] if approved
+    args
+  end
+
+  def test_changed_guidance_requires_external_approval_and_preserves_exact_staged_bytes
+    prepare_correction
+    _, err, status = run_cli(*correction_stage_args)
+    assert status.success?, err
+    prior_hash = tree_hash(@destination)
+    _, err, status = run_cli(*correction_promote_args(approved: false))
+    refute status.success?
+    assert_match(/approved correction SHA-256/, err)
+    assert_equal prior_hash, tree_hash(@destination)
+    _, err, status = run_cli(*correction_promote_args)
+    assert status.success?, err
+    html = File.read(File.join(@previous, 'documentation', 'undokit', 'example', 'index.html'))
+    assert_includes html, 'Corrected installation instruction'
+    assert_includes html, @release_sha
+    assert_includes html, @doc_sha
+    assert_includes html, 'Corrected &lt;installation&gt; &amp; guidance.'
+    refute_includes html, 'Corrected <installation>'
+    manifest = JSON.parse(File.read(File.join(@previous, 'manifest.json')))
+    assert_equal @release_sha, manifest.fetch('sourceCommit')
+    assert_equal @doc_sha, manifest.fetch('documentationSourceCommit')
+    Dir.glob(File.join(@artifact, 'site', '**', '*')).select { |path| File.file?(path) }.each do |path|
+      assert_equal File.binread(path), File.binread(path.sub(File.join(@artifact, 'site'), @previous))
+    end
+    assert_equal 1, Dir.children(File.join(@destination, 'history', '0.2.0')).length
+    hash = tree_hash(@destination)
+    _, err, status = run_cli(*correction_promote_args)
+    assert status.success?, err
+    assert_equal hash, tree_hash(@destination)
+  end
+
+  def test_correction_refuses_code_settings_symlinks_and_dirty_checkout
+    ['Engine.swift', 'Settings.xcconfig', 'UndoKit/UndoKit.docc/Linked.md'].each do |path|
+      prepare_correction
+      full = File.join(@source, path)
+      if path.end_with?('Linked.md')
+        File.symlink('Guide.md', full)
+      else
+        File.write(full, 'Changed contract')
+      end
+      git_source('add', '.')
+      git_source('commit', '-qm', 'Unsupported correction')
+      producer = JSON.parse(File.read(@producer))
+      producer['sourceCommit'] = git_source('rev-parse', 'HEAD')
+      File.write(@producer, JSON.generate(producer))
+      _, err, status = run_cli(*correction_stage_args)
+      refute status.success?
+      assert_match(/only regular Markdown/, err)
+      refute File.exist?(@artifact)
+      teardown
+      setup
+    end
+    prepare_correction
+    File.write(File.join(@source, 'UndoKit', 'UndoKit.docc', 'Guide.md'), 'Uncommitted guidance')
+    _, err, status = run_cli(*correction_stage_args)
+    refute status.success?
+    assert_match(/clean source checkout/, err)
+  end
+
+  def test_correction_refuses_wrong_documentation_or_original_source
+    prepare_correction
+    producer = JSON.parse(File.read(@producer))
+    producer['sourceCommit'] = 'f' * 40
+    File.write(@producer, JSON.generate(producer))
+    _, err, status = run_cli(*correction_stage_args)
+    refute status.success?
+    assert_match(/documentation source commit/, err)
+    producer['sourceCommit'] = @doc_sha
+    File.write(@producer, JSON.generate(producer))
+    release = JSON.parse(File.read(@released))
+    release['sourceCommit'] = 'f' * 40
+    File.write(@released, JSON.generate(release))
+    _, err, status = run_cli(*correction_stage_args)
+    refute status.success?
+    assert_match(/original release/, err)
+  end
+
+  def test_correction_refuses_tampered_note_site_or_stale_predecessor_without_changing_output
+    prepare_correction
+    _, err, status = run_cli(*correction_stage_args)
+    assert status.success?, err
+    proposal = File.join(@artifact, 'correction-provenance.json')
+    approved_sha = Digest::SHA256.file(proposal).hexdigest
+    original = File.binread(proposal)
+    File.write(proposal, original.sub('Corrected <installation>', 'Changed <installation>'))
+    args = correction_promote_args(approved: false) + ['--approved-correction-sha256', approved_sha]
+    before = tree_hash(@destination)
+    _, err, status = run_cli(*args)
+    refute status.success?
+    assert_match(/correction provenance checksum/, err)
+    assert_equal before, tree_hash(@destination)
+    File.binwrite(proposal, original)
+    page = File.join(@artifact, 'site', 'index.html')
+    original_page = File.binread(page)
+    File.write(page, 'tampered site')
+    _, err, status = run_cli(*correction_promote_args)
+    refute status.success?
+    assert_match(/site checksum/, err)
+    assert_equal before, tree_hash(@destination)
+    File.binwrite(page, original_page)
+    File.write(File.join(@previous, 'index.html'), 'newer successful correction')
+    before = tree_hash(@destination)
+    _, err, status = run_cli(*correction_promote_args)
+    refute status.success?
+    assert_match(/previous snapshot/, err)
+    assert_equal before, tree_hash(@destination)
+  end
+
+  def test_successive_corrections_retain_history_and_older_version_does_not_change_latest
+    prepare_correction
+    _, err, status = run_cli(*correction_stage_args)
+    assert status.success?, err
+    _, err, status = run_cli(*correction_promote_args)
+    assert status.success?, err
+    @artifact = File.join(@tmp, 'second-correction')
+    commit_guidance('Second corrected installation instruction')
+    _, err, status = run_cli(*correction_stage_args('Second correction.'))
+    assert status.success?, err
+    _, err, status = run_cli(*correction_promote_args)
+    assert status.success?, err
+    records = JSON.parse(File.read(File.join(@previous, 'corrections.json'))).fetch('corrections')
+    assert_equal 2, records.length
+    assert_equal 2, Dir.children(File.join(@destination, 'history', '0.2.0')).length
+    FileUtils.mkdir_p(File.join(@destination, 'latest'))
+    File.write(File.join(@destination, 'latest', 'index.html'), 'newer version latest')
+    File.write(File.join(@destination, 'latest.json'), JSON.generate({ version: '0.3.0', sourceCommit: 'e' * 40 }))
+    before = tree_hash(@destination)
+    args = correction_promote_args.drop(1)
+    _, err, status = run_cli('update-latest', *args)
+    assert status.success?, err
+    assert_equal before, tree_hash(@destination)
+  end
+
+  def correction_github_fixture
+    bin = File.join(@tmp, 'github-bin')
+    FileUtils.mkdir_p(bin)
+    fake = File.join(bin, 'gh')
+    log = File.join(@tmp, 'correction-gh.jsonl')
+    asset_name = "UndoKit-0.2.0-docs-correction-#{Digest::SHA256.file(File.join(@artifact, 'correction-provenance.json')).hexdigest}.json"
+    File.write(fake, <<~RUBY)
+      #!/usr/bin/env ruby
+      require 'json'
+      require 'fileutils'
+      File.open(ENV.fetch('GH_CALL_LOG'), 'a') { |file| file.puts(JSON.generate(ARGV)) }
+      case ARGV.take(2)
+      when ['release', 'view']
+        if ARGV.last == 'assets'
+          puts JSON.generate({ assets: ENV['EXISTING_ASSET'] == 'yes' ? [{ name: '#{asset_name}' }] : [] })
+        else
+          puts JSON.generate({ tagName: '0.2.0', isDraft: false, isPrerelease: true })
+        end
+      when ['api', 'repos/Folio-Suite/UndoKit/git/ref/tags/0.2.0']
+        puts JSON.generate({ object: { type: 'commit', sha: '#{@release_sha}' } })
+      when ['release', 'download']
+        destination = ARGV[ARGV.index('--dir') + 1]
+        path = File.join(destination, '#{asset_name}')
+        FileUtils.copy_file(ENV.fetch('ASSET_CONTENT'), path)
+      when ['release', 'upload']
+        exit 0
+      else
+        warn 'unexpected gh arguments'
+        exit 1
+      end
+    RUBY
+    FileUtils.chmod(0o755, fake)
+    [{ 'PATH' => "#{bin}:#{ENV.fetch('PATH')}", 'GH_CALL_LOG' => log,
+       'ASSET_CONTENT' => File.join(@artifact, 'correction-provenance.json') }, log, asset_name]
+  end
+
+  def test_correction_provenance_is_an_additive_immutable_asset_with_exact_retry
+    prepare_correction
+    _, err, status = run_cli(*correction_stage_args)
+    assert status.success?, err
+    env, log, asset_name = correction_github_fixture
+    args = correction_promote_args.drop(1)
+    out, err, status = Open3.capture3(env, 'ruby', CLI, 'publish-correction-provenance', *args)
+    assert status.success?, err
+    assert_equal asset_name, out.strip
+    calls = File.readlines(log).map { |line| JSON.parse(line) }
+    upload = calls.find { |call| call.take(2) == ['release', 'upload'] }
+    assert_equal asset_name, File.basename(upload.fetch(3))
+    assert_includes upload.each_cons(2).to_a, ['--repo', 'Folio-Suite/UndoKit']
+    refute_includes upload, '--clobber'
+    File.write(log, '')
+    _, err, status = Open3.capture3(env.merge('EXISTING_ASSET' => 'yes'), 'ruby', CLI, 'publish-correction-provenance', *args)
+    assert status.success?, err
+    calls = File.readlines(log).map { |line| JSON.parse(line) }
+    refute calls.any? { |call| call.take(2) == ['release', 'upload'] }
+    assert calls.any? { |call| call.take(2) == ['release', 'download'] }
+    wrong = File.join(@tmp, 'wrong-asset.json')
+    File.write(wrong, '{}')
+    File.write(log, '')
+    _, err, status = Open3.capture3(env.merge('EXISTING_ASSET' => 'yes', 'ASSET_CONTENT' => wrong), 'ruby', CLI, 'publish-correction-provenance', *args)
+    refute status.success?
+    assert_match(/existing immutable correction asset differs/, err)
+    calls = File.readlines(log).map { |line| JSON.parse(line) }
+    refute calls.any? { |call| call.take(2) == ['release', 'upload'] }
+  end
+
+  def test_correction_promotion_rechecks_source_and_original_release_bytes
+    prepare_correction
+    _, err, status = run_cli(*correction_stage_args)
+    assert status.success?, err
+    before = tree_hash(@destination)
+    File.write(@released, File.read(@released) + "\n")
+    _, err, status = run_cli(*correction_promote_args)
+    refute status.success?
+    assert_match(/correction provenance does not match original release/, err)
+    assert_equal before, tree_hash(@destination)
+    File.write(@released, File.read(@released).delete_suffix("\n"))
+    File.write(File.join(@source, 'Engine.swift'), 'Uncommitted API edit')
+    _, err, status = run_cli(*correction_promote_args)
+    refute status.success?
+    assert_match(/clean source checkout/, err)
+    assert_equal before, tree_hash(@destination)
+  end
+
 end

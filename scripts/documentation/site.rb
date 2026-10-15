@@ -2,24 +2,24 @@
 # SPDX-FileCopyrightText: 2026 the Folio Project
 # SPDX-License-Identifier: MIT
 
+require 'cgi'
 require 'digest'
 require 'fileutils'
 require 'json'
 require 'optparse'
 require 'open3'
-require 'pathname'
-require 'time'
 require 'tmpdir'
 
 module UndoKitDocumentation
   module_function
 
-  def tree_hash(root)
+  def tree_hash(root, except: [])
     root = File.expand_path(root)
     entries = Dir.glob(File.join(root, '**', '*'), File::FNM_DOTMATCH).reject { |path| ['.', '..'].include?(File.basename(path)) }.sort
     digest = Digest::SHA256.new
     entries.each do |path|
       relative = path.delete_prefix(root + '/')
+      next if except.include?(relative)
       if File.symlink?(path)
         digest.update("L\0#{relative}\0#{File.readlink(path)}\0")
       elsif File.file?(path)
@@ -59,14 +59,82 @@ module UndoKitDocumentation
     File.write(index, content)
   end
 
-  def add_identity_banner(site, version, channel, source_commit, dirty)
+  def add_identity_banner(site, version, channel, source_commit, dirty, correction = nil)
     label = "UndoKit #{channel == 'development' ? 'development' : version} · source #{source_commit}#{dirty ? ' · dirty source' : ''}"
-    banner = "<aside role=\"note\" style=\"padding:.65rem 1rem;background:#fff3cd;color:#222;font:14px/1.4 sans-serif\">#{label}</aside>"
+    if correction
+      label += " · documentation source #{correction.fetch('documentationSourceCommit')}"
+      label += " · Documentation correction: #{correction.fetch('note')}"
+    end
+    banner = "<aside role=\"note\" style=\"padding:.65rem 1rem;background:#fff3cd;color:#222;font:14px/1.4 sans-serif\">#{CGI.escapeHTML(label)}</aside>"
     Dir.glob(File.join(site, '**', '*.html')).each do |path|
       html = File.read(path)
-      html.sub!(/<body([^>]*)>/i) { |opening| "#{opening}#{banner}" }
+      inserted = html.sub!(/<body([^>]*)>/i) { |opening| "#{opening}#{banner}" }
+      html = banner + html unless inserted
       File.write(path, html)
     end
+  end
+
+  def original_release!(path)
+    fail!('published candidate manifest is required') unless path
+    release = JSON.parse(File.read(File.expand_path(path)))
+    fail!('unsupported published candidate manifest schema') unless release.fetch('schemaVersion') == 1
+    original = release.fetch('documentation')
+    fail!('original release source does not match its documentation') unless release.fetch('sourceCommit') == original.fetch('sourceCommit')
+    fail!('original release version does not match its documentation') unless release.fetch('releaseVersion') == original.fetch('version')
+    fail!('original release must contain an uncorrected release snapshot') unless original.fetch('channel') == 'release' && !original.key?('documentationSourceCommit')
+    release
+  end
+
+  def correction_source!(source, release_source, documentation_source)
+    fail!('correction requires --source documentation checkout') unless source
+    source = File.expand_path(source)
+    head, head_status = Open3.capture2('git', '-C', source, 'rev-parse', 'HEAD')
+    fail!('documentation source commit does not match checkout') unless head_status.success? && head.strip == documentation_source
+    dirty, dirty_status = Open3.capture2('git', '-C', source, 'status', '--porcelain')
+    fail!('correction requires a clean source checkout') unless dirty_status.success? && dirty.empty?
+    _, ancestry_status = Open3.capture2('git', '-C', source, 'merge-base', '--is-ancestor', release_source, documentation_source)
+    fail!('original release source must be an ancestor of documentation source') unless ancestry_status.success?
+    diff, diff_status = Open3.capture2('git', '-C', source, 'diff', '--raw', '--no-abbrev', '--no-renames', '-z', release_source, documentation_source)
+    fail!('could not inspect complete documentation source diff') unless diff_status.success?
+    changes = diff.split("\0")
+    fail!('correction must change guidance Markdown') if changes.empty?
+    changes.each_slice(2) do |header, path|
+      modes = header.to_s.split.take(2).map { |mode| mode.delete_prefix(':') }
+      allowed = path && path.start_with?('UndoKit/UndoKit.docc/') && path.end_with?('.md')
+      allowed &&= modes.length == 2 && modes.all? { |mode| %w[000000 100644 100755].include?(mode) }
+      fail!("correction allows only regular Markdown under UndoKit/UndoKit.docc: #{path}") unless allowed
+    end
+  end
+
+  def stage_correction(options)
+    release = original_release!(options[:release_provenance])
+    producer = JSON.parse(File.read(File.expand_path(options.fetch(:producer))))
+    fail!('correction requires clean producer provenance') unless producer.fetch('sourceDirty') == false
+    documentation_source = producer.fetch('sourceCommit')
+    correction_source!(options[:source], release.fetch('sourceCommit'), documentation_source)
+    fail!('correction requires --previous-snapshot PATH') unless options[:previous_snapshot]
+    previous = File.expand_path(options[:previous_snapshot])
+    prior_manifest = JSON.parse(File.read(File.join(previous, 'manifest.json')))
+    fail!('previous snapshot does not match original release') unless prior_manifest.fetch('version') == release.fetch('releaseVersion') && prior_manifest.fetch('sourceCommit') == release.fetch('sourceCommit')
+    fail!('previous snapshot bytes do not match its manifest') unless snapshot_matches?(previous, prior_manifest)
+    note = options[:correction].to_s.strip
+    fail!('correction requires a visible note') if note.empty?
+    context = {
+      'version' => release.fetch('releaseVersion'),
+      'releaseSourceCommit' => release.fetch('sourceCommit'),
+      'releaseManifestSHA256' => Digest::SHA256.file(options[:release_provenance]).hexdigest,
+      'documentationSourceCommit' => documentation_source,
+      'previousSnapshotSHA256' => tree_hash(previous),
+      'note' => note
+    }
+    prior_records = File.join(previous, 'corrections.json')
+    records = File.file?(prior_records) ? JSON.parse(File.read(prior_records)) : { 'corrections' => [] }
+    records.fetch('corrections') << { 'note' => note, 'sourceCommit' => release.fetch('sourceCommit'),
+                                    'documentationSourceCommit' => documentation_source,
+                                    'previousSnapshotSHA256' => context.fetch('previousSnapshotSHA256') }
+    stage(options.merge(version: release.fetch('releaseVersion'), channel: 'release',
+                        base_path: "/UndoKit/versions/#{release.fetch('releaseVersion')}/",
+                        correction_context: context, correction_records: records))
   end
 
   def validate_site(site, base_path)
@@ -133,6 +201,7 @@ module UndoKitDocumentation
     fail!('unsupported producer provenance schema') unless producer['schemaVersion'] == 1
     fail!('producer provenance does not match archive bytes') unless producer['archiveTreeSHA256'] == tree_hash(archive)
     source_commit = producer.fetch('sourceCommit')
+    correction = options[:correction_context]
     fail!('source commit must be a full 40-character SHA') unless source_commit.match?(/\A[0-9a-f]{40}\z/i)
     fail!('dirty source cannot produce release documentation') if options[:channel] == 'release' && producer.fetch('sourceDirty')
     if options[:channel] == 'release'
@@ -164,7 +233,11 @@ module UndoKitDocumentation
         fail!("DocC transform failed: #{stderr.strip}") unless status.success?
       end
       normalize_root_entrypoint(site, base)
-      add_identity_banner(site, options[:version], options[:channel], source_commit.downcase, producer.fetch('sourceDirty'))
+      fail!('static output uses reserved manifest.json path') if File.exist?(File.join(site, 'manifest.json'))
+      if correction
+        File.write(File.join(site, 'corrections.json'), JSON.pretty_generate(options.fetch(:correction_records)) + "\n")
+      end
+      add_identity_banner(site, options[:version], options[:channel], correction ? correction.fetch('releaseSourceCommit') : source_commit.downcase, producer.fetch('sourceDirty'), correction)
       validate_site(site, base)
       producer_copy = File.join(working, 'producer.json')
       FileUtils.copy_file(File.expand_path(options[:producer]), producer_copy)
@@ -184,6 +257,16 @@ module UndoKitDocumentation
         'producerSHA256' => Digest::SHA256.file(producer_copy).hexdigest,
         'siteTreeSHA256' => tree_hash(site)
       }
+      if correction
+        manifest['sourceCommit'] = correction.fetch('releaseSourceCommit')
+        manifest['documentationSourceCommit'] = correction.fetch('documentationSourceCommit')
+        manifest['releaseManifestSHA256'] = correction.fetch('releaseManifestSHA256')
+        manifest['previousSnapshotSHA256'] = correction.fetch('previousSnapshotSHA256')
+        manifest['correctionNote'] = correction.fetch('note')
+        proposal = { 'schemaVersion' => 1 }.merge(correction).merge('documentation' => manifest)
+        File.write(File.join(working, 'correction-provenance.json'), JSON.pretty_generate(proposal) + "\n")
+        correction_source!(options[:source], manifest.fetch('sourceCommit'), manifest.fetch('documentationSourceCommit'))
+      end
       File.write(File.join(working, 'manifest.json'), JSON.pretty_generate(manifest) + "\n")
       File.rename(working, output)
     rescue StandardError
@@ -232,16 +315,33 @@ module UndoKitDocumentation
     File.rename(temp, output)
   end
 
-  def approved_documentation!(manifest, provenance_path)
-    fail!('published candidate manifest is required') unless provenance_path
-    approved = JSON.parse(File.read(File.expand_path(provenance_path)))
-    fail!('unsupported published candidate manifest schema') unless approved.fetch('schemaVersion') == 1
+  def approved_documentation!(manifest, provenance_path, options = {})
+    approved = original_release!(provenance_path)
     fail!('published candidate version differs from documentation') unless approved.fetch('releaseVersion') == manifest.fetch('version')
     fail!('published candidate source differs from documentation') unless approved.fetch('sourceCommit') == manifest.fetch('sourceCommit')
-    fail!('published candidate documentation identity differs from staged artifact') unless approved.fetch('documentation') == manifest
+    if manifest.key?('documentationSourceCommit')
+      expected = options[:approved_correction_sha256].to_s
+      fail!('maintainer-approved correction SHA-256 is required') unless expected.match?(/\A[0-9a-f]{64}\z/)
+      path = options[:correction_provenance]
+      fail!('correction provenance is required') unless path
+      fail!('correction provenance checksum differs from approved SHA-256') unless Digest::SHA256.file(path).hexdigest == expected
+      proposal = JSON.parse(File.read(path))
+      bound = {
+        'schemaVersion' => 1, 'version' => manifest.fetch('version'),
+        'releaseSourceCommit' => manifest.fetch('sourceCommit'),
+        'releaseManifestSHA256' => Digest::SHA256.file(provenance_path).hexdigest,
+        'documentationSourceCommit' => manifest.fetch('documentationSourceCommit'),
+        'previousSnapshotSHA256' => manifest.fetch('previousSnapshotSHA256'),
+        'note' => manifest.fetch('correctionNote'), 'documentation' => manifest
+      }
+      fail!('correction provenance does not match original release and full corrected artifact') unless proposal == bound && manifest.fetch('releaseManifestSHA256') == bound.fetch('releaseManifestSHA256')
+      correction_source!(options[:source], manifest.fetch('sourceCommit'), manifest.fetch('documentationSourceCommit'))
+    else
+      fail!('published candidate documentation identity differs from staged artifact') unless approved.fetch('documentation') == manifest
+    end
   end
 
-  def verify_release(manifest, provenance_path)
+  def verify_release(manifest, provenance_path, options = {})
     fail!('only release documentation can be published') unless manifest.fetch('channel') == 'release'
     fail!('release documentation must come from a clean source checkout') if manifest.fetch('sourceDirty')
     version = manifest.fetch('version')
@@ -252,7 +352,7 @@ module UndoKitDocumentation
     fail!('release Xcode identity is not qualified') unless toolchain.fetch('xcode').match?(/\AXcode 27\.0\nBuild version 27A266a\z/)
     fail!('release Swift identity is not qualified') unless toolchain.fetch('swift').start_with?('Apple Swift version 6.4 ') && toolchain.fetch('swift').include?('swiftlang-6.4.0.34.1')
     fail!('release clang identity is missing') unless toolchain.fetch('clang').start_with?('Apple clang version 21.0.0 ')
-    approved_documentation!(manifest, provenance_path)
+    approved_documentation!(manifest, provenance_path, options)
     release_json, release_status = Open3.capture2('gh', 'release', 'view', version, '--repo', 'Folio-Suite/UndoKit', '--json', 'tagName,isDraft,isPrerelease')
     fail!("GitHub release #{version} is unavailable") unless release_status.success?
     release = JSON.parse(release_json)
@@ -276,11 +376,17 @@ module UndoKitDocumentation
     fail!('published release tag does not match documentation source commit') unless tag_commit == manifest.fetch('sourceCommit')
   end
 
+  def snapshot_matches?(target, manifest)
+    path = File.join(target, 'manifest.json')
+    File.file?(path) && JSON.parse(File.read(path)) == manifest && tree_hash(target, except: ['manifest.json']) == manifest.fetch('siteTreeSHA256')
+  end
+
   def update_latest(options)
     fail!('missing --artifact PATH') unless options[:artifact]
     artifact = File.expand_path(options[:artifact])
     manifest = JSON.parse(File.read(File.join(artifact, 'manifest.json')))
-    approved_documentation!(manifest, options[:release_provenance])
+    approved_documentation!(manifest, options[:release_provenance], options)
+    validate_artifact!(artifact, manifest)
     destination = File.expand_path(options.fetch(:destination))
     version = manifest.fetch('version')
     latest_metadata = File.join(destination, 'latest.json')
@@ -288,13 +394,15 @@ module UndoKitDocumentation
       latest = JSON.parse(File.read(latest_metadata))
       current_order = latest.fetch('version').split('.').map(&:to_i)
       candidate_order = version.split('.').map(&:to_i)
-      fail!('latest release cannot move backward') if (candidate_order <=> current_order).negative?
+      if (candidate_order <=> current_order).negative?
+        return if manifest.key?('documentationSourceCommit') && snapshot_matches?(File.join(destination, 'versions', version), manifest)
+        fail!('latest release cannot move backward')
+      end
       if candidate_order == current_order
         fail!('same-version latest correction must retain its source commit') unless latest.fetch('sourceCommit') == manifest.fetch('sourceCommit')
       end
     end
-    snapshot = JSON.parse(File.read(File.join(destination, 'versions', version, 'manifest.json')))
-    fail!('promoted snapshot does not match candidate identity') unless snapshot.fetch('version') == version && snapshot.fetch('sourceCommit') == manifest.fetch('sourceCommit')
+    fail!('promoted snapshot does not match complete candidate identity') unless snapshot_matches?(File.join(destination, 'versions', version), manifest)
     latest_dir = File.join(destination, 'latest')
     latest_tmp = File.join(destination, ".latest-#{Process.pid}")
     FileUtils.mkdir_p(latest_tmp)
@@ -323,10 +431,51 @@ module UndoKitDocumentation
     File.rename(root_tmp, File.join(destination, 'index.html'))
   end
 
+  def validate_artifact!(artifact, manifest)
+    fail!('artifact paths do not match schema') unless manifest['archivePath'] == 'archive' && manifest['sitePath'] == 'site' && manifest['producerPath'] == 'producer.json'
+    archive = File.join(artifact, manifest.fetch('archivePath'))
+    site = File.join(artifact, manifest.fetch('sitePath'))
+    producer_path = File.join(artifact, manifest.fetch('producerPath'))
+    fail!('producer provenance checksum does not match manifest') unless Digest::SHA256.file(producer_path).hexdigest == manifest['producerSHA256']
+    producer = JSON.parse(File.read(producer_path))
+    fail!('producer provenance does not match manifest identity') unless producer.fetch('sourceCommit') == manifest.fetch('documentationSourceCommit', manifest.fetch('sourceCommit')) && producer.fetch('sourceDirty') == manifest.fetch('sourceDirty') && producer.fetch('toolchain') == manifest.fetch('toolchain') && producer.fetch('command') == manifest.fetch('producerCommand')
+    fail!('producer provenance does not match archive identity') unless producer.fetch('archiveTreeSHA256') == manifest.fetch('archiveTreeSHA256')
+    fail!('archive checksum does not match manifest') unless tree_hash(archive) == manifest['archiveTreeSHA256']
+    fail!('site checksum does not match manifest') unless tree_hash(site) == manifest['siteTreeSHA256']
+    validate_site(site, manifest.fetch('basePath'))
+  end
+
   def verify_release_artifact(options)
     fail!('missing --artifact PATH') unless options[:artifact]
-    manifest = JSON.parse(File.read(File.join(File.expand_path(options[:artifact]), 'manifest.json')))
-    verify_release(manifest, options[:release_provenance])
+    artifact = File.expand_path(options[:artifact])
+    manifest = JSON.parse(File.read(File.join(artifact, 'manifest.json')))
+    validate_artifact!(artifact, manifest)
+    verify_release(manifest, options[:release_provenance], options)
+  end
+
+  def publish_correction_provenance(options)
+    verify_release_artifact(options)
+    artifact = File.expand_path(options.fetch(:artifact))
+    manifest = JSON.parse(File.read(File.join(artifact, 'manifest.json')))
+    fail!('only a corrected artifact has additive correction provenance') unless manifest.key?('documentationSourceCommit')
+    version = manifest.fetch('version')
+    name = "UndoKit-#{version}-docs-correction-#{options.fetch(:approved_correction_sha256)}.json"
+    assets_json, status = Open3.capture2('gh', 'release', 'view', version, '--repo', 'Folio-Suite/UndoKit', '--json', 'assets')
+    fail!('could not inspect existing release correction assets') unless status.success?
+    assets = JSON.parse(assets_json).fetch('assets')
+    Dir.mktmpdir('undokit-correction-asset-') do |temp|
+      if assets.any? { |asset| asset.fetch('name') == name }
+        _, _, downloaded = Open3.capture3('gh', 'release', 'download', version, '--repo', 'Folio-Suite/UndoKit', '--pattern', name, '--dir', temp)
+        fail!('could not verify retained correction provenance asset') unless downloaded.success?
+        fail!('existing immutable correction asset differs') unless File.binread(File.join(temp, name)) == File.binread(options.fetch(:correction_provenance))
+      else
+        path = File.join(temp, name)
+        FileUtils.copy_file(options.fetch(:correction_provenance), path)
+        _, stderr, uploaded = Open3.capture3('gh', 'release', 'upload', version, path, '--repo', 'Folio-Suite/UndoKit')
+        fail!("correction provenance upload failed: #{stderr.strip}") unless uploaded.success?
+      end
+    end
+    puts name
   end
 
   def promote(options)
@@ -344,29 +493,22 @@ module UndoKitDocumentation
     fail!('candidate version is invalid') unless version.match?(/\A\d+\.\d+\.\d+\z/)
     fail!('candidate source commit is invalid') unless manifest.fetch('sourceCommit').match?(/\A[0-9a-f]{40}\z/)
     fail!('candidate base path is invalid') unless manifest.fetch('basePath') == "/UndoKit/versions/#{version}/"
-    approved_documentation!(manifest, options[:release_provenance])
-    fail!('artifact paths do not match schema') unless manifest['archivePath'] == 'archive' && manifest['sitePath'] == 'site' && manifest['producerPath'] == 'producer.json'
-    archive = File.join(artifact, manifest.fetch('archivePath'))
+    approved_documentation!(manifest, options[:release_provenance], options)
+    validate_artifact!(artifact, manifest)
     site = File.join(artifact, manifest.fetch('sitePath'))
-    producer_path = File.join(artifact, manifest.fetch('producerPath'))
-    fail!('producer provenance checksum does not match manifest') unless Digest::SHA256.file(producer_path).hexdigest == manifest['producerSHA256']
-    producer = JSON.parse(File.read(producer_path))
-    fail!('producer provenance does not match manifest identity') unless producer.fetch('sourceCommit') == manifest.fetch('sourceCommit') && producer.fetch('sourceDirty') == manifest.fetch('sourceDirty') && producer.fetch('toolchain') == manifest.fetch('toolchain') && producer.fetch('command') == manifest.fetch('producerCommand')
-    fail!('producer provenance does not match archive identity') unless producer.fetch('archiveTreeSHA256') == manifest.fetch('archiveTreeSHA256')
-    fail!('archive checksum does not match manifest') unless tree_hash(archive) == manifest['archiveTreeSHA256']
-    fail!('site checksum does not match manifest') unless tree_hash(site) == manifest['siteTreeSHA256']
-    validate_site(site, manifest.fetch('basePath'))
     releases = File.join(destination, 'versions')
     target = File.join(releases, version)
     fail!('version path escapes destination') unless target.start_with?(releases + '/')
     exists = File.exist?(target)
-    if exists
-      prior_manifest = File.join(target, 'manifest.json')
-      fail!('existing release has no identity manifest') unless File.file?(prior_manifest)
-      prior_source = JSON.parse(File.read(prior_manifest)).fetch('sourceCommit')
-      fail!('correction must retain the originally published source commit') unless prior_source == manifest.fetch('sourceCommit')
+    if exists && snapshot_matches?(target, manifest)
+      return
     end
-    fail!('existing release is immutable; pass --correction with visible guidance to amend') if exists && options[:correction].to_s.strip.empty?
+    corrected = manifest.key?('documentationSourceCommit')
+    if corrected
+      fail!('previous snapshot differs from correction predecessor') unless exists && tree_hash(target) == manifest.fetch('previousSnapshotSHA256')
+    elsif exists
+      fail!('existing release is immutable; stage an approved guidance correction')
+    end
     FileUtils.mkdir_p(releases)
     temp = Dir.mktmpdir(".#{version}-", releases)
     begin
@@ -375,23 +517,12 @@ module UndoKitDocumentation
       if exists
         history = File.join(destination, 'history', version)
         FileUtils.mkdir_p(history)
-        prior = File.join(history, "#{Time.now.utc.strftime('%Y%m%dT%H%M%SZ')}-#{manifest.fetch('siteTreeSHA256')[0, 12]}")
-        copy_tree(target, prior)
-        correction_path = File.join(temp, 'corrections.json')
-        prior_corrections = File.join(target, 'corrections.json')
-        corrections = File.file?(prior_corrections) ? JSON.parse(File.read(prior_corrections)) : { 'corrections' => [] }
-        corrections['corrections'] << { 'date' => Time.now.utc.strftime('%Y-%m-%d'), 'note' => options[:correction].strip,
-                                        'sourceCommit' => manifest.fetch('sourceCommit') }
-        File.write(File.join(temp, 'corrections.json'), JSON.pretty_generate(corrections) + "\n")
-        index_path = File.join(temp, 'index.html')
-        index_html = File.read(index_path)
-        note = "<aside role=\"note\">Documentation correction: #{options[:correction].strip}</aside>"
-        if index_html.match?(%r{</body>}i)
-          index_html.sub!(%r{</body>}i, "#{note}</body>")
+        prior = File.join(history, manifest.fetch('previousSnapshotSHA256'))
+        if File.exist?(prior)
+          fail!('retained previous snapshot identity differs') unless tree_hash(prior) == manifest.fetch('previousSnapshotSHA256')
         else
-          index_html = "#{note}\n#{index_html}"
+          copy_tree(target, prior)
         end
-        File.write(index_path, index_html)
       end
       old = "#{target}.previous-#{Process.pid}"
       File.rename(target, old) if exists
@@ -423,18 +554,24 @@ module UndoKitDocumentation
       flags.on('--release-provenance PATH', 'Published UndoKit-<version>-manifest.json candidate asset') { |value| options[:release_provenance] = value }
       flags.on('--destination PATH') { |value| options[:destination] = value }
       flags.on('--correction TEXT') { |value| options[:correction] = value }
+      flags.on('--previous-snapshot PATH') { |value| options[:previous_snapshot] = value }
+      flags.on('--correction-provenance PATH') { |value| options[:correction_provenance] = value }
+      flags.on('--approved-correction-sha256 SHA256') { |value| options[:approved_correction_sha256] = value }
       flags.on('--source PATH') { |value| options[:source] = value }
       flags.on('--derived-data PATH') { |value| options[:derived_data] = value }
       flags.on('--producer-output PATH') { |value| options[:producer_output] = value }
     end
     parser.parse!(argv)
+    fail!('--correction is only valid for stage-correction') if options[:correction] && command != 'stage-correction'
     case command
     when 'stage' then stage(options)
+    when 'stage-correction' then stage_correction(options)
     when 'build' then build(options)
     when 'promote' then promote(options)
     when 'update-latest' then update_latest(options)
     when 'verify-release' then verify_release_artifact(options)
-    else fail!('usage: site.rb stage|promote [options]')
+    when 'publish-correction-provenance' then publish_correction_provenance(options)
+    else fail!('usage: site.rb build|stage|stage-correction|verify-release|promote|update-latest [options]')
     end
   rescue StandardError => error
     warn "documentation: #{error.message}"

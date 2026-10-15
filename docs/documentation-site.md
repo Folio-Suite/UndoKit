@@ -66,50 +66,137 @@ identity is captured by the producer; callers cannot supply version strings.
 
 ## Review and promote
 
-Verify or stage candidates locally before promotion. Promotion checks the
-producer, archive, and generated-site checksums again. The release snapshot is
-written under `versions/<version>/`; `latest/` is changed only by a separate
-operation after a matching GitHub release and source tag are visible. Promotion
-of an existing version requires `--correction` and the same source commit; the
-previous successful snapshot is retained under `history/<version>/`, and the
-correction appears in `corrections.json` and as a visible note on that version's
-landing page.
+The retained release candidate manifest is the immutable asset
+`UndoKit-<version>-manifest.json`. Schema 1 binds `releaseVersion`, `sourceCommit`,
+and the complete original DocC artifact manifest under `documentation`. Initial
+promotion requires that exact original artifact; a replacement self-authored
+manifest is not release approval.
 
 ```sh
+ruby scripts/documentation/site.rb verify-release \
+  --artifact /tmp/undokit-docs-candidate \
+  --release-provenance /tmp/UndoKit-0.2.0-manifest.json
 ruby scripts/documentation/site.rb promote \
+  --artifact /tmp/undokit-docs-candidate \
+  --release-provenance /tmp/UndoKit-0.2.0-manifest.json \
+  --destination /tmp/undokit-pages
+ruby scripts/documentation/site.rb update-latest \
   --artifact /tmp/undokit-docs-candidate \
   --release-provenance /tmp/UndoKit-0.2.0-manifest.json \
   --destination /tmp/undokit-pages
 ```
 
-GitHub release and tag lookups explicitly target `Folio-Suite/UndoKit`, so local
-verification also works outside a checkout and cannot infer another repository.
+`verify-release` checks the published GitHub prerelease and its tag against the
+released API source. All commands verify producer/archive/site identities;
+`promote` copies staged bytes unchanged into `versions/<version>/`, adding only
+the artifact's identity manifest beside them. `update-latest` requires that full
+promoted snapshot, refuses to move backward, and updates the root and `latest/`
+entry points. An exact installed artifact is an idempotent promotion retry.
+GitHub lookups explicitly target `Folio-Suite/UndoKit`, including when invoked
+outside a checkout.
 
-The repository workflow is `workflow_dispatch` only and has two operations. `stage`
-checks out the selected full source SHA on the pinned Xcode runner, runs the
-producer command, validates the generated site, and uploads the candidate as the
-`undokit-docs-candidate` Actions artifact for local inspection or use by the
-preparer. The artifact expires after 90 days.
+## Correct released guidance
 
-`promote` downloads a candidate by its Actions run ID, verifies the published
-GitHub prerelease and tag commit, downloads the retained candidate manifest
-asset named `UndoKit-<version>-manifest.json`, and checks its complete
-`documentation` object against the staged artifact before combining it with prior snapshots from the
-`documentation-snapshots` branch. It applies any visible correction, updates the
-latest landing, commits the preserved Pages tree to that state branch, and
-uploads the same tree to Pages. On first use, set `initialize_snapshots` only
-after confirming there is no previous Pages site to preserve. The state branch
-is updated before the Pages deployment; if deployment fails, the previously
-hosted site remains the reference while the branch retains all snapshots for a
-retry. GitHub Pages must be enabled for this repository before the workflow can
-deploy. No release documentation or latest pointer should be deployed before
-the coordinated release is approved. The retained manifest uses schema 1 with
-`releaseVersion`, `sourceCommit`, and the full version 1 DocC manifest under
-`documentation`; `verify-release`, `promote`, and `update-latest` compare the
-candidate's source identity and full archive, producer, and final-site hashes.
+A guidance correction has its own reviewed candidate. It preserves the original
+release tag, API source commit, original release manifest, and binary assets.
+The first supported correction scope is regular `.md` files beneath
+`UndoKit/UndoKit.docc/`. The complete Git tree diff from the released source to
+the documentation source must contain only those files. Code, project settings,
+resources, scripts, symlinks, and submodules are refused. The released commit
+must be an ancestor of the clean documentation checkout. Maintainer review must
+also confirm the guidance does not advertise newer APIs or compatibility
+promises; the file restriction does not establish semantic correctness.
 
-A successful local transform, artifact validation, or workflow configuration
-does not establish live hosting. After deployment, verify navigation, search,
-symbol links, assets, and a direct refresh of a symbol/guides deep link under
-`https://<owner>.github.io/UndoKit/versions/<version>/`; retain the actual result
-and any limitations with release evidence.
+Build at the new documentation source commit using the producer command above,
+then stage against the original published release manifest and the complete
+currently retained version snapshot:
+
+```sh
+ruby scripts/documentation/site.rb stage-correction \
+  --source /tmp/UndoKit-guidance-checkout \
+  --archive /tmp/UndoKit-docs-derived/Build/Products/Debug/UndoKit.doccarchive \
+  --producer /tmp/UndoKit-docs-producer.json \
+  --release-provenance /tmp/UndoKit-0.2.0-manifest.json \
+  --previous-snapshot /tmp/undokit-pages/versions/0.2.0 \
+  --correction 'Correct the installation instructions.' \
+  --output /tmp/undokit-docs-correction
+shasum -a 256 /tmp/undokit-docs-correction/correction-provenance.json
+```
+
+The corrected artifact keeps `sourceCommit` as the released API source and adds
+`documentationSourceCommit`, `releaseManifestSHA256`, `previousSnapshotSHA256`,
+and `correctionNote`. Its producer identifies the actual documentation source
+and archive. Staging prepares the visible escaped note, both source identities,
+and cumulative `corrections.json` before hashing the final site. Promotion never
+inserts or changes HTML after approval.
+
+`correction-provenance.json` schema 1 binds `version`, `releaseSourceCommit`,
+`releaseManifestSHA256`, `documentationSourceCommit`, `previousSnapshotSHA256`,
+`note`, and the full corrected artifact manifest as `documentation`. Its own
+SHA-256 is the correction identity. Review the generated content, source diff,
+producer evidence, predecessor, and proposal, then explicitly supply that exact
+reviewed digest. A JSON file alone cannot approve itself:
+
+```sh
+ruby scripts/documentation/site.rb promote \
+  --artifact /tmp/undokit-docs-correction \
+  --release-provenance /tmp/UndoKit-0.2.0-manifest.json \
+  --source /tmp/UndoKit-guidance-checkout \
+  --correction-provenance /tmp/undokit-docs-correction/correction-provenance.json \
+  --approved-correction-sha256 <reviewed-64-character-SHA-256> \
+  --destination /tmp/undokit-pages
+```
+
+Use the same approval/source options with `verify-release` and `update-latest`.
+Promotion rechecks the complete Git restriction, original manifest digest,
+proposal, actual producer/archive/site bytes, and predecessor. A stale proposal
+is refused. Every prior complete version tree and its correction records remain
+under `history/<version>/<previousSnapshotSHA256>/`. Successive corrections bind
+their actual predecessor. Correcting an older release preserves the newer
+latest pointer.
+
+`publish-correction-provenance` takes those same artifact, source, release, and
+approval options. After verifying the published release/tag and artifact, it
+uploads only the additive asset
+`UndoKit-<version>-docs-correction-<approved-SHA-256>.json`. It never replaces the
+original candidate asset or another correction. An existing asset must match
+exactly for an idempotent retry; differing bytes fail. Publishing this provenance
+is an external write and belongs to the explicitly approved promotion process.
+
+## Manual workflow and hosted acceptance
+
+The repository workflow is `workflow_dispatch` only, using trusted workflow
+checkout tooling separately from the selected source checkout:
+
+- `stage` builds the selected full source SHA on the pinned Xcode runner,
+  validates the generated release/development site, and uploads
+  `undokit-docs-candidate` for inspection. Artifacts expire after 90 days.
+- `stage-correction` additionally downloads the original release manifest,
+  loads the retained predecessor from `documentation-snapshots`, enforces the
+  restricted source diff, stages the complete correction, and prints its digest.
+- `promote` downloads the fixed candidate by Actions run ID, verifies the
+  published matching release/tag and original release asset, combines it with
+  prior snapshots, updates latest, and deploys Pages.
+- `promote-correction` requires the candidate run ID and the exact reviewed
+  `correction_manifest_sha256` as explicit maintainer approval. It rechecks the
+  clean documentation source and predecessor, copies the approved site unchanged,
+  preserves history/latest rules, retains the additive correction asset, and
+  deploys the same resulting tree.
+
+Set `initialize_snapshots` only for the first deployment after confirming Pages
+has no prior site. GitHub Pages must be enabled for this repository. No release
+documentation or latest pointer should be deployed before the coordinated
+release is approved.
+
+The state branch is updated before Pages deployment. If upload, state commit,
+or deployment fails, the previously hosted site remains authoritative; an
+additive provenance asset or pending state commit may already exist. This is
+incomplete publication, not a hosted pass. Inspect the failed step and retry
+the same approved identity. Neither a successful local transform nor workflow
+configuration establishes live hosting.
+
+After deployment, verify installation guidance, navigation, search, symbol
+links, assets, and a direct refresh of symbol/guide deep links under
+`https://<owner>.github.io/UndoKit/versions/<version>/`. Retain the actual results
+and any limitations with release evidence. Local export success alone does not
+close the hosted acceptance requirement.

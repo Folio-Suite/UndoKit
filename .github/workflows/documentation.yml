@@ -9,13 +9,13 @@ on:
         description: Stage a DocC candidate or promote an approved release candidate
         required: true
         type: choice
-        options: [stage, promote]
+        options: [stage, stage-correction, promote, promote-correction]
       source_commit:
-        description: Full source commit SHA to build when operation is stage
+        description: Full source commit SHA to build for stage or stage-correction
         required: false
         type: string
       version:
-        description: Three-part documentation version when operation is stage
+        description: Three-part documentation version for stage or stage-correction
         required: false
         type: string
       channel:
@@ -29,7 +29,11 @@ on:
         required: false
         type: string
       correction_note:
-        description: Visible reason when correcting an existing version snapshot
+        description: Visible guidance correction reason for stage-correction
+        required: false
+        type: string
+      correction_manifest_sha256:
+        description: Exact reviewed correction-provenance.json SHA-256 required for promote-correction
         required: false
         type: string
       initialize_snapshots:
@@ -55,7 +59,7 @@ defaults:
 
 jobs:
   stage:
-    if: ${{ inputs.operation == 'stage' }}
+    if: ${{ inputs.operation == 'stage' || inputs.operation == 'stage-correction' }}
     runs-on: xcode-27
     timeout-minutes: 60
     permissions:
@@ -76,6 +80,7 @@ jobs:
         with:
           ref: ${{ inputs.source_commit }}
           path: source
+          fetch-depth: 0
           persist-credentials: false
       - name: Capture source build and toolchain provenance
         run: |
@@ -84,6 +89,7 @@ jobs:
             --derived-data "$RUNNER_TEMP/undokit-docs-derived" \
             --producer-output "$RUNNER_TEMP/undokit-docs-producer.json"
       - name: Stage release or development documentation
+        if: ${{ inputs.operation == 'stage' }}
         env:
           VERSION: ${{ inputs.version }}
           CHANNEL: ${{ inputs.channel }}
@@ -99,6 +105,25 @@ jobs:
             --producer "$RUNNER_TEMP/undokit-docs-producer.json" \
             --output "$RUNNER_TEMP/undokit-docs-candidate" \
             --version "$VERSION" --channel "$CHANNEL" --base-path "$BASE_PATH"
+      - name: Stage a bounded guidance correction
+        if: ${{ inputs.operation == 'stage-correction' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+          CORRECTION_NOTE: ${{ inputs.correction_note }}
+        run: |
+          mkdir release-provenance
+          gh release download "$VERSION" --repo Folio-Suite/UndoKit --pattern "UndoKit-$VERSION-manifest.json" --dir release-provenance
+          git -C tooling fetch origin refs/heads/documentation-snapshots:refs/remotes/origin/documentation-snapshots
+          git -C tooling worktree add --detach "$RUNNER_TEMP/undokit-docs-prior" origin/documentation-snapshots
+          ruby tooling/scripts/documentation/site.rb stage-correction \
+            --archive "$RUNNER_TEMP/undokit-docs-derived/Build/Products/Debug/UndoKit.doccarchive" \
+            --producer "$RUNNER_TEMP/undokit-docs-producer.json" \
+            --output "$RUNNER_TEMP/undokit-docs-candidate" \
+            --source source --release-provenance "release-provenance/UndoKit-$VERSION-manifest.json" \
+            --previous-snapshot "$RUNNER_TEMP/undokit-docs-prior/versions/$VERSION" \
+            --correction "$CORRECTION_NOTE"
+          shasum -a 256 "$RUNNER_TEMP/undokit-docs-candidate/correction-provenance.json"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: undokit-docs-candidate
@@ -107,7 +132,7 @@ jobs:
           retention-days: 90
 
   promote:
-    if: ${{ inputs.operation == 'promote' }}
+    if: ${{ inputs.operation == 'promote' || inputs.operation == 'promote-correction' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment:
@@ -128,6 +153,25 @@ jobs:
           run-id: ${{ inputs.candidate_run_id }}
           github-token: ${{ github.token }}
           path: candidate
+      - name: Validate selected promotion and correction source identity
+        id: identity
+        env:
+          OPERATION: ${{ inputs.operation }}
+          CORRECTION_SHA: ${{ inputs.correction_manifest_sha256 }}
+        run: |
+          if [[ "$OPERATION" == promote-correction ]]; then
+            [[ "$CORRECTION_SHA" =~ ^[0-9a-f]{64}$ ]] || { echo "promote-correction requires the exact reviewed correction manifest SHA-256" >&2; exit 1; }
+            DOC_SOURCE=$(ruby -rjson -e 'puts JSON.parse(File.read("candidate/manifest.json")).fetch("documentationSourceCommit")')
+            [[ "$DOC_SOURCE" =~ ^[0-9a-f]{40}$ ]] || { echo "documentation source must be a full commit SHA" >&2; exit 1; }
+            echo "documentation_source=$DOC_SOURCE" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: ${{ inputs.operation == 'promote-correction' }}
+        with:
+          ref: ${{ steps.identity.outputs.documentation_source }}
+          path: documentation-source
+          fetch-depth: 0
+          persist-credentials: false
       - name: Download retained candidate manifest from the published release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -139,10 +183,16 @@ jobs:
       - name: Verify approved release and source tag
         env:
           GH_TOKEN: ${{ github.token }}
+          OPERATION: ${{ inputs.operation }}
+          CORRECTION_SHA: ${{ inputs.correction_manifest_sha256 }}
         run: |
           VERSION=$(ruby -rjson -e 'puts JSON.parse(File.read("candidate/manifest.json")).fetch("version")')
+          CORRECTION_ARGS=()
+          if [[ "$OPERATION" == promote-correction ]]; then
+            CORRECTION_ARGS=(--source documentation-source --correction-provenance candidate/correction-provenance.json --approved-correction-sha256 "$CORRECTION_SHA")
+          fi
           ruby tooling/scripts/documentation/site.rb verify-release --artifact candidate \
-            --release-provenance "release-provenance/UndoKit-$VERSION-manifest.json"
+            --release-provenance "release-provenance/UndoKit-$VERSION-manifest.json" "${CORRECTION_ARGS[@]}"
       - name: Load prior successful snapshots
         run: |
           STATE="$RUNNER_TEMP/undokit-docs-state"
@@ -166,18 +216,30 @@ jobs:
           rsync -a --delete --exclude=.git "$STATE/" public/
       - name: Promote immutable snapshot and latest entry
         env:
-          GH_TOKEN: ${{ github.token }}
-          CORRECTION_NOTE: ${{ inputs.correction_note }}
+          OPERATION: ${{ inputs.operation }}
+          CORRECTION_SHA: ${{ inputs.correction_manifest_sha256 }}
         run: |
           VERSION=$(ruby -rjson -e 'puts JSON.parse(File.read("candidate/manifest.json")).fetch("version")')
-          if [[ -n "$CORRECTION_NOTE" ]]; then
-            ruby tooling/scripts/documentation/site.rb promote --artifact candidate --release-provenance "release-provenance/UndoKit-$VERSION-manifest.json" --destination public --correction "$CORRECTION_NOTE"
-          else
-            ruby tooling/scripts/documentation/site.rb promote --artifact candidate --release-provenance "release-provenance/UndoKit-$VERSION-manifest.json" --destination public
+          CORRECTION_ARGS=()
+          if [[ "$OPERATION" == promote-correction ]]; then
+            CORRECTION_ARGS=(--source documentation-source --correction-provenance candidate/correction-provenance.json --approved-correction-sha256 "$CORRECTION_SHA")
           fi
+          ruby tooling/scripts/documentation/site.rb promote --artifact candidate \
+            --release-provenance "release-provenance/UndoKit-$VERSION-manifest.json" --destination public "${CORRECTION_ARGS[@]}"
           ruby tooling/scripts/documentation/site.rb update-latest --artifact candidate \
-            --release-provenance "release-provenance/UndoKit-$VERSION-manifest.json" --destination public
+            --release-provenance "release-provenance/UndoKit-$VERSION-manifest.json" --destination public "${CORRECTION_ARGS[@]}"
           touch public/.nojekyll
+      - name: Retain additive immutable correction provenance
+        if: ${{ inputs.operation == 'promote-correction' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CORRECTION_SHA: ${{ inputs.correction_manifest_sha256 }}
+        run: |
+          VERSION=$(ruby -rjson -e 'puts JSON.parse(File.read("candidate/manifest.json")).fetch("version")')
+          ruby tooling/scripts/documentation/site.rb publish-correction-provenance --artifact candidate \
+            --release-provenance "release-provenance/UndoKit-$VERSION-manifest.json" \
+            --source documentation-source --correction-provenance candidate/correction-provenance.json \
+            --approved-correction-sha256 "$CORRECTION_SHA"
       - name: Record preserved release snapshots
         run: |
           STATE="$RUNNER_TEMP/undokit-docs-state"
@@ -196,3 +258,7 @@ jobs:
           include-hidden-files: true
       - id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+      - name: Report incomplete correction publication
+        if: ${{ failure() && inputs.operation == 'promote-correction' }}
+        run: |
+          echo "Correction publication is incomplete. An additive provenance asset or snapshot commit may already exist; the prior hosted site remains authoritative until Pages succeeds. Retry the same approved identity after inspecting the failed step." >&2

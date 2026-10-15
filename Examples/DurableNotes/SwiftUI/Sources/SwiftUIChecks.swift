@@ -48,6 +48,7 @@ import UndoKit
             let originalSession = session
             let originalBinding = binding
             let originalEditor = owner.bodyEditor
+            let originalTitleEditor = owner.titleEditor
             let beforeTyping = try await lease.read()
 
             owner.bodyEditor.becomeFirstResponder()
@@ -66,6 +67,18 @@ import UndoKit
             try require(owner.bodyEditor.text == "SwiftUI draft", "Native Redo at baseline failed")
             observations.append("Native UIKit Undo and Redo at baseline remain local in the SwiftUI host.")
 
+            owner.editorGeneration += 1
+            try await pause()
+            let afterIdentityReplacement = try await lease.read()
+            try require(owner.session === originalSession && owner.binding === originalBinding
+                && owner.bodyEditor === originalEditor && owner.titleEditor === originalTitleEditor
+                && owner.bodyEditor.window != nil && owner.titleEditor.window != nil
+                && session.hasConnection && binding.hasLiveTransaction
+                && owner.bodyEditor.undoManager?.canUndo == true
+                && afterIdentityReplacement.applicationCount == 0 && afterIdentityReplacement.receiptCount == 0,
+                "Same-turn SwiftUI identity replacement failed: \(reconstructionSnapshot(owner: owner, session: session, binding: binding)), titleAttached=\(owner.titleEditor.window != nil), applications=\(afterIdentityReplacement.applicationCount), receipts=\(afterIdentityReplacement.receiptCount)")
+            observations.append("Same-turn .id replacement remounts both native editors while preserving the exact editor, binding, session, local callbacks and zero durable deliveries.")
+
             owner.showEditor = false
             try await pause()
             let afterConditionalRemoval = reconstructionSnapshot(owner: owner, session: session, binding: binding)
@@ -78,7 +91,9 @@ import UndoKit
             if !owner.navigationPath.isEmpty { owner.navigationPath.removeLast() }
             try await pause()
             try require(owner.session === originalSession && owner.binding === originalBinding
-                && owner.bodyEditor === originalEditor && session.hasConnection && binding.hasLiveTransaction
+                && owner.bodyEditor === originalEditor && owner.titleEditor === originalTitleEditor
+                && owner.bodyEditor.window != nil && owner.titleEditor.window != nil
+                && session.hasConnection && binding.hasLiveTransaction
                 && owner.bodyEditor.undoManager?.canUndo == true,
                 "SwiftUI reconstruction failed; removed=\(afterConditionalRemoval); remounted=\(afterConditionalRemount); pushed=\(afterNavigationPush); final=\(reconstructionSnapshot(owner: owner, session: session, binding: binding))")
             try require(owner.registry.sessions.entries.count == 1, "SwiftUI reconstruction created another writer")

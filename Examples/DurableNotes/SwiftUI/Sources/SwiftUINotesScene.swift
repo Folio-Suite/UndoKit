@@ -49,6 +49,7 @@ import UndoKit
     private(set) var lease: NotesDocumentLease?
     @Published private(set) var status = "Opening durable note…"
     @Published var showEditor = true
+    @Published var editorGeneration = 0
     @Published var navigationPath = NavigationPath()
     private(set) var documentURL: URL
     @Published private(set) var protectedDataAvailable = UIApplication.shared.isProtectedDataAvailable
@@ -235,9 +236,11 @@ import UndoKit
                     if let binding = owner.binding {
                         if owner.showEditor {
                             NativeHistorySwiftUIEditor(textView: owner.titleEditor)
+                                .id(owner.editorGeneration)
                                 .frame(height: 48)
                                 .accessibilityLabel("Title")
                             NativeHistorySwiftUIEditor(textView: owner.bodyEditor)
+                                .id(owner.editorGeneration)
                                 .frame(height: 150)
                                 .accessibilityLabel("Body")
                                 .nativeHistory(binding)
@@ -261,7 +264,8 @@ import UndoKit
                     Text(owner.status).font(.footnote).accessibilityIdentifier("HistoryStatus")
                 }
                 Section("SwiftUI lifecycle") {
-                    Button("Rebuild editor presentation") { owner.showEditor = false }
+                    Button("Rebuild editor presentation") { owner.editorGeneration += 1 }
+                    Button("Hide editor presentation") { owner.showEditor = false }
                     NavigationLink("Open navigation detail", value: "history-detail")
                     Button("Durable Undo") { owner.undo() }
                     Button("Durable Redo") { owner.redo() }

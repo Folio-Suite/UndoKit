@@ -39,6 +39,11 @@ leaves text input, selection, composition, paste and native Undo callbacks in
 UIKit. It uses no private API, SwiftUI view-tree lookup, custom input engine or
 replacement keyboard shortcut.
 
+Same-turn `.id` replacement can create the new native container before SwiftUI
+dismantles the old one. The adapter keeps a weak waiting presentation and mounts
+it as soon as the old presentation releases the editor. Simultaneous active
+presentations display an attachment diagnostic instead of stealing the editor.
+
 Create the binding once with `session.connectUIKit(owner:editors:localEditors:...)`.
 Supply domain draft capture/rendering and status presentation. Present each
 editor in one location at a time. Give another scene its own editor, session and

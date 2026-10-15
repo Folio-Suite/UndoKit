@@ -22,82 +22,163 @@ public extension EnvironmentValues {
 /// then moves the same UIKit editor and preserves its local Undo registrations.
 /// SwiftUI values reference the editor weakly; the mounted native container retains
 /// it only while presented. Cached view values cannot extend the editor's lifetime.
-public struct NativeHistorySwiftUIEditor: View {
-    private let editor: NativeHistorySwiftUIEditorReference
+@MainActor public struct NativeHistorySwiftUIEditor: View {
+    private let reference: NativeHistorySwiftUIEditorReference
 
     public init(textView: UITextView) {
-        editor = NativeHistorySwiftUIEditorReference(textView)
+        reference = NativeHistorySwiftUIEditorReference(textView)
     }
 
     public var body: some View {
-        NativeHistorySwiftUIEditorPresentation(editor: editor)
-            .onAppear {
-                (editor.value as? NativeHistoryTextView)?.isTemporarilyDetachedBySwiftUI = false
-            }
-            .onDisappear {
-                (editor.value as? NativeHistoryTextView)?.detachSwiftUIPresentation()
-            }
+        NativeHistorySwiftUIEditorPresentation(reference: reference)
+            .onAppear { reference.appear() }
+            .onDisappear { reference.disappear() }
     }
 }
 
-private final class NativeHistorySwiftUIEditorReference {
-    weak var value: UITextView?
-    init(_ value: UITextView) { self.value = value }
+/// One value's visibility callbacks identify its own native host, even when
+/// SwiftUI makes the replacement before dismantling the prior presentation.
+@MainActor private final class NativeHistorySwiftUIEditorReference {
+    let presentation: NativeHistorySwiftUIEditorOwnership
+    weak var container: NativeHistorySwiftUIEditorContainer?
+
+    init(_ editor: UITextView) {
+        presentation = NativeHistorySwiftUIEditorOwnership.forEditor(editor)
+    }
+    func appear() {
+        guard let container, presentation.isCurrent(container) else { return }
+        (presentation.editor as? NativeHistoryTextView)?.isTemporarilyDetachedBySwiftUI = false
+    }
+    func disappear() {
+        guard let container, presentation.isCurrent(container) else { return }
+        (presentation.editor as? NativeHistoryTextView)?.detachSwiftUIPresentation()
+    }
+}
+
+/// Neither the weak-key table nor waiting hosts retain the editor or its owner.
+@MainActor private final class NativeHistorySwiftUIEditorOwnership {
+    private static let presentations = NSMapTable<UITextView, NativeHistorySwiftUIEditorOwnership>(
+        keyOptions: .weakMemory, valueOptions: .strongMemory)
+    weak var editor: UITextView?
+    private weak var current: NativeHistorySwiftUIEditorContainer?
+    private var waiting: [WeakContainer] = []
+
+    private final class WeakContainer {
+        weak var value: NativeHistorySwiftUIEditorContainer?
+        init(_ value: NativeHistorySwiftUIEditorContainer) { self.value = value }
+    }
+
+    static func forEditor(_ editor: UITextView) -> NativeHistorySwiftUIEditorOwnership {
+        if let existing = presentations.object(forKey: editor) { return existing }
+        let presentation = NativeHistorySwiftUIEditorOwnership()
+        presentation.editor = editor
+        presentations.setObject(presentation, forKey: editor)
+        return presentation
+    }
+    func isCurrent(_ container: NativeHistorySwiftUIEditorContainer) -> Bool { current === container }
+    func attach(_ container: NativeHistorySwiftUIEditorContainer) {
+        waiting.removeAll { $0.value == nil }
+        guard let editor else { container.showUnavailableEditor(); return }
+        if current === container { return }
+        guard current == nil, editor.superview == nil else {
+            if !waiting.contains(where: { $0.value === container }) { waiting.append(WeakContainer(container)) }
+            return
+        }
+        current = container
+        container.mount(editor)
+    }
+    func detach(_ container: NativeHistorySwiftUIEditorContainer) {
+        waiting.removeAll { $0.value == nil || $0.value === container }
+        guard current === container else { return }
+        current = nil
+        container.removeEditor()
+        // Make/update of a same-turn .id replacement can precede old dismantle.
+        // The existing presentation releases first; only then may a waiter mount.
+        if let replacement = waiting.compactMap(\.value).first {
+            waiting.removeAll { $0.value === replacement }
+            attach(replacement)
+        }
+    }
 }
 
 private struct NativeHistorySwiftUIEditorPresentation: UIViewRepresentable {
-    let editor: NativeHistorySwiftUIEditorReference
+    let reference: NativeHistorySwiftUIEditorReference
 
     func makeUIView(context: Context) -> NativeHistorySwiftUIEditorContainer {
         let container = NativeHistorySwiftUIEditorContainer()
-        attachEditor(to: container)
+        container.present(reference)
         return container
     }
-
     func updateUIView(_ container: NativeHistorySwiftUIEditorContainer, context: Context) {
-        attachEditor(to: container)
+        container.present(reference)
     }
-
     static func dismantleUIView(_ container: NativeHistorySwiftUIEditorContainer, coordinator: ()) {
-        guard let editor = container.editor, editor.superview === container else { return }
-        (editor as? NativeHistoryTextView)?.detachSwiftUIPresentation()
-        editor.removeFromSuperview()
-    }
-
-    private func attachEditor(to container: NativeHistorySwiftUIEditorContainer) {
-        guard let textView = editor.value else { return }
-        (textView as? NativeHistoryTextView)?.isManagedBySwiftUI = true
-        if textView.superview === container { return }
-        guard textView.superview == nil else {
-            let diagnostic = UILabel()
-            diagnostic.text = "This native editor is already presented elsewhere. Give each scene its own editor instance."
-            diagnostic.numberOfLines = 0
-            diagnostic.textColor = .systemRed
-            diagnostic.accessibilityIdentifier = "NativeHistorySwiftUIEditorAttachmentError"
-            diagnostic.translatesAutoresizingMaskIntoConstraints = false
-            container.addSubview(diagnostic)
-            NSLayoutConstraint.activate([
-                diagnostic.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 8),
-                diagnostic.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -8),
-                diagnostic.centerYAnchor.constraint(equalTo: container.centerYAnchor)
-            ])
-            return
-        }
-        container.editor = textView
-        container.addSubview(textView)
-        (textView as? NativeHistoryTextView)?.isTemporarilyDetachedBySwiftUI = false
-        textView.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            textView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            textView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            textView.topAnchor.constraint(equalTo: container.topAnchor),
-            textView.bottomAnchor.constraint(equalTo: container.bottomAnchor)
-        ])
+        container.detach()
     }
 }
 
-private final class NativeHistorySwiftUIEditorContainer: UIView {
-    weak var editor: UITextView?
+@MainActor private final class NativeHistorySwiftUIEditorContainer: UIView {
+    private var reference: NativeHistorySwiftUIEditorReference?
+    private weak var mountedEditor: UITextView?
+    private var editorConstraints: [NSLayoutConstraint] = []
+    private let diagnostic = UILabel()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        diagnostic.text = "This native editor is already presented elsewhere. Give each scene its own editor instance."
+        diagnostic.numberOfLines = 0
+        diagnostic.textColor = .systemRed
+        diagnostic.accessibilityIdentifier = "NativeHistorySwiftUIEditorAttachmentError"
+        diagnostic.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(diagnostic)
+        NSLayoutConstraint.activate([
+            diagnostic.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
+            diagnostic.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
+            diagnostic.centerYAnchor.constraint(equalTo: centerYAnchor)
+        ])
+    }
+    required init?(coder: NSCoder) { fatalError("Use init(frame:)") }
+
+    func present(_ reference: NativeHistorySwiftUIEditorReference) {
+        if self.reference?.presentation !== reference.presentation { detach() }
+        self.reference = reference
+        reference.container = self
+        reference.presentation.attach(self)
+    }
+    func mount(_ editor: UITextView) {
+        mountedEditor = editor
+        diagnostic.isHidden = true
+        (editor as? NativeHistoryTextView)?.isManagedBySwiftUI = true
+        addSubview(editor)
+        (editor as? NativeHistoryTextView)?.isTemporarilyDetachedBySwiftUI = false
+        editor.translatesAutoresizingMaskIntoConstraints = false
+        editorConstraints = [
+            editor.leadingAnchor.constraint(equalTo: leadingAnchor),
+            editor.trailingAnchor.constraint(equalTo: trailingAnchor),
+            editor.topAnchor.constraint(equalTo: topAnchor),
+            editor.bottomAnchor.constraint(equalTo: bottomAnchor)
+        ]
+        NSLayoutConstraint.activate(editorConstraints)
+    }
+    func showUnavailableEditor() {
+        removeEditor()
+        diagnostic.text = "The owning document no longer has this editor."
+        diagnostic.isHidden = false
+    }
+    func detach() {
+        let previous = reference
+        reference = nil
+        previous?.presentation.detach(self)
+        removeEditor()
+    }
+    func removeEditor() {
+        guard let editor = mountedEditor else { return }
+        (editor as? NativeHistoryTextView)?.detachSwiftUIPresentation()
+        NSLayoutConstraint.deactivate(editorConstraints)
+        editorConstraints = []
+        if editor.superview === self { editor.removeFromSuperview() }
+        mountedEditor = nil
+    }
 }
 
 public extension View {

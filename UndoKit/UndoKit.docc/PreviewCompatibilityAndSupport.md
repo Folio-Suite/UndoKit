@@ -9,7 +9,8 @@ Distinguish intended support, actual qualification and published identity.
 
 ## Preview promises
 
-The first qualified preview is planned as version 0.2.0. It has not yet shipped.
+The first qualified preview baseline is version 0.2.0. Its compatibility promises
+begin with actual qualification, not a planned version label or development build.
 Before that baseline, public APIs are under frost, with qualification-driven
 changes documented. No migration from tagged 0.1.0 or experimental stores is
 promised. Unsupported history is preserved and refused.

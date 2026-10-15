@@ -50,10 +50,10 @@ consumer Xcode 27.0 build 27A266a / Apple Swift 6.4, Swift 6 language mode and c
 concurrency checking. No direct Objective-C or other Apple-platform contract is
 added. Older/newer compilers require explicit qualification.
 
-Version 0.2.0 is planned, not published or qualified. Build and simulator evidence
-is source/artifact-bound and does not imply floor-OS, Intel execution, physical
-hardware, binary-distribution or release acceptance. Use retained evidence for
-the exact selected candidate. Preview updates require rebuild/relink of all
+Build and simulator evidence is source/artifact-bound and does not imply
+floor-OS, Intel execution, physical hardware, binary-distribution or release
+acceptance. A development version label is not qualification. Use retained
+evidence for the exact selected candidate or published release. Preview updates require rebuild/relink of all
 clients in a process; no drop-in ABI replacement is promised.
 
 ## Topics

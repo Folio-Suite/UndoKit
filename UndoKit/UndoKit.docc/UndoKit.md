@@ -9,8 +9,9 @@ Durable application history behind a native UndoManager interface.
 
 ## Start here
 
-Version 0.2.0 is planned, not yet published or qualified. This catalog describes
-the selected source; a build or simulator pass is not a release qualification.
+This catalog describes its labelled source/version. Development output is not a
+qualified release; a build or simulator pass alone never establishes qualification.
+Consult the matching release provenance and evidence before relying on support claims.
 
 - <doc:InstallingUndoKit>
 - <doc:FirstUndoGroup>

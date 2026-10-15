@@ -20,7 +20,8 @@ ruby scripts/run-durable-notes-swiftui-ios.rb --device <simulator-UDID> --config
 
 The runner installs one selected simulator at a time and retains exact build,
 configuration, source hashes, runtime observations and an independent `Note.json`
-readback under `build/Evidence/SwiftUI`. It boots the selected simulator only when
+readback under `~/Library/Developer/Xcode/DerivedData/UndoKit/Evidence/DurableNotesSwiftUIiOS`.
+Xcode still resolves its configured default build location. The runner boots the selected simulator only when
 needed and shuts it down only when it owns that boot. Use the available iPadOS
 26.5 simulator for the tracked iPadOS 27 startup exclusion. These observations
 supplement existing preview gates; they do not add a new release gate.

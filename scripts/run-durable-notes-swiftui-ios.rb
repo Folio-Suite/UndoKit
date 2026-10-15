@@ -8,6 +8,7 @@ require 'json'
 require 'open3'
 require 'optparse'
 require 'securerandom'
+require_relative 'build-support'
 
 options = { configuration: 'Debug', check: true }
 invocation = ARGV.dup
@@ -22,8 +23,8 @@ abort 'Supply --device and no positional arguments' unless options[:device] && A
 repository = File.expand_path('..', __dir__)
 project = File.join(repository, 'Examples/DurableNotes/SwiftUI/DurableNotesSwiftUI.xcodeproj')
 fixture = options[:check] ? "Check-#{SecureRandom.uuid}" : 'Interactive'
-evidence = File.join(repository, 'build/Evidence/SwiftUI', "#{Time.now.utc.strftime('%Y%m%dT%H%M%SZ')}-#{SecureRandom.hex(3)}")
-FileUtils.mkdir_p(evidence)
+evidence = UndoKitBuild.directory('Evidence', 'DurableNotesSwiftUIiOS',
+                                 "#{Time.now.utc.strftime('%Y%m%dT%H%M%SZ')}-#{SecureRandom.hex(3)}")
 log = File.join(evidence, 'Run.log')
 bundle = 'app.foliosuite.UndoKit.DurableNotesSwiftUI'
 

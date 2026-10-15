@@ -213,6 +213,39 @@ class ReleaseCandidateCommandTest < Minitest::Test
     end
   end
 
+  def test_binary_consumer_verifies_the_full_candidate_before_any_build
+    Dir.mktmpdir('undokit-candidate-test-') do |directory|
+      options = fixture(directory)
+      artifacts(options)
+      environment = boundary_tools(directory)
+      text, result = candidate_command(options, environment)
+      assert result.success?, text
+      manifest = JSON.parse(File.read(File.join(options[:output], 'manifest.json')))
+      archive_path = File.join(options[:output], manifest.fetch('archivePath'))
+      original_archive = File.binread(archive_path)
+      File.open(archive_path, 'ab') { |file| file.write('tampered') }
+      build_marker = File.join(directory, 'build-started')
+      xcodebuild = File.join(directory, 'bin', 'xcodebuild')
+      File.write(xcodebuild, "#!/bin/sh\ntouch \"#{build_marker}\"\nexit 89\n")
+      File.chmod(0755, xcodebuild)
+      text, result = Open3.capture2e(environment, RbConfig.ruby, '--disable-gems',
+        File.expand_path('../check-binary-consumer.rb', __dir__), '--xcframework', File.join(options[:output], 'UndoKit.xcframework'))
+      refute result.success?
+      assert_includes text, 'release candidate verification failed'
+      assert_includes text, 'download ZIP differs'
+      refute File.exist?(build_marker)
+      refute File.exist?(File.join(options[:output], 'BinaryConsumerRuns'))
+      File.binwrite(archive_path, original_archive)
+      text, result = Open3.capture2e(environment.merge('UNDOKIT_FIXTURE_BAD_SIGNATURE' => '1'), RbConfig.ruby, '--disable-gems',
+        File.expand_path('../check-binary-consumer.rb', __dir__), '--xcframework', File.join(options[:output], 'UndoKit.xcframework'))
+      refute result.success?
+      assert_includes text, 'release candidate verification failed'
+      assert_includes text, 'synthetic invalid signature'
+      refute File.exist?(build_marker)
+      refute File.exist?(File.join(options[:output], 'BinaryConsumerRuns'))
+    end
+  end
+
   def test_missing_publisher_approval_fails_with_retained_diagnostic
     Dir.mktmpdir('undokit-candidate-test-') do |directory|
       output = File.join(directory, 'attempt')

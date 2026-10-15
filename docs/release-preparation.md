@@ -51,6 +51,25 @@ Prepare these inputs outside the source checkout:
   preparation. An offline inventory cannot establish current remote state;
   verify it again during approval and promotion. The tool retains and hashes it.
 
+Stage documentation with the `Versioned documentation` Actions workflow
+(`documentation.yml`), operation `stage`, the selected full `source_commit`,
+version `0.2.0` and channel `release`. Download its retained output without
+rebuilding it:
+
+```sh
+gh run download DOCS_STAGE_RUN_ID --repo Folio-Suite/UndoKit \
+  --name undokit-docs-candidate --dir /absolute/path/to/retained/documentation
+```
+
+The downloaded directory is the `--docs` input itself: `manifest.json`,
+`producer.json`, `archive/`, and `site/` are at its root. Its manifest's
+`producerPath` and `producerSHA256` bind the original producer record;
+`sourceCommit`, `sourceDirty: false`, full toolchain and `producerCommand`
+bind the documentation build. Archive/site tree hashes bind retained output.
+Keep the selected Actions run ID as staging evidence, and copy downloaded bytes
+to durable retention before the Actions artifact expires. Candidate preparation
+checks this initial release artifact against the binary's exact source identity.
+
 The publisher JSON uses this schema (replace all illustrative values):
 
 ```json
@@ -157,13 +176,35 @@ uses an isolated temporary directory. Verification does not rebuild, sign,
 repack, rewrite manifests or repair a modified candidate. Checksums and manifest
 hashes identify bytes; approval must bind their trusted values separately.
 
+Use the signed candidate's bundle directly for binary consumer checks:
+
+```sh
+scripts/check-binary-consumer.rb \
+  --xcframework /absolute/path/to/candidate/UndoKit.xcframework
+```
+
+The consumer detects the sibling candidate `manifest.json` and invokes the full
+candidate verifier before inspecting/building a consumer. Conflicting unsigned
+`provenance.json` and candidate manifests are rejected. Original unsigned
+assembly directories continue to use their original `provenance.json` route.
+Consumer evidence records which manifest kind supplied the source and artifact
+identity, its SHA-256, and the candidate ID/ZIP identity when applicable.
+Metadata hashes alone do not establish publisher authentication. A successful
+real signed candidate consumer run remains required when release signing access
+is available; synthetic external-tool tests do not satisfy it.
+
 Attach qualification results and maintainer approval as separate records binding
 `candidateID`, manifest SHA-256 and ZIP SHA-256. Do not append results to the
 candidate manifest or change retained documentation. A relevant source, artifact
 or documentation change requires a new preparation and applicable requalification.
 Promotion must use the exact approved ZIP, documentation output and source
 commit without rebuilding, re-signing or recompressing. Publication and live
-verification remain separate maintainer-controlled work (#28/#29).
+verification remain separate maintainer-controlled work (#28/#29). Publish the
+unchanged candidate `manifest.json` bytes as the GitHub release asset
+`UndoKit-0.2.0-manifest.json` (general form `UndoKit-<version>-manifest.json`).
+That exact asset name is the versioned documentation promotion workflow's
+release-provenance input. Changing an upload filename does not change the
+approved manifest bytes or its SHA-256; preserve both.
 
 An output path inside the source or either original input is rejected before
 creating any directory or diagnostic file, including through symlink parents.

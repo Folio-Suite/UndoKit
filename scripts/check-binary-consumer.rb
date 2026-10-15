@@ -6,6 +6,7 @@ require "fileutils"
 require "json"
 require "optparse"
 require "open3"
+require "rbconfig"
 require "securerandom"
 require "time"
 require_relative "build-support"
@@ -21,16 +22,7 @@ module UndoKit
     def run(xcframework, run_id, platforms, installations, device, export_options, mixed_runtime)
       xcframework = File.expand_path(xcframework)
       raise Assembly::VerificationError, "XCFramework directory is missing: #{xcframework}" unless File.directory?(xcframework)
-      provenance_path = File.join(File.dirname(xcframework), "provenance.json")
-      raise Assembly::VerificationError, "candidate provenance is missing: #{provenance_path}" unless File.file?(provenance_path)
-      producer = JSON.parse(File.read(provenance_path))
-      unless producer["sourceCommit"].to_s.match?(/\A[0-9a-f]{40}\z/) &&
-             producer["xcframeworkTreeSHA256"] == Assembly.tree_sha256(xcframework)
-        raise Assembly::VerificationError, "candidate provenance does not identify the selected XCFramework bytes"
-      end
-      producer_identity = {"producerSourceCommit" => producer.fetch("sourceCommit"),
-                           "producerProvenanceSHA256" => Digest::SHA256.file(provenance_path).hexdigest,
-                           "producerXCFrameworkTreeSHA256" => producer.fetch("xcframeworkTreeSHA256")}
+      producer_identity = selected_provenance!(xcframework)
       variants = Assembly.verify_xcframework!(xcframework, File.expand_path("../UndoKit/Resources/PrivacyInfo.xcprivacy", __dir__))
       toolchain = pinned_toolchain!
       mac_framework = File.join(xcframework, variants.fetch("macos").fetch("frameworkPath"))
@@ -62,6 +54,54 @@ module UndoKit
       ensure
         cleanup_simulator!(simulator) if simulator
       end
+    end
+
+    def selected_provenance!(xcframework)
+      parent = File.dirname(xcframework)
+      manifest_path = File.join(parent, "manifest.json")
+      provenance_path = File.join(parent, "provenance.json")
+      candidate = File.exist?(manifest_path) || File.symlink?(manifest_path)
+      if candidate && (File.exist?(provenance_path) || File.symlink?(provenance_path))
+        raise Assembly::VerificationError, "conflicting release candidate and unsigned assembly manifests"
+      end
+      path = candidate ? manifest_path : provenance_path
+      raise Assembly::VerificationError, "candidate provenance is missing: #{path}" unless File.file?(path)
+      producer = JSON.parse(File.read(path))
+      raise Assembly::VerificationError, "candidate provenance must contain an object" unless producer.is_a?(Hash)
+      if !candidate && producer.key?("signedXCFrameworkTreeSHA256")
+        raise Assembly::VerificationError, "release candidate metadata requires manifest.json and full candidate verification"
+      end
+      hash_field = candidate ? "signedXCFrameworkTreeSHA256" : "xcframeworkTreeSHA256"
+      unless producer["sourceCommit"].to_s.match?(/\A[0-9a-f]{40}\z/) && producer[hash_field] == Assembly.tree_sha256(xcframework)
+        raise Assembly::VerificationError, "candidate provenance does not identify the selected XCFramework bytes"
+      end
+      manifest_hash = Digest::SHA256.file(path).hexdigest
+      if candidate
+        unless producer["schemaVersion"] == 1 && producer["xcframeworkPath"].is_a?(String) &&
+               File.realpath(File.expand_path(producer.fetch("xcframeworkPath"), parent)) == File.realpath(xcframework)
+          raise Assembly::VerificationError, "release candidate manifest does not identify the selected XCFramework path/schema"
+        end
+        verifier = File.expand_path("release/candidate.rb", __dir__)
+        output, status = Open3.capture2e(RbConfig.ruby, "--disable-gems", verifier, "verify", "--candidate", parent)
+        unless status.success?
+          raise Assembly::VerificationError, "release candidate verification failed before consumer build:\n#{output}"
+        end
+        unless Digest::SHA256.file(path).hexdigest == manifest_hash && Assembly.tree_sha256(xcframework) == producer.fetch(hash_field)
+          raise Assembly::VerificationError, "release candidate identity changed during verification"
+        end
+        puts output
+      end
+      identity = {"producerSourceCommit" => producer.fetch("sourceCommit"),
+                  "producerManifestKind" => candidate ? "release-candidate" : "unsigned-assembly",
+                  "producerProvenanceSHA256" => manifest_hash,
+                  "producerXCFrameworkTreeSHA256" => producer.fetch(hash_field)}
+      if candidate
+        identity["producerCandidateID"] = producer.fetch("candidateID")
+        identity["producerArchiveSHA256"] = producer.fetch("archiveSHA256")
+      end
+      identity
+    rescue JSON::ParserError, KeyError, TypeError, Errno::ENOENT => error
+      raise Assembly::VerificationError, "invalid candidate provenance: #{error.message}"
     end
 
     def prepare_simulator!(udid)

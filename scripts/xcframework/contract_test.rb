@@ -26,6 +26,63 @@ class XCFrameworkAssemblyContractTest < Minitest::Test
     end
   end
 
+  def test_consumer_does_not_treat_candidate_hash_metadata_as_publisher_authentication
+    Dir.mktmpdir("undokit-forged-candidate-") do |temporary|
+      bundle = File.join(temporary, "UndoKit.xcframework")
+      FileUtils.mkdir_p(bundle)
+      File.write(File.join(temporary, "manifest.json"), JSON.generate(
+        "schemaVersion" => 1, "sourceCommit" => "a" * 40, "xcframeworkPath" => "UndoKit.xcframework",
+        "signedXCFrameworkTreeSHA256" => Assembly.tree_sha256(bundle)))
+      output, status = Open3.capture2e(RbConfig.ruby, File.expand_path("../check-binary-consumer.rb", __dir__),
+                                      "--xcframework", bundle)
+      refute status.success?
+      assert_includes output, "release candidate verification failed before consumer build"
+      assert_includes output, "manifest.sha256"
+      refute File.exist?(File.join(temporary, "BinaryConsumerRuns"))
+    end
+  end
+
+  def test_consumer_rejects_conflicting_candidate_and_unsigned_manifests
+    Dir.mktmpdir("undokit-conflicting-provenance-") do |temporary|
+      bundle = File.join(temporary, "UndoKit.xcframework")
+      FileUtils.mkdir_p(bundle)
+      %w[manifest.json provenance.json].each { |name| File.write(File.join(temporary, name), '{}') }
+      output, status = Open3.capture2e(RbConfig.ruby, File.expand_path("../check-binary-consumer.rb", __dir__),
+                                      "--xcframework", bundle)
+      refute status.success?
+      assert_includes output, "conflicting release candidate and unsigned assembly manifests"
+      refute File.exist?(File.join(temporary, "BinaryConsumerRuns"))
+    end
+  end
+
+  def test_consumer_rejects_malformed_candidate_metadata
+    Dir.mktmpdir("undokit-malformed-candidate-") do |temporary|
+      bundle = File.join(temporary, "UndoKit.xcframework")
+      FileUtils.mkdir_p(bundle)
+      File.write(File.join(temporary, "manifest.json"), '{')
+      output, status = Open3.capture2e(RbConfig.ruby, File.expand_path("../check-binary-consumer.rb", __dir__),
+                                      "--xcframework", bundle)
+      refute status.success?
+      assert_includes output, "invalid candidate provenance"
+      refute File.exist?(File.join(temporary, "BinaryConsumerRuns"))
+    end
+  end
+
+  def test_candidate_metadata_cannot_use_the_unsigned_producer_route
+    Dir.mktmpdir("undokit-renamed-candidate-") do |temporary|
+      bundle = File.join(temporary, "UndoKit.xcframework")
+      FileUtils.mkdir_p(bundle)
+      File.write(File.join(temporary, "provenance.json"), JSON.generate(
+        "sourceCommit" => "a" * 40, "xcframeworkTreeSHA256" => Assembly.tree_sha256(bundle),
+        "signedXCFrameworkTreeSHA256" => Assembly.tree_sha256(bundle)))
+      output, status = Open3.capture2e(RbConfig.ruby, File.expand_path("../check-binary-consumer.rb", __dir__),
+                                      "--xcframework", bundle)
+      refute status.success?
+      assert_includes output, "release candidate metadata requires manifest.json and full candidate verification"
+      refute File.exist?(File.join(temporary, "BinaryConsumerRuns"))
+    end
+  end
+
   def test_archive_matrix_keeps_device_and_simulator_separate
     assert_equal [
       ["macos", "generic/platform=macOS", %w[arm64 x86_64], "14.0"],

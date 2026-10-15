@@ -145,6 +145,69 @@ class DocumentationSiteTest < Minitest::Test
     assert_match(/development.*dirty source/, File.read(File.join(output, 'site', 'index.html')))
   end
 
+  def test_clean_development_candidate_is_explicitly_labeled
+    development_site = File.join(@tmp, 'development-site')
+    FileUtils.cp_r(@static, development_site)
+    Dir.glob(File.join(development_site, '**', '*.html')).each do |path|
+      File.write(path, File.read(path).gsub('/UndoKit/versions/0.2.0/', "/UndoKit/development/#{SHA}/"))
+    end
+    output = File.join(@tmp, 'development-artifact')
+    _, err, status = run_cli('stage', '--archive', @archive, '--producer', @producer,
+                            '--static-output', development_site, '--output', output,
+                            '--version', '0.2.0', '--channel', 'development',
+                            '--base-path', "/UndoKit/development/#{SHA}/")
+    assert status.success?, err
+    html = File.read(File.join(output, 'site', 'index.html'))
+    assert_match(/UndoKit development.*source #{SHA}/, html)
+    refute_includes html, 'dirty source'
+  end
+
+  def test_stage_rejects_caller_supplied_toolchain_identity_flags
+    %w[--xcode-version --swift-version].each do |flag|
+      _, err, status = run_cli(*stage_args, flag, 'invented identity')
+      refute status.success?, "#{flag} must not override producer provenance"
+      assert_match(/invalid option/, err)
+      refute File.exist?(@artifact)
+    end
+  end
+
+  def test_verify_release_uses_explicit_repository_from_outside_checkout
+    _, _, status = run_cli(*stage_args)
+    assert status.success?
+    provenance = release_provenance
+    bin = File.join(@tmp, 'bin')
+    FileUtils.mkdir_p(bin)
+    log = File.join(@tmp, 'gh-calls.jsonl')
+    fake_gh = File.join(bin, 'gh')
+    File.write(fake_gh, <<~RUBY)
+      #!/usr/bin/env ruby
+      require 'json'
+      File.open(ENV.fetch('GH_CALL_LOG'), 'a') { |file| file.puts(JSON.generate(ARGV)) }
+      case ARGV.take(2)
+      when ['release', 'view']
+        puts JSON.generate({ tagName: '0.2.0', isDraft: false, isPrerelease: true })
+      when ['api', 'repos/Folio-Suite/UndoKit/git/ref/tags/0.2.0']
+        puts JSON.generate({ object: { type: 'tag', sha: '#{'c' * 40}' } })
+      when ['api', 'repos/Folio-Suite/UndoKit/git/tags/#{'c' * 40}']
+        puts JSON.generate({ object: { type: 'commit', sha: '#{SHA}' } })
+      else
+        warn 'unexpected gh arguments'
+        exit 1
+      end
+    RUBY
+    FileUtils.chmod(0o755, fake_gh)
+    env = { 'PATH' => "#{bin}:#{ENV.fetch('PATH')}", 'GH_CALL_LOG' => log,
+            'GITHUB_REPOSITORY' => 'unrelated/repository' }
+    _, err, status = Open3.capture3(env, 'ruby', CLI, 'verify-release', '--artifact', @artifact,
+                                  '--release-provenance', provenance, chdir: @tmp)
+    assert status.success?, err
+    calls = File.readlines(log).map { |line| JSON.parse(line) }
+    assert_includes calls.first.each_cons(2).to_a, ['--repo', 'Folio-Suite/UndoKit']
+    assert_equal 3, calls.length
+    workflow = File.read(File.expand_path('../../../.github/workflows/documentation.yml', __dir__))
+    assert_match(/gh release download .*--repo Folio-Suite\/UndoKit/, workflow)
+  end
+
   def test_promote_keeps_previous_release_when_artifact_checksum_fails
     _, _, status = run_cli(*stage_args)
     assert status.success?

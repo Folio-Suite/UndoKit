@@ -60,7 +60,9 @@ checks the producer, archive, and generated-site checksums again.
 
 Development candidates use `--channel development` and
 `--base-path /UndoKit/development/<sourceCommit>/`. They are separate from the
-release snapshot namespace.
+release snapshot namespace and always carry a development label, including for clean
+source checkouts. The dirty-source label is additional provenance. Toolchain
+identity is captured by the producer; callers cannot supply version strings.
 
 ## Review and promote
 
@@ -79,6 +81,9 @@ ruby scripts/documentation/site.rb promote \
   --release-provenance /tmp/UndoKit-0.2.0-manifest.json \
   --destination /tmp/undokit-pages
 ```
+
+GitHub release and tag lookups explicitly target `Folio-Suite/UndoKit`, so local
+verification also works outside a checkout and cannot infer another repository.
 
 The repository workflow is `workflow_dispatch` only and has two operations. `stage`
 checks out the selected full source SHA on the pinned Xcode runner, runs the

@@ -59,8 +59,8 @@ module UndoKitDocumentation
     File.write(index, content)
   end
 
-  def add_identity_banner(site, version, source_commit, dirty)
-    label = "UndoKit #{dirty ? 'development' : version} · source #{source_commit}#{dirty ? ' · dirty source' : ''}"
+  def add_identity_banner(site, version, channel, source_commit, dirty)
+    label = "UndoKit #{channel == 'development' ? 'development' : version} · source #{source_commit}#{dirty ? ' · dirty source' : ''}"
     banner = "<aside role=\"note\" style=\"padding:.65rem 1rem;background:#fff3cd;color:#222;font:14px/1.4 sans-serif\">#{label}</aside>"
     Dir.glob(File.join(site, '**', '*.html')).each do |path|
       html = File.read(path)
@@ -164,7 +164,7 @@ module UndoKitDocumentation
         fail!("DocC transform failed: #{stderr.strip}") unless status.success?
       end
       normalize_root_entrypoint(site, base)
-      add_identity_banner(site, options[:version], source_commit.downcase, producer.fetch('sourceDirty'))
+      add_identity_banner(site, options[:version], options[:channel], source_commit.downcase, producer.fetch('sourceDirty'))
       validate_site(site, base)
       producer_copy = File.join(working, 'producer.json')
       FileUtils.copy_file(File.expand_path(options[:producer]), producer_copy)
@@ -253,19 +253,14 @@ module UndoKitDocumentation
     fail!('release Swift identity is not qualified') unless toolchain.fetch('swift').start_with?('Apple Swift version 6.4 ') && toolchain.fetch('swift').include?('swiftlang-6.4.0.34.1')
     fail!('release clang identity is missing') unless toolchain.fetch('clang').start_with?('Apple clang version 21.0.0 ')
     approved_documentation!(manifest, provenance_path)
-    release_json, release_status = Open3.capture2('gh', 'release', 'view', version, '--json', 'tagName,isDraft,isPrerelease')
+    release_json, release_status = Open3.capture2('gh', 'release', 'view', version, '--repo', 'Folio-Suite/UndoKit', '--json', 'tagName,isDraft,isPrerelease')
     fail!("GitHub release #{version} is unavailable") unless release_status.success?
     release = JSON.parse(release_json)
     fail!('GitHub release is still a draft') if release.fetch('isDraft')
     fail!('GitHub release is not marked as a prerelease') unless release.fetch('isPrerelease')
     tag = release.fetch('tagName')
     fail!('GitHub release tag must match documentation version') unless tag == version
-    repository = ENV['GITHUB_REPOSITORY']
-    if repository.to_s.empty?
-      repository, repository_status = Open3.capture2('gh', 'repo', 'view', '--json', 'nameWithOwner', '--jq', '.nameWithOwner')
-      fail!('could not identify the GitHub repository') unless repository_status.success?
-      repository = repository.strip
-    end
+    repository = 'Folio-Suite/UndoKit'
     ref_json, ref_status = Open3.capture2('gh', 'api', "repos/#{repository}/git/ref/tags/#{tag}")
     fail!('could not verify published tag on GitHub') unless ref_status.success?
     object = JSON.parse(ref_json).fetch('object')
@@ -424,8 +419,6 @@ module UndoKitDocumentation
       flags.on('--channel CHANNEL') { |value| options[:channel] = value }
       flags.on('--producer PATH', 'Provenance JSON emitted by build') { |value| options[:producer] = value }
       flags.on('--base-path PATH') { |value| options[:base_path] = value }
-      flags.on('--xcode-version TEXT') { |value| options[:xcode_version] = value }
-      flags.on('--swift-version TEXT') { |value| options[:swift_version] = value }
       flags.on('--artifact PATH') { |value| options[:artifact] = value }
       flags.on('--release-provenance PATH', 'Published UndoKit-<version>-manifest.json candidate asset') { |value| options[:release_provenance] = value }
       flags.on('--destination PATH') { |value| options[:destination] = value }

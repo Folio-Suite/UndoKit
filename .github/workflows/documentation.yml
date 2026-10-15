@@ -135,7 +135,7 @@ jobs:
           VERSION=$(ruby -rjson -e 'puts JSON.parse(File.read("candidate/manifest.json")).fetch("version")')
           [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "candidate version is invalid" >&2; exit 1; }
           mkdir release-provenance
-          gh release download "$VERSION" --pattern "UndoKit-$VERSION-manifest.json" --dir release-provenance
+          gh release download "$VERSION" --repo Folio-Suite/UndoKit --pattern "UndoKit-$VERSION-manifest.json" --dir release-provenance
       - name: Verify approved release and source tag
         env:
           GH_TOKEN: ${{ github.token }}

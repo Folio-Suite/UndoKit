@@ -55,6 +55,15 @@ Apply `.nativeHistory(binding)` to SwiftUI command controls and read
 responder actions still route through the native editor's `undoManager`; the
 explicit environment key supplies the same facade to SwiftUI buttons.
 
+The sample observes the facade's `NSUndoManagerCheckpoint` notifications and
+native editing begin/end notifications to refresh the SwiftUI buttons' local
+eligibility state. Native Undo can change `canUndo`/`canRedo` while the durable
+status text stays identical. Observing only that status left the buttons stale
+in an actual iPad software-keyboard check. After native Undo reaches the live
+baseline, SwiftUI Undo must disable and Redo enable; Redo reverses that state.
+Rebuilding the editor presentation releases focus, so both live buttons disable
+until refocusing an editor supplies its native route again.
+
 ## Transactions and lifetime
 
 Typing, native Undo and baseline Redo stay local while the editing transaction

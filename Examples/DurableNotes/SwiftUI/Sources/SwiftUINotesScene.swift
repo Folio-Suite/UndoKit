@@ -327,12 +327,32 @@ import UndoKit
 @MainActor private struct SwiftUINotesUndoButtons: View {
     let status: String
     @Environment(\.nativeHistoryUndoManager) private var undoManager
+    @State private var canUndo = false
+    @State private var canRedo = false
+
     var body: some View {
         HStack {
-            Button("Undo") { undoManager?.undo() }.disabled(undoManager?.canUndo != true)
-            Button("Redo") { undoManager?.redo() }.disabled(undoManager?.canRedo != true)
+            Button("Undo") { undoManager?.undo() }
+                .disabled(!canUndo)
+                .accessibilityIdentifier("SwiftUIUndoButton")
+            Button("Redo") { undoManager?.redo() }
+                .disabled(!canRedo)
+                .accessibilityIdentifier("SwiftUIRedoButton")
         }
         .accessibilityValue(status)
+        .onAppear { refreshEligibility() }
+        .onChange(of: undoManager.map(ObjectIdentifier.init)) { _, _ in refreshEligibility() }
+        .onReceive(NotificationCenter.default.publisher(for: .NSUndoManagerCheckpoint, object: undoManager)
+            .receive(on: RunLoop.main)) { _ in refreshEligibility() }
+        .onReceive(NotificationCenter.default.publisher(for: UITextView.textDidBeginEditingNotification)
+            .receive(on: RunLoop.main)) { _ in refreshEligibility() }
+        .onReceive(NotificationCenter.default.publisher(for: UITextView.textDidEndEditingNotification)
+            .receive(on: RunLoop.main)) { _ in refreshEligibility() }
+    }
+
+    private func refreshEligibility() {
+        canUndo = undoManager?.canUndo == true
+        canRedo = undoManager?.canRedo == true
     }
 }
 

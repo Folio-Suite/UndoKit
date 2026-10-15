@@ -60,6 +60,8 @@ and encoded the Command before calling it:
 ```swift
 import UndoKit
 
+struct UnsupportedHistoryResult: Error {}
+
 @MainActor
 func submitChange(
     _ command: HistoryCommand,
@@ -72,6 +74,8 @@ func submitChange(
         return nil
     case .failure(let failure):
         throw failure
+    @unknown default:
+        throw UnsupportedHistoryResult()
     }
 }
 ```
@@ -81,6 +85,8 @@ completed. Rejection proves no semantic effect. A thrown ``HistoryFailure`` from
 this helper preserves its ``HistoryFailure/disposition``: the caller must inspect
 it before allowing further edits. In particular, failure after possible delivery
 requires authoritative reconciliation rather than a new identity and blind retry.
+A future, unfamiliar binary result stops this helper. Keep further admission
+blocked until the consumer understands the result; do not treat it as rejection.
 Queue admission alone is neither a durable receipt nor a guarantee that a waiting
 request survives a crash. Cancellation after delivery cannot retract its effect.
 

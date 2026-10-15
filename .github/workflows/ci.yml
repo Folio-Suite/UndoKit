@@ -21,6 +21,18 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  maintenance:
+    runs-on: xcode-27
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Verify producer toolchain
+        run: ruby scripts/check-toolchain.rb
+      - name: Run maintenance regression gate
+        run: ruby scripts/maintenance/check.rb
+
   swift-package:
     runs-on: xcode-27
     timeout-minutes: 60

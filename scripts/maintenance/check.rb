@@ -46,8 +46,7 @@ def tracked_or_present_paths(pattern)
     .sort
 end
 
-def swiftlint_executable
-  cache = File.expand_path('~/Library/Developer/Xcode/DerivedData')
+def cached_swiftlint_executable(cache)
   candidates = Dir.glob(File.join(cache,
                                  'UndoKit-*/SourcePackages/artifacts/swiftlintplugins/' \
                                  'SwiftLintBinary/SwiftLintBinary.artifactbundle/macos/swiftlint'))
@@ -55,6 +54,13 @@ def swiftlint_executable
     version, status = Open3.capture2(candidate, 'version')
     return candidate if status.success? && version.strip == SWIFTLINT_VERSION
   end
+  nil
+end
+
+def swiftlint_executable
+  cache = File.expand_path('~/Library/Developer/Xcode/DerivedData')
+  executable = cached_swiftlint_executable(cache)
+  return executable if executable
 
   project = File.join(ROOT, 'UndoKit.xcodeproj')
   command = ['xcodebuild', '-resolvePackageDependencies', '-project', project, '-scheme', 'UndoKit']
@@ -62,13 +68,9 @@ def swiftlint_executable
   return fail_check("Could not resolve the pinned SwiftLint tool with `#{command.join(' ')}`:\n#{output}") unless
     status.success?
 
-  candidates = Dir.glob(File.join(cache,
-                                 'UndoKit-*/SourcePackages/artifacts/swiftlintplugins/' \
-                                 'SwiftLintBinary/SwiftLintBinary.artifactbundle/macos/swiftlint'))
-  candidates.each do |candidate|
-    version, version_status = Open3.capture2(candidate, 'version')
-    return candidate if version_status.success? && version.strip == SWIFTLINT_VERSION
-  end
+  executable = cached_swiftlint_executable(cache)
+  return executable if executable
+
   fail_check("SwiftLint #{SWIFTLINT_VERSION} was not found in Xcode's resolved package artifacts.")
 end
 

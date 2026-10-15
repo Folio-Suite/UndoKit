@@ -7,6 +7,7 @@ import UndoKit
 
 #if CONSUMER_APP
 import ConsumerDomain
+import MachO
 #endif
 
 private struct StoredEffect: Codable {

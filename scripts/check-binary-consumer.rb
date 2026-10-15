@@ -136,7 +136,7 @@ module UndoKit
       unless %w[arm64 x86_64].include?(architecture)
         raise Assembly::VerificationError, "unsupported consumer host architecture: #{architecture}"
       end
-      destination = ios ? "id=#{device.fetch('udid')}" : "generic/platform=macOS"
+      destination = ios ? "id=#{device.fetch(:udid)}" : "generic/platform=macOS"
       command = ["xcodebuild", "-project", project, "-scheme", "Consumer", "-configuration", "Release",
                  "-destination", destination, "-derivedDataPath", build_root,
                  "ARCHS=#{ios ? 'arm64' : architecture}", "ONLY_ACTIVE_ARCH=YES", "CODE_SIGNING_ALLOWED=YES",
@@ -283,7 +283,9 @@ module UndoKit
       Assembly.verify_architectures!(architectures, [architecture], "binary consumer executable")
       raise Assembly::VerificationError, "embedded UndoKit runtime path is missing" unless File.file?(File.join(framework, "UndoKit"))
       runtime_architectures = Assembly.parse_architectures(Assembly.capture!("xcrun", "lipo", "-archs", File.join(framework, "UndoKit")))
-      Assembly.verify_architectures!(runtime_architectures, [architecture], "installed UndoKit runtime")
+      unless runtime_architectures.include?(architecture)
+        raise Assembly::VerificationError, "installed UndoKit runtime architectures are #{runtime_architectures.join(', ')}; expected support for #{architecture}"
+      end
     end
 
     def pinned_toolchain!

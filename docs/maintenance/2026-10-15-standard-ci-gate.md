@@ -43,6 +43,13 @@ the gate does not contact external sites or validate remote links. It reads
 preserved artifacts without modifying them. Historical prototype sources are
 not built or executed by this command.
 
+CI also runs `ruby scripts/maintenance/check-fixtures.rb`. This focused harness
+builds temporary repositories and invokes the public gate to confirm a clean
+pass and actionable failures for a new lint finding, broken inline and
+reference-style destinations, invalid Ruby and shell syntax, and a mismatched
+preserved-artifact checksum. It removes the temporary fixtures on exit and does
+not write to the repository's preserved artifacts.
+
 The prerequisites are macOS with the repository's pinned Xcode 27.0 / Swift
 6.4 toolchain, Ruby 2.6 or later, Bash, and the pinned SwiftLint package
 artifact. The runner uses Ruby's standard library only and is compatible with

@@ -8,13 +8,13 @@ SPDX-License-Identifier: MIT
 `0.2.0` is the planned next preview. Preparation retains a candidate for
 qualification; it does not qualify it, create a tag, publish a GitHub release,
 deploy Pages, or approve promotion. The actual signed preparation remains
-blocked until the maintainer supplies approved Apple Distribution publisher
-and certificate details and secure access to its private key (#24).
-The maintainer has approved Justin Croonenberghs as publisher under team
-`FT9KDL728H`. A release Apple Distribution certificate fingerprint and usable
-private signing identity remain unavailable; an Apple Development certificate
-cannot substitute. Development project signing settings do not establish
-release authority.
+requires approved Apple Distribution publisher and certificate details and
+secure access to its private key (#24). The maintainer-approved publisher is
+Justin Croonenberghs under team `FT9KDL728H`; the
+[signing verification record](signing-identity.md) records the checked certificate
+and actual secure-timestamp probe. Recheck availability, validity and approval
+for each preparation. An Apple Development certificate cannot substitute.
+Development project signing settings do not establish release authority.
 
 The accepted contracts are [binary installation](https://github.com/Folio-Suite/UndoKit/issues/7#issuecomment-6104427419),
 [release identity](https://github.com/Folio-Suite/UndoKit/issues/9), and

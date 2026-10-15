@@ -135,8 +135,10 @@ module CandidateFixture
         if ARGV.include?('--sign')
           FileUtils.mkdir_p(File.join(path, '_CodeSignature'))
           File.write(File.join(path, '_CodeSignature', 'fixture'), 'synthetic signature only')
-        elsif ARGV.include?('--extract-certificates')
-          prefix = ARGV[ARGV.index('--extract-certificates') + 1]
+        elsif ARGV.any? { |argument| argument.start_with?('--extract-certificates') }
+          option = ARGV.find { |argument| argument.start_with?('--extract-certificates') }
+          abort 'codesign requires --extract-certificates=prefix for an explicit output prefix' unless option.start_with?('--extract-certificates=')
+          prefix = option.delete_prefix('--extract-certificates=')
           FileUtils.cp(File.join(root, 'fixture.der'), prefix + '0')
         elsif ARGV.include?('--verify')
           requirement = ARGV[ARGV.index('-R') + 1]

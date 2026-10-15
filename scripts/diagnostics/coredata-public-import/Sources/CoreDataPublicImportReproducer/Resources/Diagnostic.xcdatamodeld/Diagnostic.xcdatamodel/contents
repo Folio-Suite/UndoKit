@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!-- SPDX-FileCopyrightText: 2026 the Folio Project -->
+<!-- SPDX-License-Identifier: MIT -->
+<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="25249" systemVersion="26A434" minimumToolsVersion="Automatic" sourceLanguage="Swift" userDefinedModelVersionIdentifier="DiagnosticV1">
+    <entity name="DiagnosticRecord" representedClassName="DiagnosticRecord" syncable="YES" codeGenerationType="category">
+        <attribute name="value" optional="YES" attributeType="String"/>
+    </entity>
+</model>

@@ -313,12 +313,18 @@ module UndoKit
       end
       directory = File.join(installed_root, "MixedRuntimeProbe")
       FileUtils.mkdir_p(directory)
+      alternate_hash = Digest::SHA256.file(alternate).hexdigest
+      retained_alternate = File.join(directory, "libUndoKit.dylib")
+      FileUtils.cp(alternate, retained_alternate)
+      unless Digest::SHA256.file(retained_alternate).hexdigest == alternate_hash
+        raise Assembly::VerificationError, "source runtime changed while retaining mixed-runtime evidence"
+      end
       host_data = File.join(directory, "host-data")
-      environment = runtime_environment.merge("DYLD_INSERT_LIBRARIES" => alternate,
+      environment = runtime_environment.merge("DYLD_INSERT_LIBRARIES" => retained_alternate,
                                               "UNDOkit_CONSUMER_ROOT" => host_data)
       output, status = Open3.capture2e(environment, executable)
       log = File.join(directory, "launch.log")
-      File.write(log, "$ DYLD_INSERT_LIBRARIES=#{alternate} #{executable}\n#{output}")
+      File.write(log, "$ DYLD_INSERT_LIBRARIES=#{retained_alternate} #{executable}\n#{output}")
       failure_path = File.join(host_data, "ConsumerFailure.txt")
       failure = File.file?(failure_path) ? File.read(failure_path) : ""
       expected = failure.include?("expected one loaded UndoKit runtime image") ||
@@ -329,8 +335,9 @@ module UndoKit
       if File.file?(File.join(host_data, "History.sqlite")) || File.file?(File.join(host_data, "HostState.json"))
         raise Assembly::VerificationError, "mixed-runtime graph mutated host/history stores before rejection"
       end
-      {"alternateRuntimePath" => alternate, "alternateRuntimeSHA256" => Digest::SHA256.file(alternate).hexdigest,
-       "alternateRuntimeInstallName" => Assembly.capture!("xcrun", "otool", "-D", alternate),
+      {"sourceRuntimePath" => alternate, "alternateRuntimePath" => retained_alternate,
+       "alternateRuntimeSHA256" => alternate_hash,
+       "alternateRuntimeInstallName" => Assembly.capture!("xcrun", "otool", "-D", retained_alternate),
        "consumerExecutableSHA256" => Digest::SHA256.file(executable).hexdigest,
        "failure" => failure, "exitStatus" => status.exitstatus, "launchLog" => log,
        "hostAndHistoryStoresCreated" => false}
@@ -515,8 +522,8 @@ begin
   if options[:mixed_runtime] && options[:platform] != "macos"
     raise UndoKit::XCFrameworkAssembly::VerificationError, "--probe-mixed-runtime requires --platform macos"
   end
-  if options[:export_macos] && (options[:platform] != "macos" || options[:team].to_s.empty? || options[:identity].to_s.empty?)
-    raise UndoKit::XCFrameworkAssembly::VerificationError, "--export-macos requires --platform macos, --development-team and --signing-identity"
+  if options[:export_macos] && (options[:platform] != "macos" || options[:installation] != "embedded" || options[:team].to_s.empty? || options[:identity].to_s.empty?)
+    raise UndoKit::XCFrameworkAssembly::VerificationError, "--export-macos requires --platform macos, --installation embedded, --development-team and --signing-identity"
   end
   if !options[:export_macos] && (options[:team] || options[:identity])
     raise UndoKit::XCFrameworkAssembly::VerificationError, "--development-team and --signing-identity require --export-macos"

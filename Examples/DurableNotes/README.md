@@ -5,6 +5,8 @@ SPDX-License-Identifier: MIT
 
 # Durable Notes
 
+The [SwiftUI Mac host](SwiftUIApp/README.md) provides the same example with native-backed SwiftUI editors.
+
 A small runnable AppKit host using UndoKit's supported
 [AppKit binding](../../docs/appkit-history-binding.md) and shared native session.
 Two document windows edit separate

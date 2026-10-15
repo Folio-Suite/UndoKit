@@ -8,11 +8,15 @@ let package = Package(
     name: "DurableNotes",
     platforms: [.macOS(.v14), .iOS(.v17)],
     products: [.library(name: "DurableNotesCore", targets: ["DurableNotesCore"]),
-               .executable(name: "DurableNotesApp", targets: ["DurableNotesApp"])],
+               .executable(name: "DurableNotesApp", targets: ["DurableNotesApp"]),
+               .executable(name: "DurableNotesSwiftUIApp", targets: ["DurableNotesSwiftUIApp"])],
     dependencies: [.package(name: "UndoKit", path: "../..")],
     targets: [
         .target(name: "DurableNotesCore", dependencies: [.product(name: "UndoKit", package: "UndoKit")]),
         .executableTarget(name: "DurableNotesApp", dependencies: ["DurableNotesCore"]),
+        .executableTarget(name: "DurableNotesSwiftUIApp", dependencies: [
+            "DurableNotesCore", .product(name: "UndoKit", package: "UndoKit")
+        ], path: "SwiftUIApp/Sources"),
         .testTarget(name: "DurableNotesCoreTests", dependencies: ["DurableNotesCore"])
     ],
     swiftLanguageModes: [.v6]

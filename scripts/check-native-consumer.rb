@@ -11,18 +11,22 @@ require "digest"
 require "time"
 require_relative "build-support"
 
-Options = Struct.new(:route, :platform, :configuration, :keep, :device, keyword_init: true)
-options = Options.new(route: "package", platform: "macos", configuration: "Debug", keep: false)
+Options = Struct.new(:route, :platform, :configuration, :installation, :keep, :device, keyword_init: true)
+options = Options.new(route: "package", platform: "macos", configuration: "Debug", installation: "embedded", keep: false)
 OptionParser.new do |parser|
   parser.banner = "Usage: scripts/check-consumer.sh [options]"
   parser.on("--route ROUTE", %w[package native both], "package, native, or both (default package)") { |v| options.route = v }
   parser.on("--platform PLATFORM", %w[macos ios-simulator both], "macos, ios-simulator, or both (default macos)") { |v| options.platform = v }
   parser.on("--configuration CONFIG", %w[Debug Release], "Debug or Release (default Debug)") { |v| options.configuration = v }
+  parser.on("--installation MODE", %w[embedded shared-macos both], "embedded, shared-macos, or both (default embedded)") { |v| options.installation = v }
   parser.on("--device UDID", "reuse an available iOS simulator; refuse other booted simulators") { |v| options.device = v }
   parser.on("--keep", "retain generated projects, builds, stores, and reports") { options.keep = true }
   parser.on("-h", "--help") { puts parser; exit 0 }
 end.parse!
 abort "--device requires --platform ios-simulator or both" if options.device && options.platform == "macos"
+abort "--installation shared-macos requires --platform macos or both" if options.installation == "shared-macos" && options.platform == "ios-simulator"
+abort "--installation both requires --platform macos or both" if options.installation == "both" && options.platform == "ios-simulator"
+installation_names = options.installation == "both" ? %w[embedded shared-macos] : [options.installation]
 
 ROOT = File.expand_path("..", __dir__)
 FIXTURE = File.join(__dir__, "consumer", "HostFixture.swift")
@@ -138,10 +142,14 @@ def verify_macho!(app, platform)
   metadata
 end
 
-def generated_project(directory, root, route, platform, configuration, framework_path = nil)
+def generated_project(directory, root, route, platform, configuration, framework_path = nil, run_id:)
   source_dir = File.join(directory, "Sources")
-  FileUtils.mkdir_p(source_dir)
-  FileUtils.cp(FIXTURE, File.join(source_dir, "HostFixture.swift"))
+  app_sources = File.join(source_dir, "App")
+  domain_sources = File.join(source_dir, "Domain")
+  FileUtils.mkdir_p(app_sources)
+  FileUtils.mkdir_p(domain_sources)
+  FileUtils.cp(FIXTURE, File.join(app_sources, "HostFixture.swift"))
+  FileUtils.cp(File.join(__dir__, "consumer", "DomainIdentity.swift"), File.join(domain_sources, "DomainIdentity.swift"))
   native = route == "native-framework"
   ios = platform == "ios-simulator"
   sdk = ios ? "iphoneos" : "macosx"
@@ -179,8 +187,17 @@ def generated_project(directory, root, route, platform, configuration, framework
   product_settings = native ? "" : "packageProductDependencies = (#{package_dependency}, );"
   package_link = native ? "" : "#{package_ref},"
   framework_file_list = native ? "#{product_ref} /* UndoKit.framework */," : ""
+  domain_link = "A00000000000000000000024"
+  domain_embed = "A00000000000000000000025"
+  domain_framework_ref = "A00000000000000000000015"
+  domain_product_ref = "A00000000000000000000015"
+  domain_framework_search = native ? File.dirname(framework_path) : "$(BUILT_PRODUCTS_DIR)"
+  package_domain = native ? "" : "packageProductDependencies = (#{package_dependency}, );"
+  domain_link_build = "A00000000000000000000027"
+  app_dependency = "A00000000000000000000035"
+  app_proxy = "A00000000000000000000036"
   embed_phase = <<~PBX
-    A00000000000000000000042 = {isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = ""; dstSubfolderSpec = 10; files = (#{embed_build} /* UndoKit in Embed Frameworks */, ); name = "Embed Frameworks"; runOnlyForDeploymentPostprocessing = 0; };
+    A00000000000000000000042 = {isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = ""; dstSubfolderSpec = 10; files = (#{embed_build} /* UndoKit in Embed Frameworks */, #{domain_embed} /* ConsumerDomain in Embed Frameworks */, ); name = "Embed Frameworks"; runOnlyForDeploymentPostprocessing = 0; };
   PBX
   project = <<~PBX
     // !$*UTF8*$!
@@ -188,23 +205,36 @@ def generated_project(directory, root, route, platform, configuration, framework
     archiveVersion = 1; classes = {}; objectVersion = 60;
     objects = {
     #{framework_groups}
-    A00000000000000000000001 = {isa = PBXProject; attributes = {LastUpgradeCheck = 2700; }; buildConfigurationList = A00000000000000000000051; compatibilityVersion = "Xcode 14.0"; mainGroup = A00000000000000000000002; packageReferences = (#{package_link}); productRefGroup = A00000000000000000000003; projectDirPath = ""; projectRoot = ""; targets = (A00000000000000000000010, ); };
-    A00000000000000000000002 = {isa = PBXGroup; children = (A00000000000000000000005, A00000000000000000000003, #{framework_file_list}); sourceTree = "<group>"; };
-    A00000000000000000000003 = {isa = PBXGroup; children = (A00000000000000000000013, ); name = Products; sourceTree = "<group>"; };
-    A00000000000000000000004 = {isa = PBXGroup; children = (A00000000000000000000005, ); path = Sources; sourceTree = "<group>"; };
-    A00000000000000000000005 = {isa = PBXFileSystemSynchronizedRootGroup; path = Sources; sourceTree = "<group>"; };
+    A00000000000000000000001 = {isa = PBXProject; attributes = {LastUpgradeCheck = 2700; }; buildConfigurationList = A00000000000000000000051; compatibilityVersion = "Xcode 14.0"; mainGroup = A00000000000000000000002; packageReferences = (#{package_link}); productRefGroup = A00000000000000000000003; projectDirPath = ""; projectRoot = ""; targets = (A00000000000000000000010, A00000000000000000000014, ); };
+    A00000000000000000000002 = {isa = PBXGroup; children = (A00000000000000000000005, A00000000000000000000006, A00000000000000000000003, #{framework_file_list}); sourceTree = "<group>"; };
+    A00000000000000000000003 = {isa = PBXGroup; children = (A00000000000000000000013, #{domain_product_ref} /* ConsumerDomain.framework */, ); name = Products; sourceTree = "<group>"; };
+    A00000000000000000000004 = {isa = PBXGroup; children = (A00000000000000000000005, A00000000000000000000006, ); path = Sources; sourceTree = "<group>"; };
+    A00000000000000000000005 = {isa = PBXFileSystemSynchronizedRootGroup; path = Sources/App; sourceTree = "<group>"; };
+    A00000000000000000000006 = {isa = PBXFileSystemSynchronizedRootGroup; path = Sources/Domain; sourceTree = "<group>"; };
     A00000000000000000000013 = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Consumer.app; sourceTree = BUILT_PRODUCTS_DIR; };
-    A00000000000000000000010 = {isa = PBXNativeTarget; buildConfigurationList = A00000000000000000000052; buildPhases = (A00000000000000000000040, A00000000000000000000041, A00000000000000000000042, A00000000000000000000043, ); buildRules = (); dependencies = (); fileSystemSynchronizedGroups = (A00000000000000000000005, ); name = Consumer; #{product_settings} productName = Consumer; productReference = A00000000000000000000013; productType = "com.apple.product-type.application"; };
+    A00000000000000000000010 = {isa = PBXNativeTarget; buildConfigurationList = A00000000000000000000052; buildPhases = (A00000000000000000000040, A00000000000000000000041, A00000000000000000000042, A00000000000000000000043, ); buildRules = (); dependencies = (#{app_dependency}, ); fileSystemSynchronizedGroups = (A00000000000000000000005, ); name = Consumer; #{product_settings} productName = Consumer; productReference = A00000000000000000000013; productType = "com.apple.product-type.application"; };
     A00000000000000000000040 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-    A00000000000000000000041 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (#{link_build} /* UndoKit in Frameworks */, ); runOnlyForDeploymentPostprocessing = 0; };
+    A00000000000000000000041 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (#{link_build} /* UndoKit in Frameworks */, A00000000000000000000026 /* ConsumerDomain in Frameworks */, ); runOnlyForDeploymentPostprocessing = 0; };
     #{embed_phase}
     A00000000000000000000043 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+    A00000000000000000000014 = {isa = PBXNativeTarget; buildConfigurationList = A00000000000000000000057; buildPhases = (A00000000000000000000044, A00000000000000000000045, ); buildRules = (); dependencies = (); fileSystemSynchronizedGroups = (A00000000000000000000006, ); name = ConsumerDomain; #{package_domain} productName = ConsumerDomain; productReference = #{domain_product_ref}; productType = "com.apple.product-type.framework"; };
+    A00000000000000000000044 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+    A00000000000000000000045 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (#{domain_link_build} /* UndoKit in Frameworks */, ); runOnlyForDeploymentPostprocessing = 0; };
+    A00000000000000000000026 = {isa = PBXBuildFile; fileRef = #{domain_framework_ref}; };
+    #{domain_link_build} = {isa = PBXBuildFile; #{native ? "fileRef = #{product_ref};" : "productRef = #{package_dependency};"} };
+    #{domain_embed} = {isa = PBXBuildFile; fileRef = #{domain_framework_ref}; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+    #{domain_product_ref} = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = ConsumerDomain.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+    A00000000000000000000057 = {isa = XCConfigurationList; buildConfigurations = (A00000000000000000000064, A00000000000000000000065, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug; };
+    A00000000000000000000064 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGNING_ALLOWED = YES; CODE_SIGN_IDENTITY = "-"; DEFINES_MODULE = YES; DYLIB_INSTALL_NAME_BASE = "@rpath"; FRAMEWORK_SEARCH_PATHS = ("$(inherited)", "#{domain_framework_search}", ); GENERATE_INFOPLIST_FILE = YES; INSTALL_PATH = "@rpath"; IPHONEOS_DEPLOYMENT_TARGET = 17.0; MACOSX_DEPLOYMENT_TARGET = 14.0; PRODUCT_BUNDLE_IDENTIFIER = "org.foliosuite.undokit.consumer.domain.#{platform.gsub('-', '')}"; PRODUCT_NAME = ConsumerDomain; SKIP_INSTALL = YES; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) #{route_flags}"; SWIFT_VERSION = 6.0; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Debug; };
+    A00000000000000000000065 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGNING_ALLOWED = YES; CODE_SIGN_IDENTITY = "-"; DEFINES_MODULE = YES; DYLIB_INSTALL_NAME_BASE = "@rpath"; FRAMEWORK_SEARCH_PATHS = ("$(inherited)", "#{domain_framework_search}", ); GENERATE_INFOPLIST_FILE = YES; INSTALL_PATH = "@rpath"; IPHONEOS_DEPLOYMENT_TARGET = 17.0; MACOSX_DEPLOYMENT_TARGET = 14.0; PRODUCT_BUNDLE_IDENTIFIER = "org.foliosuite.undokit.consumer.domain.#{platform.gsub('-', '')}"; PRODUCT_NAME = ConsumerDomain; SKIP_INSTALL = YES; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) #{route_flags}"; SWIFT_VERSION = 6.0; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Release; };
+    #{app_proxy} = {isa = PBXContainerItemProxy; containerPortal = A00000000000000000000001; proxyType = 1; remoteGlobalIDString = A00000000000000000000014; remoteInfo = ConsumerDomain; };
+    #{app_dependency} = {isa = PBXTargetDependency; target = A00000000000000000000014; targetProxy = #{app_proxy}; };
     A00000000000000000000051 = {isa = XCConfigurationList; buildConfigurations = (A00000000000000000000060, A00000000000000000000061, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug; };
     A00000000000000000000052 = {isa = XCConfigurationList; buildConfigurations = (A00000000000000000000062, A00000000000000000000063, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug; };
     A00000000000000000000060 = {isa = XCBuildConfiguration; buildSettings = {SDKROOT = #{sdk}; SWIFT_VERSION = 6.0; }; name = Debug; };
     A00000000000000000000061 = {isa = XCBuildConfiguration; buildSettings = {SDKROOT = #{sdk}; SWIFT_VERSION = 6.0; }; name = Release; };
-    A00000000000000000000062 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGNING_ALLOWED = YES; CODE_SIGN_IDENTITY = "-"; FRAMEWORK_SEARCH_PATHS = #{framework_search_paths}; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; LD_RUNPATH_SEARCH_PATHS = #{runtime_paths}; MACOSX_DEPLOYMENT_TARGET = 14.0; PRODUCT_BUNDLE_IDENTIFIER = "org.foliosuite.undokit.consumer.#{route == 'native-framework' ? 'nativeframework' : 'package'}.#{platform.gsub('-', '')}"; PRODUCT_NAME = Consumer; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) CONSUMER_APP #{route_flags}"; SWIFT_VERSION = 6.0; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Debug; };
-    A00000000000000000000063 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGNING_ALLOWED = YES; CODE_SIGN_IDENTITY = "-"; FRAMEWORK_SEARCH_PATHS = #{framework_search_paths}; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; LD_RUNPATH_SEARCH_PATHS = #{runtime_paths}; MACOSX_DEPLOYMENT_TARGET = 14.0; PRODUCT_BUNDLE_IDENTIFIER = "org.foliosuite.undokit.consumer.#{route == 'native-framework' ? 'nativeframework' : 'package'}.#{platform.gsub('-', '')}"; PRODUCT_NAME = Consumer; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) CONSUMER_APP #{route_flags}"; SWIFT_VERSION = 6.0; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Release; };
+    A00000000000000000000062 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGNING_ALLOWED = YES; CODE_SIGN_IDENTITY = "-"; FRAMEWORK_SEARCH_PATHS = #{framework_search_paths}; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; LD_RUNPATH_SEARCH_PATHS = #{runtime_paths}; MACOSX_DEPLOYMENT_TARGET = 14.0; PRODUCT_BUNDLE_IDENTIFIER = "org.foliosuite.undokit.consumer.#{route == 'native-framework' ? 'nativeframework' : 'package'}.#{platform.gsub('-', '')}.#{run_id}"; PRODUCT_NAME = Consumer; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) CONSUMER_APP #{route_flags}"; SWIFT_VERSION = 6.0; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Debug; };
+    A00000000000000000000063 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGNING_ALLOWED = YES; CODE_SIGN_IDENTITY = "-"; FRAMEWORK_SEARCH_PATHS = #{framework_search_paths}; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; LD_RUNPATH_SEARCH_PATHS = #{runtime_paths}; MACOSX_DEPLOYMENT_TARGET = 14.0; PRODUCT_BUNDLE_IDENTIFIER = "org.foliosuite.undokit.consumer.#{route == 'native-framework' ? 'nativeframework' : 'package'}.#{platform.gsub('-', '')}.#{run_id}"; PRODUCT_NAME = Consumer; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) CONSUMER_APP #{route_flags}"; SWIFT_VERSION = 6.0; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Release; };
     };
     rootObject = A00000000000000000000001;
     }
@@ -244,10 +274,12 @@ Dir.mktmpdir("undokit-consumer-", temporary_parent) do |temporary|
   selected_simulator = nil
   simulator_created = false
   simulator_booted_here = false
+  consumer_run_id = "#{Time.now.utc.strftime('%Y%m%d%H%M%S')}-#{SecureRandom.hex(4)}"
   simulator_evidence = []
   at_exit do
     simulator_evidence.each do |entry|
       system("xcrun", "simctl", "terminate", entry.fetch(:device), entry.fetch(:bundle), out: File::NULL, err: File::NULL)
+      system("xcrun", "simctl", "uninstall", entry.fetch(:device), entry.fetch(:bundle), out: File::NULL, err: File::NULL)
       directory = entry.fetch(:directory)
       next unless File.directory?(directory)
       if options.keep
@@ -311,7 +343,7 @@ Dir.mktmpdir("undokit-consumer-", temporary_parent) do |temporary|
             swiftLanguageModes: [.v6])
         SWIFT
         report = File.join(evidence_root, "#{route}-#{platform}-report.json")
-        root = File.join(evidence_root, "#{route}-#{platform}-host")
+        root = File.join(evidence_root, "#{route}-#{platform}-cli-host")
         FileUtils.mkdir_p(root)
         build = File.join(build_root, "Package")
         run!("swift", "run", "--configuration", options.configuration.downcase, "--package-path", scratch,
@@ -324,7 +356,6 @@ Dir.mktmpdir("undokit-consumer-", temporary_parent) do |temporary|
         evidence["runs"] << {"route" => "source-package", "platform" => platform,
           "consumerReport" => JSON.parse(File.read(report)), "installedResources" => resource_paths,
           "artifactSHA256" => artifact_hashes(resource_paths, build)}
-        next
       end
 
       framework_path = nil
@@ -352,7 +383,7 @@ Dir.mktmpdir("undokit-consumer-", temporary_parent) do |temporary|
       end
 
       project = generated_project(scratch, ROOT, route == "native" ? "native-framework" : "source-package",
-                                  platform, options.configuration, framework_path)
+                                  platform, options.configuration, framework_path, run_id: consumer_run_id)
       derived = File.join(build_root, "Host")
       destination = platform == "ios-simulator" ? "id=#{selected_simulator['udid']}" : "generic/platform=macOS"
       run!("xcodebuild", "-project", project, "-scheme", "Consumer", "-configuration", options.configuration,
@@ -360,12 +391,38 @@ Dir.mktmpdir("undokit-consumer-", temporary_parent) do |temporary|
            "CODE_SIGNING_ALLOWED=YES", "CODE_SIGN_IDENTITY=-", "build",
            label: "Independent #{route} app build: #{platform} #{options.configuration}")
       product_configuration = options.configuration + (platform == "ios-simulator" ? "-iphonesimulator" : "")
-      app = File.join(derived, "Build", "Products", product_configuration, "Consumer.app")
-      raise "consumer app missing under #{File.join(derived, 'Build', 'Products')}" unless app && File.directory?(app)
-      resource_paths = verify_resources!(app, route)
+      built_app = File.join(derived, "Build", "Products", product_configuration, "Consumer.app")
+      raise "consumer app missing under #{File.join(derived, 'Build', 'Products')}" unless built_app && File.directory?(built_app)
+      macho_evidence = verify_macho!(built_app, platform)
+      selected_installations = platform == "ios-simulator" ? ["embedded"] : installation_names
+      selected_installations.each do |installation|
+      install_root = File.join(scratch, "Installations", installation)
+      FileUtils.mkdir_p(install_root)
+      app = File.join(install_root, "Consumer.app")
+      FileUtils.cp_r(built_app, app)
+      shared_runtime_root = nil
+      runtime_environment = {}
+      if installation == "shared-macos"
+        shared_runtime_root = File.join(install_root, "SharedFrameworks")
+        FileUtils.mkdir_p(shared_runtime_root)
+        runtime = Dir.glob(File.join(app, "Contents", "Frameworks", "UndoKit.framework")).first ||
+          Dir.glob(File.join(app, "Contents", "Frameworks", "libUndoKit.dylib")).first
+        raise "shared macOS install cannot locate the built UndoKit runtime in #{app}" unless runtime && File.exist?(runtime)
+        shared_runtime = File.join(shared_runtime_root, File.basename(runtime))
+        FileUtils.mv(runtime, shared_runtime)
+        if File.directory?(shared_runtime)
+          run!("codesign", "--force", "--deep", "--sign", "-", shared_runtime, label: "Ad-hoc sign shared UndoKit framework for local execution")
+          runtime_environment["DYLD_FRAMEWORK_PATH"] = shared_runtime_root
+        else
+          run!("codesign", "--force", "--sign", "-", shared_runtime, label: "Ad-hoc sign shared UndoKit package runtime for local execution")
+          runtime_environment["DYLD_LIBRARY_PATH"] = shared_runtime_root
+        end
+        run!("codesign", "--force", "--deep", "--sign", "-", app, label: "Ad-hoc sign relocated local consumer app")
+      end
+      resource_paths = shared_runtime_root && route == "native" && File.directory?(File.join(shared_runtime_root, "UndoKit.framework")) ?
+        verify_resources!(shared_runtime_root, "native") : verify_resources!(app, route)
       puts "Installed #{route} resources: #{resource_paths.inspect}"
-      macho_evidence = verify_macho!(app, platform)
-      bundle_id = "org.foliosuite.undokit.consumer.#{route == 'native' ? 'nativeframework' : 'package'}.#{platform.gsub('-', '')}"
+      bundle_id = "org.foliosuite.undokit.consumer.#{route == 'native' ? 'nativeframework' : 'package'}.#{platform.gsub('-', '')}.#{consumer_run_id}"
       if platform == "ios-simulator"
         booted = JSON.parse(run!("xcrun", "simctl", "list", "devices", "booted", "--json")).fetch("devices").values.flatten
         if options.device && booted.any? { |entry| entry["udid"] != selected_simulator["udid"] }
@@ -398,29 +455,42 @@ Dir.mktmpdir("undokit-consumer-", temporary_parent) do |temporary|
         end
         raise "simulator app produced no consumer report" unless report_path
         report = JSON.parse(File.read(report_path))
+        unless report["sharedUndoKitTypeIdentity"] == true && report["undoKitLoadedImages"].is_a?(Array) && report["undoKitLoadedImages"].length == 1
+          raise "consumer report did not prove one shared UndoKit runtime identity: #{report}"
+        end
         FileUtils.cp(report_path, File.join(evidence_root, "#{route}-#{platform}-report.json"))
       else
         evidence_route = route == "native" ? "native-framework" : "source-package"
-        root = File.join(evidence_root, "#{route}-#{platform}-host")
+        root = File.join(evidence_root, "#{route}-#{platform}-#{installation}-host")
         FileUtils.mkdir_p(root)
-        run!(File.join(app, "Contents", "MacOS", "Consumer"), env: {"UNDOkit_CONSUMER_ROOT" => root},
+        run!(File.join(app, "Contents", "MacOS", "Consumer"), env: runtime_environment.merge("UNDOkit_CONSUMER_ROOT" => root),
              label: "Run independent macOS #{route} consumer")
         report_file = File.join(root, "ConsumerReport.json")
         raise "macOS consumer report missing at #{report_file}" unless File.file?(report_file)
         report = JSON.parse(File.read(report_file))
         raise "consumer report did not prove durable grouped behavior: #{report}" unless report["hostValue"] == "alpha-beta" && report["receiptCount"] == 3 && report["appliedMembers"] == 6 && report["bundledModelLoaded"]
-        FileUtils.cp(report_file, File.join(evidence_root, "#{route}-#{platform}-report.json"))
+        unless report["sharedUndoKitTypeIdentity"] == true && report["undoKitLoadedImages"].is_a?(Array) && report["undoKitLoadedImages"].length == 1
+          raise "consumer report did not prove one shared UndoKit runtime identity: #{report}"
+        end
+        if shared_runtime_root && !report.fetch("undoKitLoadedImages").first.start_with?(shared_runtime_root)
+          raise "shared-macOS consumer loaded UndoKit from outside the host-managed location: #{report['undoKitLoadedImages'].inspect}"
+        end
+        FileUtils.cp(report_file, File.join(evidence_root, "#{route}-#{platform}-#{installation}-report.json"))
         puts "Evidence: #{report.inspect}"
       end
       if platform == "ios-simulator"
-        raise "consumer report did not prove the expected durable grouped behavior: #{report}" unless report["hostValue"] == "alpha-beta" && report["receiptCount"] == 3 && report["appliedMembers"] == 6 && report["bundledModelLoaded"] && report["processArchitecture"]
+        raise "consumer report did not prove the expected durable grouped behavior: #{report}" unless report["hostValue"] == "alpha-beta" && report["receiptCount"] == 3 && report["appliedMembers"] == 6 && report["bundledModelLoaded"] && report["processArchitecture"] && report["sharedUndoKitTypeIdentity"] == true && report["undoKitLoadedImages"].is_a?(Array) && report["undoKitLoadedImages"].length == 1
         puts "Evidence: #{report.inspect}"
         puts "Simulator runtime: #{selected_simulator['runtimeIdentifier']} #{selected_simulator['runtimeVersion']}"
       end
       evidence["runs"] << {"route" => route == "native" ? "native-framework" : "source-package",
-        "platform" => platform, "consumerReport" => report, "installedResources" => resource_paths,
-        "artifactSHA256" => artifact_hashes(resource_paths, app), "prelaunchMachO" => macho_evidence,
+        "platform" => platform, "installation" => installation, "consumerReport" => report, "installedResources" => resource_paths,
+        "artifactSHA256" => artifact_hashes(resource_paths, app).merge(
+          sharedRuntimeBinarySHA256: shared_runtime_root && sha256(Dir.glob(File.join(shared_runtime_root, "UndoKit.framework", "UndoKit")).first || File.join(shared_runtime_root, "libUndoKit.dylib")),
+          sharedRuntimePath: shared_runtime_root && (Dir.glob(File.join(shared_runtime_root, "UndoKit.framework")).first || Dir.glob(File.join(shared_runtime_root, "libUndoKit.dylib")).first)),
+        "prelaunchMachO" => macho_evidence,
         "simulator" => selected_simulator && platform == "ios-simulator" ? selected_simulator : nil}
+      end
     end
   end
 

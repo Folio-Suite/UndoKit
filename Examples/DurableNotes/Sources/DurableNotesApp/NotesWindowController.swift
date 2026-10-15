@@ -113,13 +113,25 @@ import UndoKit
                 NativeDraftCapture(value: Note(title: $0.titleEditor.string, body: $0.bodyEditor.string),
                     isComposing: $0.titleEditor.hasMarkedText() || $0.bodyEditor.hasMarkedText())
             }, draftDidChange: { owner, note in
-                owner.titleEditor.string = note.title; owner.bodyEditor.string = note.body
+                owner.render(note)
             }, statusDidChange: { owner, value in
                 owner.renderStatus()
                 if value.phase == .ready { Task { [weak owner] in await owner?.refresh() } }
             })
         (window as? NotesWindow)?.history = binding.undoManager
         renderStatus()
+    }
+    private func render(_ note: Note) {
+        for (editor, value) in [(titleEditor, note.title), (bodyEditor, note.body)] {
+            guard editor.string != value else { continue }
+            let selections = editor.selectedRanges.map(\.rangeValue)
+            editor.string = value
+            editor.selectedRanges = selections.map { selection in
+                let location = min(selection.location, value.utf16.count)
+                return NSValue(range: NSRange(location: location,
+                    length: min(selection.length, value.utf16.count - location)))
+            }
+        }
     }
     @discardableResult func settleEditing() -> Bool { binding.settleEditing() }
     func waitForOperations() async { await uiOperation?.value; await binding.waitForOperations() }

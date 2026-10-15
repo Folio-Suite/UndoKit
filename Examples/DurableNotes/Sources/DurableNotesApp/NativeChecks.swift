@@ -52,7 +52,10 @@ import UndoKit
         try require(a.bodyEditor.string == "Alpha", "Native Redo lost text")
         let live = try await a.read()
         try require(live.applicationCount == 0 && live.receiptCount == 0, "Live input delivered durable effects")
+        let selectedText = NSRange(location: 1, length: 3)
+        a.bodyEditor.setSelectedRange(selectedText)
         _ = await a.binding.commit()
+        try require(a.bodyEditor.selectedRange() == selectedText, "Committing unchanged text moved the native selection")
         let committed = try await a.read()
         try require(committed.note.body == "Alpha" && committed.applicationCount == 1 && committed.receiptCount == 1,
             "Explicit boundary did not persist one group")

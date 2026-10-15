@@ -5,6 +5,11 @@ import Foundation
 import Darwin
 import UndoKit
 
+#if CONSUMER_APP
+import ConsumerDomain
+import MachO
+#endif
+
 private struct StoredEffect: Codable {
     var memberID: String
     var undo: Data
@@ -98,12 +103,31 @@ private struct ConsumerReport: Codable {
     var reopenedCanUndo: Bool
     var reopenedCanRedo: Bool
     var bundledModelLoaded: Bool
+    var sharedUndoKitTypeIdentity: Bool?
+    var undoKitLoadedImages: [String]?
     var runtimeVersion: String
     var processArchitecture: String
 }
 
 @MainActor
 private func runConsumerFixture(route: String) async throws -> ConsumerReport {
+    #if CONSUMER_APP
+    let sharedTypeIdentity = consumerDomainHistoryStoreTypeIdentity() == ObjectIdentifier(HistoryStore.self)
+    let loadedImages = (0..<_dyld_image_count()).compactMap { index -> String? in
+        guard let name = _dyld_get_image_name(index) else { return nil }
+        let path = String(cString: name)
+        return path.contains("UndoKit.framework") || path.hasSuffix("libUndoKit.dylib") ? path : nil
+    }
+    guard sharedTypeIdentity else {
+        throw FixtureError.assertion("app and domain framework resolved different UndoKit HistoryStore type identities")
+    }
+    guard loadedImages.count == 1 else {
+        throw FixtureError.assertion("expected one loaded UndoKit runtime image, found \(loadedImages)")
+    }
+    #else
+    let sharedTypeIdentity: Bool? = nil
+    let loadedImages: [String]? = nil
+    #endif
     let root: URL
     #if CONSUMER_APP
     root = try consumerEvidenceDirectory(route)
@@ -161,6 +185,8 @@ private func runConsumerFixture(route: String) async throws -> ConsumerReport {
                           appliedMembers: snapshot.appliedMembers,
                           reopenedCanUndo: available.canUndo, reopenedCanRedo: available.canRedo,
                           bundledModelLoaded: true,
+                          sharedUndoKitTypeIdentity: sharedTypeIdentity,
+                          undoKitLoadedImages: loadedImages,
                           runtimeVersion: ProcessInfo.processInfo.operatingSystemVersionString,
                           processArchitecture: processArchitecture)
 }

@@ -7,6 +7,18 @@ SPDX-License-Identifier: MIT
 
 Durable application history behind a native UndoManager interface.
 
+## Start here
+
+This catalog describes its labelled source/version. Development output is not a
+qualified release; a build or simulator pass alone never establishes qualification.
+Consult the matching release provenance and evidence before relying on support claims.
+
+- <doc:InstallingUndoKit>
+- <doc:FirstUndoGroup>
+- <doc:RecoveryAndStorage>
+- <doc:RetainedHistoryAndResources>
+- <doc:PreviewCompatibilityAndSupport>
+
 ## Ownership
 
 UndoKit orders opaque commands, persists transaction evidence and accepted action
@@ -48,6 +60,8 @@ and encoded the Command before calling it:
 ```swift
 import UndoKit
 
+struct UnsupportedHistoryResult: Error {}
+
 @MainActor
 func submitChange(
     _ command: HistoryCommand,
@@ -60,6 +74,8 @@ func submitChange(
         return nil
     case .failure(let failure):
         throw failure
+    @unknown default:
+        throw UnsupportedHistoryResult()
     }
 }
 ```
@@ -69,6 +85,8 @@ completed. Rejection proves no semantic effect. A thrown ``HistoryFailure`` from
 this helper preserves its ``HistoryFailure/disposition``: the caller must inspect
 it before allowing further edits. In particular, failure after possible delivery
 requires authoritative reconciliation rather than a new identity and blind retry.
+A future, unfamiliar binary result stops this helper. Keep further admission
+blocked until the consumer understands the result; do not treat it as rejection.
 Queue admission alone is neither a durable receipt nor a guarantee that a waiting
 request survives a crash. Cancellation after delivery cannot retract its effect.
 
@@ -285,6 +303,11 @@ for retry. Read-only sessions can inspect requirements but cannot perform cleanu
 
 ## Native hosting
 
+Start with the supported AppKit/UIKit bindings and ``NativeHistorySession`` for
+standard native editing, draft settlement and recovery lifetime. SwiftUI presents
+those native editors through the framework adapter. See <doc:FirstUndoGroup>.
+The lower-level router below is for hosts that own their editing integration.
+
 ``NativeHistoryRouter`` supplies an UndoManager to native controls. NSTextView
 retains its native grouping and coalescing. The host settles provisional input
 before a reversal, submits prior edits in order, applies the router's editing
@@ -309,13 +332,25 @@ reconciles it. The bridge does not navigate or interpret affected-content data.
 
 ## Current limits
 
-Host payloads remain bounded.
-The independent tests do not
-establish production behavior at the prototype's 100,000-group scale.
+Host payloads and group sizes remain bounded. Guarded production measurements
+and their declared source/environment/budgets are distinct from historical
+prototype results; a passing small case does not qualify 100,000-group workloads.
+Timing and heavy cases are advisory, while correctness, controlled limit refusal
+and ordinary responsiveness remain required acceptance work.
 
-The storage format and Swift interface are pre-alpha. No old-store migration or
-independent binary compatibility is promised. Objective-C and XCFramework
-publication remain deferred. Apps and Kits ship as a coordinated Suite version.
+UndoKit versions and publishes independently of Folio or consuming applications.
+Source, native-project and complete dynamic XCFramework routes are implemented;
+actual signed/downloadable artifacts and supported environments require matching
+qualification evidence. All clients in one process rebuild/relink against one
+selected preview version. No drop-in binary ABI replacement or untested compiler
+compatibility is promised. Direct Objective-C remains outside the preview scope.
+
+Before the first qualified preview, API frost permits documented changes needed
+for qualification; there is no migration promise from tagged 0.1.0 or experimental
+stores. The qualified preview establishes the supported persisted-history
+baseline and its forward continuity obligations. Unsupported history is preserved
+and refused. See <doc:PreviewCompatibilityAndSupport> for patch/minor/major
+compatibility, explicit future migration and retained codec/resource obligations.
 
 ## Topics
 

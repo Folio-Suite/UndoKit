@@ -15,7 +15,7 @@ SPDX-License-Identifier: MIT
 **Before submitting**
 
 - Search existing issues for the same problem.
-- Do not include private documents, account details, or other personal information.
+- Do not include real host databases, user content, raw payloads, account details, or other personal information. Use a small fictional reproduction.
 - Report suspected security vulnerabilities privately as described in [the Security Policy](https://github.com/Folio-Suite/UndoKit/blob/main/SECURITY.md), not in a public issue.
 
 **What happened?**
@@ -28,10 +28,13 @@ Describe the problem and what you expected to happen.
 
 **Environment**
 - UndoKit API or component:
-- Version or commit:
-- Mac model, if relevant:
-- OS and version:
-- Xcode version, if relevant:
+- UndoKit version/build or exact source commit:
+- Supply route (source package/native project/direct XCFramework; embedded/shared Mac):
+- Device/model and executing architecture (arm64/x86_64):
+- OS version/build and simulator or physical device:
+- Xcode version/build, Swift version and language mode:
+- Debug or Release configuration:
+- Sanitized diagnostic or reproduction command:
 
 **Additional context**
 Add any other context. If you attach a screenshot or log, remove private document and account data first.

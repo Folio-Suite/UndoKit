@@ -121,10 +121,11 @@ extension HistoryTransactionCoordinator {
                                      targetID: UUID?, effects: [HistoryEffect]) {
         switch kind {
         case .command:
-            sessionGroups.removeAll(where: { !$0.applied })
+            sessionGroups.removeAll(where: { !$0.applied && !$0.invalidated })
             sessionGroups.append(SessionGroup(id: groupID, effects: effects))
-            if sessionGroups.count > limits.maxUndoGroups {
-                sessionGroups.removeFirst(sessionGroups.count - limits.maxUndoGroups)
+            while sessionGroups.count > limits.maxUndoGroups,
+                  let index = sessionGroups.firstIndex(where: { !$0.invalidated }) {
+                sessionGroups.remove(at: index)
             }
         case .undo, .redo:
             if let target = targetID,
@@ -252,6 +253,10 @@ extension HistoryTransactionCoordinator {
         transaction.presentationPayload = nil
         transaction.presentationDigest = nil
         try history.saveContext()
+        if kind != .command, let targetKey = transaction.targetGroupID,
+           let index = sessionGroups.firstIndex(where: { $0.id.uuidString == targetKey }) {
+            sessionGroups[index].invalidated = true
+        }
         updateSnapshot()
         return .rejected
     }

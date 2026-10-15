@@ -34,6 +34,7 @@ enum HistoryHostCallbackContext {
     var context: NSManagedObjectContext { history.context }
     private var queue: [Waiting] = []
     private var draining = false
+    private var opening = false
     private(set) var closing = false
     private(set) var closed = false
     var reconciling = false
@@ -42,6 +43,7 @@ enum HistoryHostCallbackContext {
         let id: UUID
         let effects: [HistoryEffect]
         var applied = true
+        var invalidated = false
     }
     var sessionGroups: [SessionGroup] = []
     /// Prepared transactions below this sequence predate this engine session.
@@ -60,10 +62,15 @@ enum HistoryHostCallbackContext {
     }
 
     var isExecuting: Bool { draining }
-    var isActive: Bool { draining || !queue.isEmpty || reconciling }
+    var isActive: Bool { opening || draining || !queue.isEmpty || reconciling }
     var hasPending: Bool { draining || !queue.isEmpty }
 
     func open(mode: HistoryScopeOpenMode) async throws {
+        opening = true
+        defer {
+            opening = false
+            resumeClosureIfIdle()
+        }
         try history.register(mode: mode)
         sessionStartSequence = try history.scopeRecord().nextSequence
         await reconcileOnOpen()
@@ -81,7 +88,7 @@ enum HistoryHostCallbackContext {
         if store.writeFailed {
             return .failure(HistoryFailure(.storage, stage: .admission, disposition: .suspended))
         }
-        guard !closed, !closing, !reconciling, !store.closing, !store.closed,
+        guard !opening, !closed, !closing, !reconciling, !store.closing, !store.closed,
               !store.maintenance else {
             return .failure(HistoryFailure(.busy, stage: .admission, disposition: .usable))
         }
@@ -124,6 +131,11 @@ enum HistoryHostCallbackContext {
         }
         draining = false
         updateSnapshot()
+        resumeClosureIfIdle()
+    }
+
+    private func resumeClosureIfIdle() {
+        guard !opening, !draining else { return }
         let waiters = closeWaiters
         closeWaiters.removeAll()
         for waiter in waiters { waiter.resume() }
@@ -149,7 +161,7 @@ enum HistoryHostCallbackContext {
             throw HistoryFailure(.busy, stage: .reconciliation, disposition: .suspended)
         }
         beginClosing(protection: protection)
-        if draining {
+        if opening || draining {
             await withCheckedContinuation { continuation in closeWaiters.append(continuation) }
         }
         do {

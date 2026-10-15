@@ -29,12 +29,11 @@ extension HistoryTransactionCoordinator {
     }
 
     private func executeAvailableInverse(kind: HistoryDeliveryKind) async throws -> HistoryResult {
-        let session = kind == .undo
-            ? sessionGroups.last(where: { $0.applied })
-            : sessionGroups.first(where: { !$0.applied })
-        if let session { return await executeSessionInverse(session, kind: kind) }
-        guard let target = try history.eligibleGroup(for: kind) else { return .rejected }
-        return await executeInverse(target: target, kind: kind)
+        switch try eligibleInverse(for: kind) {
+        case .session(let group): return await executeSessionInverse(group, kind: kind)
+        case .retained(let group): return await executeInverse(target: group, kind: kind)
+        case nil: return .rejected
+        }
     }
 
     private func validateGeneration(for request: Request, scopeRow: HistoryScopeRecord) throws {

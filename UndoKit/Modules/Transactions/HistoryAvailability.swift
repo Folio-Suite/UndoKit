@@ -5,6 +5,22 @@ import CoreData
 import Foundation
 
 extension HistoryTransactionCoordinator {
+    enum InverseTarget {
+        case session(SessionGroup)
+        case retained(HistoryGroupRecord)
+    }
+
+    func eligibleInverse(for kind: HistoryDeliveryKind) throws -> InverseTarget? {
+        // Like a retained invalid group, a transient invalid group is a
+        // traversal barrier until the host establishes a new coherent baseline.
+        guard !sessionGroups.contains(where: { $0.invalidated }) else { return nil }
+        let session = kind == .undo
+            ? sessionGroups.last(where: { $0.applied })
+            : sessionGroups.first(where: { !$0.applied })
+        if let session { return .session(session) }
+        return try history.eligibleGroup(for: kind).map(InverseTarget.retained)
+    }
+
     func updateSnapshot() {
         if store.writeFailed {
             publishSnapshot(canUndo: false, canRedo: false, isSuspended: true,
@@ -24,10 +40,11 @@ extension HistoryTransactionCoordinator {
     func refreshSnapshot() throws {
         let row = try history.scopeRecord()
         let suspended = row.suspended
-        let canUndo = try sessionGroups.contains(where: { $0.applied }) || history.eligibleGroup(for: .undo) != nil
-        let canRedo = try sessionGroups.contains(where: { !$0.applied }) || history.eligibleGroup(for: .redo) != nil
-        publishSnapshot(canUndo: !suspended && !store.writeFailed && canUndo,
-                        canRedo: !suspended && !store.writeFailed && canRedo,
+        let canUndo = try eligibleInverse(for: .undo) != nil
+        let canRedo = try eligibleInverse(for: .redo) != nil
+        let available = !suspended && !store.writeFailed && !closing && !closed && !store.closing
+        publishSnapshot(canUndo: available && canUndo,
+                        canRedo: available && canRedo,
                         isSuspended: suspended || store.writeFailed,
                         hasPending: hasPending,
                         generation: try row.uuid(row.generationID))

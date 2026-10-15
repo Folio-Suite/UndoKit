@@ -55,6 +55,13 @@ def artifact_hashes(resources, product_root)
   hashes
 end
 
+def verify_runtime_identity!(report)
+  unless report["sharedUndoKitTypeIdentity"] == true &&
+         report["undoKitLoadedImages"].is_a?(Array) && report["undoKitLoadedImages"].length == 1
+    raise "consumer report did not prove one shared UndoKit runtime identity: #{report}"
+  end
+end
+
 def run!(*command, env: {}, label: nil)
   puts "  #{label || command.join(' ')}"
   output, status = Open3.capture2e(env, *command)
@@ -455,9 +462,7 @@ Dir.mktmpdir("undokit-consumer-", temporary_parent) do |temporary|
         end
         raise "simulator app produced no consumer report" unless report_path
         report = JSON.parse(File.read(report_path))
-        unless report["sharedUndoKitTypeIdentity"] == true && report["undoKitLoadedImages"].is_a?(Array) && report["undoKitLoadedImages"].length == 1
-          raise "consumer report did not prove one shared UndoKit runtime identity: #{report}"
-        end
+        verify_runtime_identity!(report)
         FileUtils.cp(report_path, File.join(evidence_root, "#{route}-#{platform}-report.json"))
       else
         evidence_route = route == "native" ? "native-framework" : "source-package"
@@ -469,9 +474,7 @@ Dir.mktmpdir("undokit-consumer-", temporary_parent) do |temporary|
         raise "macOS consumer report missing at #{report_file}" unless File.file?(report_file)
         report = JSON.parse(File.read(report_file))
         raise "consumer report did not prove durable grouped behavior: #{report}" unless report["hostValue"] == "alpha-beta" && report["receiptCount"] == 3 && report["appliedMembers"] == 6 && report["bundledModelLoaded"]
-        unless report["sharedUndoKitTypeIdentity"] == true && report["undoKitLoadedImages"].is_a?(Array) && report["undoKitLoadedImages"].length == 1
-          raise "consumer report did not prove one shared UndoKit runtime identity: #{report}"
-        end
+        verify_runtime_identity!(report)
         if shared_runtime_root && !report.fetch("undoKitLoadedImages").first.start_with?(shared_runtime_root)
           raise "shared-macOS consumer loaded UndoKit from outside the host-managed location: #{report['undoKitLoadedImages'].inspect}"
         end
@@ -479,7 +482,7 @@ Dir.mktmpdir("undokit-consumer-", temporary_parent) do |temporary|
         puts "Evidence: #{report.inspect}"
       end
       if platform == "ios-simulator"
-        raise "consumer report did not prove the expected durable grouped behavior: #{report}" unless report["hostValue"] == "alpha-beta" && report["receiptCount"] == 3 && report["appliedMembers"] == 6 && report["bundledModelLoaded"] && report["processArchitecture"] && report["sharedUndoKitTypeIdentity"] == true && report["undoKitLoadedImages"].is_a?(Array) && report["undoKitLoadedImages"].length == 1
+        raise "consumer report did not prove the expected durable grouped behavior: #{report}" unless report["hostValue"] == "alpha-beta" && report["receiptCount"] == 3 && report["appliedMembers"] == 6 && report["bundledModelLoaded"] && report["processArchitecture"]
         puts "Evidence: #{report.inspect}"
         puts "Simulator runtime: #{selected_simulator['runtimeIdentifier']} #{selected_simulator['runtimeVersion']}"
       end

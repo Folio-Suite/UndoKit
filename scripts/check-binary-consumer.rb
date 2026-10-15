@@ -131,7 +131,7 @@ module UndoKit
       FileUtils.mkdir_p(project)
       File.write(File.join(project, "project.pbxproj"), project_text(interface_probe, platform, run_id))
       write_scheme(project)
-      log = File.join(evidence_root, "binary-consumer-build.log")
+      log = File.join(project_directory, "binary-consumer-build.log")
       architecture = ios ? "arm64" : `uname -m`.strip
       unless %w[arm64 x86_64].include?(architecture)
         raise Assembly::VerificationError, "unsupported consumer host architecture: #{architecture}"
@@ -261,7 +261,7 @@ module UndoKit
         "buildLog" => log,
         "runLog" => File.join(installed_root, ios ? "simulator-launch.log" : "binary-consumer-run.log")
       })
-      path = File.join(evidence_root, "BinaryConsumerEvidence-#{installation}.json")
+      path = File.join(installed_root, "BinaryConsumerEvidence.json")
       File.write(path, JSON.pretty_generate(evidence) + "\n")
       puts "Independent binary consumer passed: #{path}"
       end

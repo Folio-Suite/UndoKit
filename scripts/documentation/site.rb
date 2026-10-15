@@ -139,7 +139,7 @@ module UndoKitDocumentation
       fail!('release documentation requires Xcode 27.0 build 27A266a') unless producer.dig('toolchain', 'xcode').match?(/\AXcode 27\.0\nBuild version 27A266a\z/)
       swift = producer.dig('toolchain', 'swift')
       fail!('release documentation requires Apple Swift 6.4 / swiftlang-6.4.0.34.1') unless swift.start_with?('Apple Swift version 6.4 ') && swift.include?('swiftlang-6.4.0.34.1')
-      fail!('release documentation requires clang 2100.3.34.1') unless producer.dig('toolchain', 'clang').include?('2100.3.34.1')
+      fail!('release documentation must record the selected Xcode clang identity') unless producer.dig('toolchain', 'clang').start_with?('Apple clang version 21.0.0 ')
     end
     fail!('version must be a three-part numeric version') unless options[:version].match?(/\A\d+\.\d+\.\d+\z/)
     fail!('channel must be release or development') unless %w[release development].include?(options[:channel])
@@ -232,7 +232,16 @@ module UndoKitDocumentation
     File.rename(temp, output)
   end
 
-  def verify_release(manifest)
+  def approved_documentation!(manifest, provenance_path)
+    fail!('published candidate manifest is required') unless provenance_path
+    approved = JSON.parse(File.read(File.expand_path(provenance_path)))
+    fail!('unsupported published candidate manifest schema') unless approved.fetch('schemaVersion') == 1
+    fail!('published candidate version differs from documentation') unless approved.fetch('releaseVersion') == manifest.fetch('version')
+    fail!('published candidate source differs from documentation') unless approved.fetch('sourceCommit') == manifest.fetch('sourceCommit')
+    fail!('published candidate documentation identity differs from staged artifact') unless approved.fetch('documentation') == manifest
+  end
+
+  def verify_release(manifest, provenance_path)
     fail!('only release documentation can be published') unless manifest.fetch('channel') == 'release'
     fail!('release documentation must come from a clean source checkout') if manifest.fetch('sourceDirty')
     version = manifest.fetch('version')
@@ -242,7 +251,8 @@ module UndoKitDocumentation
     toolchain = manifest.fetch('toolchain')
     fail!('release Xcode identity is not qualified') unless toolchain.fetch('xcode').match?(/\AXcode 27\.0\nBuild version 27A266a\z/)
     fail!('release Swift identity is not qualified') unless toolchain.fetch('swift').start_with?('Apple Swift version 6.4 ') && toolchain.fetch('swift').include?('swiftlang-6.4.0.34.1')
-    fail!('release clang identity is not qualified') unless toolchain.fetch('clang').include?('clang-2100.3.34.1')
+    fail!('release clang identity is missing') unless toolchain.fetch('clang').start_with?('Apple clang version 21.0.0 ')
+    approved_documentation!(manifest, provenance_path)
     release_json, release_status = Open3.capture2('gh', 'release', 'view', version, '--json', 'tagName,isDraft,isPrerelease')
     fail!("GitHub release #{version} is unavailable") unless release_status.success?
     release = JSON.parse(release_json)
@@ -275,7 +285,7 @@ module UndoKitDocumentation
     fail!('missing --artifact PATH') unless options[:artifact]
     artifact = File.expand_path(options[:artifact])
     manifest = JSON.parse(File.read(File.join(artifact, 'manifest.json')))
-    verify_release(manifest)
+    approved_documentation!(manifest, options[:release_provenance])
     destination = File.expand_path(options.fetch(:destination))
     version = manifest.fetch('version')
     latest_metadata = File.join(destination, 'latest.json')
@@ -321,7 +331,7 @@ module UndoKitDocumentation
   def verify_release_artifact(options)
     fail!('missing --artifact PATH') unless options[:artifact]
     manifest = JSON.parse(File.read(File.join(File.expand_path(options[:artifact]), 'manifest.json')))
-    verify_release(manifest)
+    verify_release(manifest, options[:release_provenance])
   end
 
   def promote(options)
@@ -339,6 +349,7 @@ module UndoKitDocumentation
     fail!('candidate version is invalid') unless version.match?(/\A\d+\.\d+\.\d+\z/)
     fail!('candidate source commit is invalid') unless manifest.fetch('sourceCommit').match?(/\A[0-9a-f]{40}\z/)
     fail!('candidate base path is invalid') unless manifest.fetch('basePath') == "/UndoKit/versions/#{version}/"
+    approved_documentation!(manifest, options[:release_provenance])
     fail!('artifact paths do not match schema') unless manifest['archivePath'] == 'archive' && manifest['sitePath'] == 'site' && manifest['producerPath'] == 'producer.json'
     archive = File.join(artifact, manifest.fetch('archivePath'))
     site = File.join(artifact, manifest.fetch('sitePath'))
@@ -416,6 +427,7 @@ module UndoKitDocumentation
       flags.on('--xcode-version TEXT') { |value| options[:xcode_version] = value }
       flags.on('--swift-version TEXT') { |value| options[:swift_version] = value }
       flags.on('--artifact PATH') { |value| options[:artifact] = value }
+      flags.on('--release-provenance PATH', 'Published UndoKit-<version>-manifest.json candidate asset') { |value| options[:release_provenance] = value }
       flags.on('--destination PATH') { |value| options[:destination] = value }
       flags.on('--correction TEXT') { |value| options[:correction] = value }
       flags.on('--source PATH') { |value| options[:source] = value }

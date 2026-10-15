@@ -128,10 +128,21 @@ jobs:
           run-id: ${{ inputs.candidate_run_id }}
           github-token: ${{ github.token }}
           path: candidate
+      - name: Download retained candidate manifest from the published release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(ruby -rjson -e 'puts JSON.parse(File.read("candidate/manifest.json")).fetch("version")')
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "candidate version is invalid" >&2; exit 1; }
+          mkdir release-provenance
+          gh release download "$VERSION" --pattern "UndoKit-$VERSION-manifest.json" --dir release-provenance
       - name: Verify approved release and source tag
         env:
           GH_TOKEN: ${{ github.token }}
-        run: ruby tooling/scripts/documentation/site.rb verify-release --artifact candidate
+        run: |
+          VERSION=$(ruby -rjson -e 'puts JSON.parse(File.read("candidate/manifest.json")).fetch("version")')
+          ruby tooling/scripts/documentation/site.rb verify-release --artifact candidate \
+            --release-provenance "release-provenance/UndoKit-$VERSION-manifest.json"
       - name: Load prior successful snapshots
         run: |
           STATE="$RUNNER_TEMP/undokit-docs-state"
@@ -158,12 +169,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           CORRECTION_NOTE: ${{ inputs.correction_note }}
         run: |
+          VERSION=$(ruby -rjson -e 'puts JSON.parse(File.read("candidate/manifest.json")).fetch("version")')
           if [[ -n "$CORRECTION_NOTE" ]]; then
-            ruby tooling/scripts/documentation/site.rb promote --artifact candidate --destination public --correction "$CORRECTION_NOTE"
+            ruby tooling/scripts/documentation/site.rb promote --artifact candidate --release-provenance "release-provenance/UndoKit-$VERSION-manifest.json" --destination public --correction "$CORRECTION_NOTE"
           else
-            ruby tooling/scripts/documentation/site.rb promote --artifact candidate --destination public
+            ruby tooling/scripts/documentation/site.rb promote --artifact candidate --release-provenance "release-provenance/UndoKit-$VERSION-manifest.json" --destination public
           fi
-          ruby tooling/scripts/documentation/site.rb update-latest --artifact candidate --destination public
+          ruby tooling/scripts/documentation/site.rb update-latest --artifact candidate \
+            --release-provenance "release-provenance/UndoKit-$VERSION-manifest.json" --destination public
           touch public/.nojekyll
       - name: Record preserved release snapshots
         run: |

@@ -70,11 +70,13 @@ written under `versions/<version>/`; `latest/` is changed only by a separate
 operation after a matching GitHub release and source tag are visible. Promotion
 of an existing version requires `--correction` and the same source commit; the
 previous successful snapshot is retained under `history/<version>/`, and the
-correction appears in `corrections.json`.
+correction appears in `corrections.json` and as a visible note on that version's
+landing page.
 
 ```sh
 ruby scripts/documentation/site.rb promote \
   --artifact /tmp/undokit-docs-candidate \
+  --release-provenance /tmp/UndoKit-0.2.0-manifest.json \
   --destination /tmp/undokit-pages
 ```
 
@@ -85,7 +87,9 @@ producer command, validates the generated site, and uploads the candidate as the
 preparer. The artifact expires after 90 days.
 
 `promote` downloads a candidate by its Actions run ID, verifies the published
-GitHub prerelease and tag commit, then combines it with prior snapshots from the
+GitHub prerelease and tag commit, downloads the retained candidate manifest
+asset named `UndoKit-<version>-manifest.json`, and checks its complete
+`documentation` object against the staged artifact before combining it with prior snapshots from the
 `documentation-snapshots` branch. It applies any visible correction, updates the
 latest landing, commits the preserved Pages tree to that state branch, and
 uploads the same tree to Pages. On first use, set `initialize_snapshots` only
@@ -94,7 +98,10 @@ is updated before the Pages deployment; if deployment fails, the previously
 hosted site remains the reference while the branch retains all snapshots for a
 retry. GitHub Pages must be enabled for this repository before the workflow can
 deploy. No release documentation or latest pointer should be deployed before
-the coordinated release is approved.
+the coordinated release is approved. The retained manifest uses schema 1 with
+`releaseVersion`, `sourceCommit`, and the full version 1 DocC manifest under
+`documentation`; `verify-release`, `promote`, and `update-latest` compare the
+candidate's source identity and full archive, producer, and final-site hashes.
 
 A successful local transform, artifact validation, or workflow configuration
 does not establish live hosting. After deployment, verify navigation, search,

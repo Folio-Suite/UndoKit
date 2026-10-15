@@ -60,6 +60,13 @@ class DocumentationSiteTest < Minitest::Test
      '--version', '0.2.0', '--channel', 'release', '--base-path', '/UndoKit/versions/0.2.0/']
   end
 
+  def release_provenance
+    manifest = JSON.parse(File.read(File.join(@artifact, 'manifest.json')))
+    path = File.join(@tmp, 'UndoKit-0.2.0-manifest.json')
+    File.write(path, JSON.generate({ schemaVersion: 1, releaseVersion: '0.2.0', sourceCommit: SHA, documentation: manifest }))
+    path
+  end
+
   def create_site(site)
     site = File.expand_path(site)
     FileUtils.mkdir_p(File.join(site, 'documentation', 'undokit'))
@@ -147,10 +154,30 @@ class DocumentationSiteTest < Minitest::Test
     File.write(File.join(old, 'keep.txt'), 'previous release')
     File.write(File.join(old, 'manifest.json'), JSON.generate({ sourceCommit: 'b' * 40 }))
     File.write(File.join(@artifact, 'site', 'index.html'), 'tampered')
-    _, err, status = run_cli('promote', '--artifact', @artifact, '--destination', destination)
+    provenance = release_provenance
+    _, err, status = run_cli('promote', '--artifact', @artifact, '--release-provenance', provenance, '--destination', destination)
     refute status.success?, err
     assert_equal 'previous release', File.read(File.join(old, 'keep.txt'))
     refute File.exist?(File.join(destination, '0.2.0'))
+  end
+
+  def test_promote_rejects_artifact_that_differs_from_published_candidate_manifest
+    _, _, status = run_cli(*stage_args)
+    assert status.success?
+    destination = File.join(@tmp, 'public')
+    old = File.join(destination, 'versions', '0.1.0')
+    FileUtils.mkdir_p(old)
+    File.write(File.join(old, 'keep.txt'), 'previous release')
+    File.write(File.join(old, 'manifest.json'), JSON.generate({ sourceCommit: 'b' * 40 }))
+    provenance = release_provenance
+    approved = JSON.parse(File.read(provenance))
+    approved['documentation']['siteTreeSHA256'] = '0' * 64
+    File.write(provenance, JSON.generate(approved))
+    _, err, status = run_cli('promote', '--artifact', @artifact, '--release-provenance', provenance, '--destination', destination)
+    refute status.success?
+    assert_match(/published candidate documentation identity differs/, err)
+    assert_equal 'previous release', File.read(File.join(old, 'keep.txt'))
+    refute File.exist?(File.join(destination, 'versions', '0.2.0'))
   end
 
   def test_promote_requires_visible_correction_for_existing_release_and_retains_prior_snapshot
@@ -160,10 +187,12 @@ class DocumentationSiteTest < Minitest::Test
     FileUtils.mkdir_p(File.join(destination, 'versions', '0.2.0'))
     File.write(File.join(destination, 'versions', '0.2.0', 'old.html'), 'old')
     File.write(File.join(destination, 'versions', '0.2.0', 'manifest.json'), JSON.generate({ sourceCommit: SHA }))
-    _, _, status = run_cli('promote', '--artifact', @artifact, '--destination', destination)
+    provenance = release_provenance
+    _, _, status = run_cli('promote', '--artifact', @artifact, '--release-provenance', provenance, '--destination', destination)
     refute status.success?
     site_before = Dir.glob(File.join(@artifact, 'site', '**', '*')).select { |p| File.file?(p) }.to_h { |p| [p.delete_prefix(@artifact + '/site/'), Digest::SHA256.file(p).hexdigest] }
-    out, err, status = run_cli('promote', '--artifact', @artifact, '--destination', destination, '--correction', 'Corrected a link.')
+    out, err, status = run_cli('promote', '--artifact', @artifact, '--release-provenance', provenance,
+                               '--destination', destination, '--correction', 'Corrected a link.')
     assert status.success?, "#{out}\n#{err}"
     site_after = Dir.glob(File.join(destination, 'versions', '0.2.0', '**', '*')).select { |p| File.file?(p) && !%w[corrections.json manifest.json].include?(File.basename(p)) }.to_h { |p| [p.delete_prefix(File.join(destination, 'versions', '0.2.0') + '/'), Digest::SHA256.file(p).hexdigest] }
     assert_equal site_before.keys.sort, site_after.keys.sort

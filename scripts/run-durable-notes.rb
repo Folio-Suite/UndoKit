@@ -41,7 +41,7 @@ File.open(File.join(cache, '.runner.lock'), 'w') do |lock|
   abort 'Another Durable Notes build is using the shared cache' unless lock.flock(File::LOCK_EX | File::LOCK_NB)
   common = ['--package-path', package, '--scratch-path', cache, '--configuration', swift_configuration]
   if options[:mode] == :check
-    run!(['swift', 'test', *common, '--filter', 'NotesSessionTests'], File.join(evidence, 'HostTests.log'))
+    run!(['swift', 'test', *common, '--filter', 'Notes'], File.join(evidence, 'HostTests.log'))
   else
     run!(['swift', 'build', *common, '--product', 'DurableNotesApp'], File.join(evidence, 'Build.log'))
   end

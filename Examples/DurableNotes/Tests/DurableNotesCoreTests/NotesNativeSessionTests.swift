@@ -75,4 +75,35 @@ import XCTest
         XCTAssertEqual(redone.applicationCount, 3)
         await reopened.close()
     }
+    func testKnownDocumentRegistryRefusesUnavailableOriginalAcrossFreshAppOwners() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let directory = root.appendingPathComponent("Document-A")
+        let moved = root.appendingPathComponent("Moved-original")
+        let registry = NotesDocumentRegistry(root: root)
+        let initialMode = try registry.openMode(for: directory)
+        XCTAssertEqual(initialMode, .create)
+        let owners = NativeHistorySessions<NotesDocumentLease>()
+        let session = await owners.open(documentURL: directory, mode: initialMode, codec: .json(),
+            draftURL: directory.appendingPathComponent("Draft.json")) { NotesDocumentLease(directory: directory) }
+        await session.close()
+        let receipt = try Data(contentsOf: directory.appendingPathComponent("Note.json"))
+        try FileManager.default.moveItem(at: directory, to: moved)
+        let relaunched = NotesDocumentRegistry(root: root)
+        XCTAssertEqual(try relaunched.openMode(for: directory), .existing)
+        let newOwners = NativeHistorySessions<NotesDocumentLease>()
+        let refused = await newOwners.open(documentURL: directory, mode: try relaunched.openMode(for: directory),
+            codec: .json(), draftURL: directory.appendingPathComponent("Draft.json")) { NotesDocumentLease(directory: directory) }
+        XCTAssertEqual(refused.status.phase, .blocked)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: directory.path))
+        XCTAssertEqual(try Data(contentsOf: moved.appendingPathComponent("Note.json")), receipt)
+        await refused.close()
+        try FileManager.default.moveItem(at: moved, to: directory)
+        let restored = await newOwners.open(documentURL: directory, mode: try relaunched.openMode(for: directory),
+            codec: .json(), draftURL: directory.appendingPathComponent("Draft.json")) { NotesDocumentLease(directory: directory) }
+        XCTAssertEqual(restored.status.phase, .ready)
+        XCTAssertEqual(try Data(contentsOf: directory.appendingPathComponent("Note.json")), receipt)
+        await restored.close()
+    }
+
 }

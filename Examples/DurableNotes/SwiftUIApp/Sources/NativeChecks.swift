@@ -1,0 +1,182 @@
+// SPDX-FileCopyrightText: 2026 the Folio Project
+// SPDX-License-Identifier: MIT
+
+import AppKit
+import Darwin
+import DurableNotesCore
+import UndoKit
+
+/// Installed native controls/responder checks; human keyboard/IME evidence is separate.
+@MainActor enum SwiftUINativeChecks {
+    struct Report: Codable {
+        let runtime: String
+        let architecture: String
+        let loadedUndoKit: String
+        let observations: [String]
+        let limits: [String]
+    }
+    enum CheckFailure: Error { case observation(String) }
+    private static func require(_ value: Bool, _ description: String) throws {
+        guard value else { throw CheckFailure.observation(description) }
+    }
+    private static func focus(_ controller: DurableNotesSwiftUIDocumentOwner, editor: NSTextView) {
+        controller.window?.makeKeyAndOrderFront(nil); controller.window?.makeFirstResponder(editor)
+    }
+    private static func command(_ action: String) -> Bool {
+        NSApp.sendAction(NSSelectorFromString(action), to: nil, from: NSApp.mainMenu)
+    }
+    private static func pump() async { try? await Task.sleep(for: .milliseconds(40)) }
+    private static func insert(_ value: String, in editor: NSTextView) {
+        let manager = editor.undoManager!
+        manager.groupsByEvent = false; manager.beginUndoGrouping()
+        editor.setSelectedRange(NSRange(location: editor.string.utf16.count, length: 0))
+        editor.insertText(value, replacementRange: editor.selectedRange())
+        manager.endUndoGrouping()
+    }
+
+    static func run(a: DurableNotesSwiftUIDocumentOwner, b: DurableNotesSwiftUIDocumentOwner, root: URL) async throws {
+        guard let aBinding = a.binding, b.binding != nil else {
+            throw CheckFailure.observation("SwiftUI host did not connect its native bindings")
+        }
+        var observations: [String] = []
+        await pump(); await pump(); await pump()
+        try require(a.bodyEditor.window === a.window, "SwiftUI did not materialize the native editor")
+        let loaded = (0..<_dyld_image_count()).compactMap { index -> String? in
+            guard let name = _dyld_get_image_name(index) else { return nil }
+            let path = String(cString: name)
+            return path.hasSuffix("/libUndoKit.dylib") ? URL(fileURLWithPath: path).standardizedFileURL.path : nil
+        }
+        try require(loaded.count == 1 && loaded[0].hasPrefix(Bundle.main.privateFrameworksPath ?? "<missing>"),
+            "Expected exactly one installed UndoKit runtime")
+        try require(try await a.read().note == Note(), "Fresh fixture required")
+        focus(a, editor: a.bodyEditor); await pump()
+        insert("Alpha", in: a.bodyEditor)
+        try require(command("undo:"), "Responder Undo absent")
+        try require(a.bodyEditor.string.isEmpty && a.bodyEditor.undoManager!.canRedo, "Native baseline Redo absent")
+        try require(command("redo:"), "Responder Redo absent")
+        try require(a.bodyEditor.string == "Alpha", "Native Redo lost text")
+        let originalManager = a.bodyEditor.undoManager
+        a.presentationGeneration += 1
+        await pump(); await pump(); await pump()
+        try require(a.bodyEditor.window === a.window && a.bodyEditor.undoManager === originalManager,
+            "Actual SwiftUI identity reconstruction lost editor presentation or native manager")
+        focus(a, editor: a.bodyEditor)
+        _ = command("undo:"); _ = command("redo:")
+        try require(a.bodyEditor.string == "Alpha", "SwiftUI remount lost native live history")
+        observations.append("Actual SwiftUI .id reconstruction remounted the same editor and native manager without resetting live history or delivering effects.")
+        let live = try await a.read()
+        try require(live.applicationCount == 0 && live.receiptCount == 0, "Live input delivered durable effects")
+        let selectedText = NSRange(location: 1, length: 3)
+        a.bodyEditor.setSelectedRange(selectedText)
+        _ = await aBinding.commit()
+        try require(a.bodyEditor.selectedRange() == selectedText, "Committing unchanged text moved the native selection")
+        let committed = try await a.read()
+        try require(committed.note.body == "Alpha" && committed.applicationCount == 1 && committed.receiptCount == 1,
+            "Explicit boundary did not persist one group")
+        let independent = try JSONSerialization.jsonObject(with: Data(contentsOf: a.directory.appendingPathComponent("Note.json"))) as? [String: Any]
+        let independentNote = independent?["note"] as? [String: Any]
+        let independentReceipts = independent?["receipts"] as? [String: Any]
+        try require(independentNote?["body"] as? String == "Alpha" && independent?["applicationCount"] as? Int == 1 && independentReceipts?.count == 1,
+            "Independent persisted host Note/receipt readback disagreed with explicit settlement")
+        _ = command("undo:"); await a.waitForOperations()
+        try require(try await a.read().note == Note(), "Durable responder Undo failed")
+        _ = command("redo:"); await a.waitForOperations()
+        try require(try await a.read().note.body == "Alpha", "Durable responder Redo failed")
+        observations.append("Focused standard NSTextView insert/live Undo/baseline Redo produced zero host applications/receipts; explicit commit produced exactly one; responder Undo/Redo then used durable history.")
+
+        a.apply(title: "Shopping", body: "Tea and bread"); await a.waitForOperations()
+        let grouped = try a.lease.history!.historyPage(limit: 20).last
+        try require(grouped?.memberCount == 2, "Host grouped fields did not persist as one two-member group")
+        focus(a, editor: a.titleEditor); await pump(); _ = command("undo:"); await a.waitForOperations()
+        try require(try await a.read().note == Note(body: "Alpha"), "Grouped Undo was partial")
+        _ = command("redo:"); await a.waitForOperations()
+        observations.append("A host action changing two Note fields persisted one two-member Undo Group, reversed/reapplied through the AppKit responder chain.")
+
+        focus(a, editor: a.bodyEditor); await pump()
+        insert(" live", in: a.bodyEditor)
+        await a.lease.rejectNextDelivery()
+        let beforeRejection = try await a.read()
+        let rejected = await aBinding.undoDocument()
+        try require(rejected == .rejected, "Expected authoritative rejection")
+        try require(try await a.read().applicationCount == beforeRejection.applicationCount, "Rejected draft fell through to older group")
+        try require(a.bodyEditor.string == "Tea and bread live" && a.bodyEditor.undoManager!.canUndo, "Rejected draft lost native history")
+        _ = command("undo:"); _ = command("redo:")
+        try require(a.bodyEditor.string == "Tea and bread live", "Rejected baseline native Redo failed")
+        _ = await aBinding.discardDraft()
+        observations.append("Authoritative rejection on explicit durable Undo retained draft/live Undo/Redo and did not fall through to an older durable group; explicit discard restored authority.")
+
+        focus(a, editor: a.bodyEditor)
+        let manager = a.bodyEditor.undoManager!
+        manager.beginUndoGrouping()
+        a.bodyEditor.setMarkedText(" composition", selectedRange: NSRange(location: 12, length: 0),
+            replacementRange: NSRange(location: a.bodyEditor.string.utf16.count, length: 0))
+        try require(a.bodyEditor.hasMarkedText(), "Native marked-text input absent")
+        let beforeComposition = try await a.read()
+        _ = await aBinding.undoDocument()
+        try require(try await a.read().applicationCount == beforeComposition.applicationCount, "Composition submitted early")
+        try require(!manager.canUndo && a.bodyEditor.hasMarkedText(), "Composition Undo barrier destroyed native marked text")
+        try require(!aBinding.settleEditing(), "Marked focus boundary should defer")
+        a.bodyEditor.unmarkText(); manager.endUndoGrouping()
+        await pump(); await aBinding.waitForOperations()
+        try require(try await a.read().note.body == "Tea and bread composition", "Composed text lost")
+        observations.append("Real NSTextInputClient marked text blocked live/durable Undo and settlement without forced composition; explicit unmark+commit preserved composed text.")
+
+        focus(a, editor: a.scratch); await pump()
+        let beforeLocal = try await a.read()
+        _ = command("undo:")
+        insert("scratch", in: a.scratch); _ = command("undo:")
+        try require(a.scratch.string.isEmpty, "Scratch native Undo failed")
+        try require(try await a.read().applicationCount == beforeLocal.applicationCount, "Scratch fell through to durable history")
+        observations.append("Local scratch native Undo and empty-history Undo never reached document history.")
+
+        await a.lease.delayNextDelivery()
+        a.apply(title: "Delayed", body: "Waits for receipt")
+        for _ in 0..<100 { if await a.lease.isDeliveryDelayed() { break }; await pump() }
+        try require(await a.lease.isDeliveryDelayed(), "Controlled pending delivery absent")
+        try require(!aBinding.permitsEditing && !a.bodyEditor.isEditable, "Pending editing barrier absent")
+        try require(!a.bodyEditor.shouldChangeText(in: NSRange(location: 0, length: 0), replacementString: "unsafe"), "Native input admission failed while pending")
+        focus(a, editor: a.bodyEditor); _ = command("undo:"); _ = command("undo:")
+        focus(b, editor: b.bodyEditor)
+        b.apply(title: "Independent", body: "Other scope remains usable"); await b.waitForOperations()
+        let focused = b.window?.firstResponder
+        await a.lease.resumeDelivery(); await a.waitForOperations()
+        try require(try await a.read().note.title == "Delayed", "Pending repeated Undo changed target")
+        try require(try await b.read().applicationCount == 1, "Other scope blocked")
+        try require(b.window?.firstResponder === focused && NSApp.keyWindow === b.window, "Async completion stole focus")
+        observations.append("Pending host acceptance refused real text admission and repeated Undo, while independent window B edited and retained focus.")
+
+        #if DEBUG
+        focus(a, editor: a.bodyEditor)
+        a.titleEditor.string = "Recovered"; a.bodyEditor.string = "Accepted once"
+        let beforeFailure = try await a.read()
+        _ = await aBinding.demonstrateFinalizationFailure()
+        try require(!aBinding.permitsEditing, "Failed finalization did not block input")
+        let receipt = try Data(contentsOf: a.directory.appendingPathComponent("Note.json"))
+        let recovered = await aBinding.retryDraft()
+        guard case .accepted = recovered else { throw CheckFailure.observation("Exact retry did not reconcile acceptance") }
+        try require(try await a.read().applicationCount == beforeFailure.applicationCount + 1, "Recovery duplicated domain effect")
+        try require(try Data(contentsOf: a.directory.appendingPathComponent("Note.json")) == receipt, "Recovery rewrote host receipt")
+        observations.append("Debug accepted-effect/failed-finalization retained exact intent; explicit retry reconciled unchanged host receipt bytes with one effect.")
+        #endif
+        let persisted = try await a.read()
+        let reopenReceipt = try Data(contentsOf: a.directory.appendingPathComponent("Note.json"))
+        try await a.reopenSession()
+        try require(try await a.read().note == persisted.note && aBinding.undoManager.canUndo, "Reopen lost persisted availability")
+        try require(try Data(contentsOf: a.directory.appendingPathComponent("Note.json")) == reopenReceipt, "Reopen replayed domain delivery")
+        focus(a, editor: a.bodyEditor); _ = command("undo:"); await a.waitForOperations()
+        try await a.reopenSession()
+        try require(aBinding.undoManager.canRedo, "Reopen lost durable Redo")
+        observations.append("Complete host/history close and existing-only reopen independently read persisted Note/receipts without replay, then rebuilt durable Undo and reopened Redo.")
+        #if arch(arm64)
+        let architecture = "arm64"
+        #else
+        let architecture = "x86_64"
+        #endif
+        let report = Report(runtime: ProcessInfo.processInfo.operatingSystemVersionString, architecture: architecture,
+            loadedUndoKit: loaded[0], observations: observations,
+            limits: ["Programmatic native input/responder actions; actual keyboard and physical IME review is separate.",
+                "Current Mac runtime only; no floor OS, Intel, physical device or forced-termination qualification."])
+        try JSONEncoder().encode(report).write(to: root.appendingPathComponent("NativeReport.json"), options: .atomic)
+        print("UNDOKIT_SWIFTUI_NOTES_NATIVE_PASS \(root.path)")
+    }
+}

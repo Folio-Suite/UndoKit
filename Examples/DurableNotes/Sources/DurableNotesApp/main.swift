@@ -21,7 +21,7 @@ import DurableNotesCore
                 NSApp.activate(ignoringOtherApps: true)
                 if CommandLine.arguments.contains("--native-check") {
                     try await NativeChecks.run(a: a, b: b, root: root)
-                    try await a.session.close(); try await b.session.close()
+                    await a.binding.close(); await b.binding.close()
                     exit(EXIT_SUCCESS)
                 }
             } catch {
@@ -41,21 +41,18 @@ import DurableNotesCore
         guard !terminating else { return .terminateLater }
         terminating = true
         Task { @MainActor in
-            do {
-                // Settle every editor before closing any session.
-                guard windows.allSatisfy({ $0.settleEditing() }) else {
+            // Settle every editor before closing any session.
+            guard windows.allSatisfy({ $0.settleEditing() }) else {
+                terminating = false; sender.reply(toApplicationShouldTerminate: false); return
+            }
+            for controller in windows {
+                await controller.waitForOperations()
+                await controller.binding.close()
+                guard controller.session.status.phase == .closed else {
                     terminating = false; sender.reply(toApplicationShouldTerminate: false); return
                 }
-                for controller in windows {
-                    await controller.waitForOperations()
-                    try await controller.session.close()
-                }
-                sender.reply(toApplicationShouldTerminate: true)
-            } catch {
-                terminating = false; sender.reply(toApplicationShouldTerminate: false)
-                let alert = NSAlert(); alert.messageText = "Note closure requires attention"
-                alert.informativeText = String(describing: error); alert.runModal()
             }
+            sender.reply(toApplicationShouldTerminate: true)
         }
         return .terminateLater
     }

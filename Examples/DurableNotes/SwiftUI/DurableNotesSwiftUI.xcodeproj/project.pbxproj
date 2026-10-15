@@ -1,0 +1,32 @@
+// !$*UTF8*$!
+{
+ archiveVersion = 1;
+ classes = {};
+ objectVersion = 77;
+ objects = {
+ A00000000000000000000001 = {isa = PBXProject; attributes = {LastUpgradeCheck = 2700;}; buildConfigurationList = A00000000000000000000050; compatibilityVersion = "Xcode 16.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, Base); mainGroup = A00000000000000000000002; productRefGroup = A00000000000000000000003; projectDirPath = ""; projectRoot = ""; targets = (A00000000000000000000010); packageReferences = (A00000000000000000000031, A00000000000000000000033); };
+ A00000000000000000000002 = {isa = PBXGroup; children = (A00000000000000000000004, A00000000000000000000003); sourceTree = "<group>";};
+ A00000000000000000000003 = {isa = PBXGroup; children = (A00000000000000000000011); name = Products; sourceTree = "<group>";};
+ A00000000000000000000004 = {isa = PBXFileSystemSynchronizedRootGroup; path = Sources; sourceTree = "<group>";};
+ A00000000000000000000010 = {isa = PBXNativeTarget; buildConfigurationList = A00000000000000000000051; buildPhases = (A00000000000000000000040, A00000000000000000000041, A00000000000000000000042, A00000000000000000000043); buildRules = (); dependencies = (); fileSystemSynchronizedGroups = (A00000000000000000000004); name = DurableNotesSwiftUI; packageProductDependencies = (A00000000000000000000032, A00000000000000000000034); productName = DurableNotesSwiftUI; productReference = A00000000000000000000011; productType = "com.apple.product-type.application";};
+ A00000000000000000000011 = {isa = PBXFileReference; explicitFileType = wrapper.application; path = DurableNotesSwiftUI.app; sourceTree = BUILT_PRODUCTS_DIR;};
+ A00000000000000000000021 = {isa = PBXBuildFile; productRef = A00000000000000000000032;};
+ A00000000000000000000022 = {isa = PBXBuildFile; productRef = A00000000000000000000034;};
+ A00000000000000000000023 = {isa = PBXBuildFile; productRef = A00000000000000000000034; settings = {ATTRIBUTES = (CodeSignOnCopy);};};
+ A00000000000000000000031 = {isa = XCLocalSwiftPackageReference; relativePath = ..;};
+ A00000000000000000000032 = {isa = XCSwiftPackageProductDependency; package = A00000000000000000000031; productName = DurableNotesCore;};
+ A00000000000000000000033 = {isa = XCLocalSwiftPackageReference; relativePath = ../../..;};
+ A00000000000000000000034 = {isa = XCSwiftPackageProductDependency; package = A00000000000000000000033; productName = UndoKit;};
+ A00000000000000000000040 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0;};
+ A00000000000000000000041 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000021, A00000000000000000000022); runOnlyForDeploymentPostprocessing = 0;};
+ A00000000000000000000042 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0;};
+ A00000000000000000000043 = {isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = ""; dstSubfolderSpec = 10; files = (A00000000000000000000023); name = "Embed Frameworks"; runOnlyForDeploymentPostprocessing = 0;};
+ A00000000000000000000050 = {isa = XCConfigurationList; buildConfigurations = (A00000000000000000000060, A00000000000000000000061); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug;};
+ A00000000000000000000051 = {isa = XCConfigurationList; buildConfigurations = (A00000000000000000000062, A00000000000000000000063); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug;};
+ A00000000000000000000060 = {isa = XCBuildConfiguration; buildSettings = {SDKROOT = iphoneos; SWIFT_VERSION = 6.0; SWIFT_STRICT_CONCURRENCY = complete;}; name = Debug;};
+ A00000000000000000000061 = {isa = XCBuildConfiguration; buildSettings = {SDKROOT = iphoneos; SWIFT_VERSION = 6.0; SWIFT_STRICT_CONCURRENCY = complete;}; name = Release;};
+ A00000000000000000000062 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGNING_ALLOWED = YES; CODE_SIGN_STYLE = Automatic; INFOPLIST_FILE = Info.plist; IPHONEOS_DEPLOYMENT_TARGET = 17.0; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks"); PRODUCT_BUNDLE_IDENTIFIER = app.foliosuite.UndoKit.DurableNotesSwiftUI; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG"; SWIFT_VERSION = 6.0; SWIFT_STRICT_CONCURRENCY = complete; TARGETED_DEVICE_FAMILY = "1,2"; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; ARCHS = "$(ARCHS_STANDARD)";}; name = Debug;};
+ A00000000000000000000063 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGNING_ALLOWED = YES; CODE_SIGN_STYLE = Automatic; INFOPLIST_FILE = Info.plist; IPHONEOS_DEPLOYMENT_TARGET = 17.0; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks"); PRODUCT_BUNDLE_IDENTIFIER = app.foliosuite.UndoKit.DurableNotesSwiftUI; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 6.0; SWIFT_STRICT_CONCURRENCY = complete; TARGETED_DEVICE_FAMILY = "1,2"; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; ARCHS = "$(ARCHS_STANDARD)";}; name = Release;};
+ };
+ rootObject = A00000000000000000000001;
+}

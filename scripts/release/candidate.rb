@@ -204,7 +204,7 @@ module UndoKitCandidate
   def signature!(bundle, approval, certificate_directory)
     FileUtils.mkdir_p(certificate_directory)
     prefix = File.join(certificate_directory, 'signer-')
-    capture('codesign', '-d', '--extract-certificates', prefix, bundle)
+    capture('codesign', '-d', "--extract-certificates=#{prefix}", bundle)
     certificate = OpenSSL::X509::Certificate.new(File.binread(prefix + '0'))
     sha1 = certificate_matches!(certificate, approval, check_validity: false)
     requirement = "anchor apple generic and certificate leaf = H\"#{sha1}\" and certificate leaf[subject.OU] = \"#{approval.fetch('teamIdentifier')}\""

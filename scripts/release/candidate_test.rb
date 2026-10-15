@@ -27,7 +27,7 @@ class ReleaseCandidateCommandTest < Minitest::Test
       output = File.join(directory, 'attempt')
       text, result = Open3.capture2e(RbConfig.ruby, '--disable-gems', COMMAND, 'prepare', '--output', output,
         '--source', source, '--commit', commit.strip, '--version', '0.2.0', '--build-number', '8',
-        '--assembly', directory, '--docs', directory, '--publisher-approval', 'missing.json',
+        '--assembly', File.join(directory, 'assembly'), '--docs', File.join(directory, 'docs'), '--publisher-approval', 'missing.json',
         '--published-inventory', inventory)
       refute result.success?
       assert_includes text, 'build number must exceed published build 8'
@@ -145,22 +145,15 @@ class ReleaseCandidateCommandTest < Minitest::Test
     end
   end
 
-  def test_documentation_requires_the_pinned_clang_toolchain
+  def test_documentation_records_standalone_clang_independently_of_swift_embedded_clang
     Dir.mktmpdir('undokit-candidate-test-') do |directory|
       options = fixture(directory)
       artifacts(options)
-      producer_path = File.join(options[:docs], 'producer.json')
-      producer = JSON.parse(File.read(producer_path))
-      producer['toolchain']['clang'] = 'Apple clang version 1.0'
-      File.write(producer_path, JSON.generate(producer))
-      manifest_path = File.join(options[:docs], 'manifest.json')
-      manifest = JSON.parse(File.read(manifest_path))
-      manifest['toolchain'] = producer['toolchain']
-      manifest['producerSHA256'] = Digest::SHA256.file(producer_path).hexdigest
-      File.write(manifest_path, JSON.generate(manifest))
-      text, result = candidate_command(options)
-      refute result.success?
-      assert_includes text, 'documentation producer must use pinned Apple clang'
+      text, result = candidate_command(options, boundary_tools(directory))
+      assert result.success?, text
+      manifest = JSON.parse(File.read(File.join(options[:output], 'manifest.json')))
+      assert_equal 'Apple clang version 21.0.0 (clang-2100.3.34.2)', manifest.fetch('documentation').fetch('toolchain').fetch('clang')
+      assert_includes manifest.fetch('documentation').fetch('toolchain').fetch('swift'), 'clang-2100.3.34.1'
     end
   end
 
@@ -197,6 +190,26 @@ class ReleaseCandidateCommandTest < Minitest::Test
       text, result = candidate_command(options)
       refute result.success?
       assert_includes text, 'build number must exceed published build 1'
+    end
+  end
+
+  def test_unsafe_output_never_changes_original_inputs_even_through_a_symlink_parent
+    Dir.mktmpdir('undokit-candidate-test-') do |directory|
+      options = fixture(directory)
+      artifacts(options)
+      roots = options.values_at(:source, :assembly, :docs)
+      original_hashes = roots.map { |path| UndoKit::XCFrameworkAssembly.tree_sha256(path) }
+      alias_path = File.join(directory, 'documentation-alias')
+      File.symlink(options[:docs], alias_path)
+      unsafe_outputs = roots.map { |path| File.join(path, 'new-attempt') } + [File.join(alias_path, 'nested', 'attempt')]
+      unsafe_outputs.each do |unsafe|
+        options[:output] = unsafe
+        text, result = candidate_command(options)
+        refute result.success?
+        assert_includes text, 'candidate output must be outside source and input directories'
+        refute File.exist?(unsafe), text
+        assert_equal original_hashes, roots.map { |path| UndoKit::XCFrameworkAssembly.tree_sha256(path) }
+      end
     end
   end
 

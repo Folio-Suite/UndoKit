@@ -172,7 +172,8 @@ module UndoKitCandidate
       fail!('documentation producer provenance differs from release manifest')
     end
     toolchain!(manifest.fetch('toolchain').fetch('xcode'), manifest.fetch('toolchain').fetch('swift'))
-    fail!('documentation producer must use pinned Apple clang 2100.3.34.1') unless manifest.fetch('toolchain').fetch('clang').include?('clang version 2100.3.34.1')
+    clang = manifest.fetch('toolchain').fetch('clang')
+    fail!('documentation producer must record full standalone Apple clang output') unless clang.is_a?(String) && clang.match?(/Apple clang version .+\(clang-[^)]+\)/)
     manifest
   end
 
@@ -332,6 +333,26 @@ module UndoKitCandidate
     puts "Prepared candidate retained at #{output}; no source tag, release or documentation was published."
   end
 
+  def safe_output!(output, options)
+    # Resolve existing symlink ancestors before creating even a failure directory.
+    ancestor = output
+    suffix = []
+    until File.exist?(ancestor) || File.symlink?(ancestor)
+      suffix.unshift(File.basename(ancestor))
+      ancestor = File.dirname(ancestor)
+    end
+    canonical_output = File.join(File.realpath(ancestor), *suffix)
+    %i[source assembly docs].each do |key|
+      next unless options[key]
+      input = File.expand_path(options.fetch(key))
+      next unless File.exist?(input) || File.symlink?(input)
+      root = File.realpath(input)
+      if canonical_output == root || canonical_output.start_with?(root + '/')
+        fail!('candidate output must be outside source and input directories')
+      end
+    end
+  end
+
   def run(argv)
     command = argv.shift
     argv.unshift(command) if %w[-h --help].include?(command)
@@ -348,7 +369,8 @@ module UndoKitCandidate
     if command == 'prepare'
       fail!('missing --output') unless options[:output]
       output = File.expand_path(options[:output])
-      fail!('output already exists; use a fresh candidate directory') if File.exist?(output)
+      fail!('output already exists; use a fresh candidate directory') if File.exist?(output) || File.symlink?(output)
+      safe_output!(output, options)
       FileUtils.mkdir_p(output)
       begin
         required = %i[source commit version build_number assembly docs publisher_approval published_inventory]

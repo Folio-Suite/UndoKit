@@ -37,9 +37,12 @@ Prepare these inputs outside the source checkout:
   and the unsigned `UndoKit.xcframework`. Keep that entire directory unchanged.
 - A release documentation artifact from `scripts/documentation/site.rb` (#22):
   `manifest.json`, `producer.json`, `archive/` and `site/`. It must describe
-  `0.2.0`, the same clean source commit and pinned Xcode/Swift/clang producer, channel `release`,
+  `0.2.0`, the same clean source commit and pinned Xcode/Swift producer, channel `release`,
   and base path `/UndoKit/versions/0.2.0/`. Both original DocC archive and staged
   output are retained exactly; preparation performs no documentation build.
+  Retain full standalone clang output independently: this Xcode reports
+  `Apple clang version 21.0.0 (clang-2100.3.34.2)`, while the pinned Swift compiler
+  identifies its embedded clang as `2100.3.34.1`. These are distinct evidence.
 - A maintainer-approved publisher record. This is an explicit local input,
   supplied through the maintainer's trusted process; repository signing settings
   are not substituted for approval. The record contains no private key.
@@ -162,7 +165,9 @@ Promotion must use the exact approved ZIP, documentation output and source
 commit without rebuilding, re-signing or recompressing. Publication and live
 verification remain separate maintainer-controlled work (#28/#29).
 
-A failed attempt retains `preparation-failure.json` and any copied artifacts,
+An output path inside the source or either original input is rejected before
+creating any directory or diagnostic file, including through symlink parents.
+Other failed attempts retain `preparation-failure.json` and any copied artifacts,
 partial signed bundle, certificate evidence and ZIP already produced. If final
 verification fails, an attempted manifest is retained as `unverified-manifest.json`.
 A failed attempt is rejected by `verify`; use a new output directory when retrying.

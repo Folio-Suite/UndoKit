@@ -101,7 +101,7 @@ module CandidateFixture
       digest.hexdigest
     end
     producer = {schemaVersion: 1, sourceCommit: options[:commit], sourceDirty: false,
-      toolchain: {xcode: "Xcode 27.0\nBuild version 27A266a", swift: provenance[:toolchain][:swiftVersion].first, clang: 'Apple clang version 2100.3.34.1'},
+      toolchain: {xcode: "Xcode 27.0\nBuild version 27A266a", swift: provenance[:toolchain][:swiftVersion].first, clang: 'Apple clang version 21.0.0 (clang-2100.3.34.2)'},
       command: ['xcodebuild', 'docbuild'], archiveTreeSHA256: tree_hash.call(File.join(docs, 'archive'))}
     File.write(File.join(docs, 'producer.json'), JSON.generate(producer))
     manifest = {schemaVersion: 1, version: '0.2.0', channel: 'release', sourceCommit: options[:commit], sourceDirty: false,

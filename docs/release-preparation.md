@@ -7,7 +7,7 @@ SPDX-License-Identifier: MIT
 
 `0.2.0` is the planned next preview. Preparation retains a candidate for
 qualification; it does not qualify it, create a tag, publish a GitHub release,
-deploy Pages, or approve promotion. The actual signed preparation remains
+deploy Pages, or approve promotion. Actual signed preparation
 requires approved Apple Distribution publisher and certificate details and
 secure access to its private key (#24). The maintainer-approved publisher is
 Justin Croonenberghs under team `FT9KDL728H`; the

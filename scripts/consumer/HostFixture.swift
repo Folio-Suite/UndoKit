@@ -218,7 +218,6 @@ private var processArchitecture: String {
 
 #if CONSUMER_APP
 import SwiftUI
-import Darwin
 
 @main
 struct ConsumerApp: App {

@@ -413,15 +413,14 @@ module UndoKit
   end
 end
 
-options = {xcframework: nil, run_id: nil, installation: "embedded", platform: "macos",
-           device: "241ED977-E46A-4095-B4CF-FA4C3E0F0EE3"}
+options = {xcframework: nil, run_id: nil, installation: "embedded", platform: "macos", device: nil}
 parser = OptionParser.new do |arguments|
   arguments.banner = "Usage: ruby scripts/check-binary-consumer.rb --xcframework PATH [--platform macos|ios-simulator|both] [--installation embedded|shared-macos|both] [--device UDID]"
   arguments.on("--xcframework PATH", "Assembled UndoKit.xcframework to install in an independent app") { |value| options[:xcframework] = value }
   arguments.on("--run-id ID", "Unique evidence-run name") { |value| options[:run_id] = value }
   arguments.on("--platform PLATFORM", %w[macos ios-simulator both], "macos, ios-simulator, or both (default macos)") { |value| options[:platform] = value }
   arguments.on("--installation MODE", %w[embedded shared-macos both], "embedded, shared-macos, or both (default embedded)") { |value| options[:installation] = value }
-  arguments.on("--device UDID", "reuse one available iOS simulator; default is the designated iPadOS 26.5 device") { |value| options[:device] = value }
+  arguments.on("--device UDID", "required for ios-simulator; reuse this available iOS simulator") { |value| options[:device] = value }
   arguments.on("-h", "--help", "Show this help") { puts arguments; exit 0 }
 end
 parser.parse!
@@ -433,6 +432,9 @@ begin
     raise UndoKit::XCFrameworkAssembly::VerificationError, "--run-id must contain only letters, numbers, dot, underscore, and hyphen"
   end
   platform_names = options[:platform] == "both" ? %w[macos ios-simulator] : [options[:platform]]
+  if platform_names.include?("ios-simulator") && options[:device].to_s.empty?
+    raise UndoKit::XCFrameworkAssembly::VerificationError, "--device is required when --platform includes ios-simulator"
+  end
   if options[:installation] == "shared-macos" && options[:platform] == "ios-simulator"
     raise UndoKit::XCFrameworkAssembly::VerificationError, "--installation shared-macos requires --platform macos or both"
   end

@@ -71,16 +71,16 @@ type-identity or loaded-image check fails with the observed evidence.
 
 Pass `--platform ios-simulator` to build, install, and launch the independent
 host on an available iOS simulator; `--platform both` runs macOS followed by
-the simulator. The default simulator is the designated iPadOS 26.5 device;
-`--device UDID` selects another available iOS simulator. The harness refuses to
-start a second booted simulator and shuts down only a device it booted itself.
-Simulator evidence is always for the embedded installation; shared-framework
-loading is a macOS-only route. For example:
+the simulator. Both options require an explicit `--device UDID` naming an
+available iOS simulator. The harness refuses to start a second booted
+simulator and shuts down only a device it booted itself. Simulator evidence is
+always for the embedded installation; shared-framework loading is a macOS-only
+route. For example:
 
 ```sh
 ruby scripts/check-binary-consumer.rb \
   --xcframework "$HOME/Library/Developer/Xcode/DerivedData/UndoKit/XCFramework/Candidates/<candidate>/UndoKit.xcframework" \
-  --platform both --installation both
+  --platform both --installation both --device YOUR_SIMULATOR_UDID
 ```
 
 These commands produce and inspect an unsigned candidate. They do not sign,

@@ -24,6 +24,39 @@
 
 /* Begin PBXFileReference section */
 		A120CDE9306A0D9F0097A0D5 /* Project.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Project.xcconfig; sourceTree = "<group>"; };
+		A1809C7D308144E200F40853 /* Package.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Package.swift; sourceTree = "<group>"; };
+		A1809C7E3081450000F40853 /* AGENTS.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = AGENTS.md; sourceTree = "<group>"; };
+		A1809C7F3081450000F40853 /* CODE_OF_CONDUCT.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = CODE_OF_CONDUCT.md; sourceTree = "<group>"; };
+		A1809C803081450000F40853 /* CONTRIBUTING.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = CONTRIBUTING.md; sourceTree = "<group>"; };
+		A1809C813081450000F40853 /* SECURITY.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = SECURITY.md; sourceTree = "<group>"; };
+		A1809C82308145D400F40853 /* DurableNotes */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = DurableNotes; sourceTree = "<group>"; };
+		A1809C84308145D400F40853 /* native */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = native; sourceTree = "<group>"; };
+		A1809C85308145D400F40853 /* package */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = package; sourceTree = "<group>"; };
+		A1809C86308145D400F40853 /* recovery */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = recovery; sourceTree = "<group>"; };
+		A1809C87308145D400F40853 /* scale */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = scale; sourceTree = "<group>"; };
+		A1809C89308145D400F40853 /* HostFixture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostFixture.swift; sourceTree = "<group>"; };
+		A1809C8B308145D400F40853 /* ScaleProbe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScaleProbe.swift; sourceTree = "<group>"; };
+		A1809C8D308145D400F40853 /* ScaleArtifact.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScaleArtifact.swift; sourceTree = "<group>"; };
+		A1809C8E308145D400F40853 /* ScaleModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScaleModel.swift; sourceTree = "<group>"; };
+		A1809C8F308145D400F40853 /* ScaleResources.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScaleResources.swift; sourceTree = "<group>"; };
+		A1809C90308145D400F40853 /* ScaleWorkload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScaleWorkload.swift; sourceTree = "<group>"; };
+		A1809C92308145D400F40853 /* ScaleDeviceApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScaleDeviceApp.swift; sourceTree = "<group>"; };
+		A1809C94308145D400F40853 /* assembly.rb */ = {isa = PBXFileReference; lastKnownFileType = text.script.ruby; path = assembly.rb; sourceTree = "<group>"; };
+		A1809C95308145D400F40853 /* contract_test.rb */ = {isa = PBXFileReference; lastKnownFileType = text.script.ruby; path = contract_test.rb; sourceTree = "<group>"; };
+		A1809C97308145D400F40853 /* assemble-xcframework.rb */ = {isa = PBXFileReference; lastKnownFileType = text.script.ruby; path = "assemble-xcframework.rb"; sourceTree = "<group>"; };
+		A1809C98308145D400F40853 /* build-scale-device.rb */ = {isa = PBXFileReference; lastKnownFileType = text.script.ruby; path = "build-scale-device.rb"; sourceTree = "<group>"; };
+		A1809C99308145D400F40853 /* build-support.rb */ = {isa = PBXFileReference; lastKnownFileType = text.script.ruby; path = "build-support.rb"; sourceTree = "<group>"; };
+		A1809C9A308145D400F40853 /* check-binary-consumer.rb */ = {isa = PBXFileReference; lastKnownFileType = text.script.ruby; path = "check-binary-consumer.rb"; sourceTree = "<group>"; };
+		A1809C9B308145D400F40853 /* check-consumer.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = "check-consumer.sh"; sourceTree = "<group>"; };
+		A1809C9C308145D400F40853 /* check-native-consumer.rb */ = {isa = PBXFileReference; lastKnownFileType = text.script.ruby; path = "check-native-consumer.rb"; sourceTree = "<group>"; };
+		A1809C9D308145D400F40853 /* check-scale-device-evidence.rb */ = {isa = PBXFileReference; lastKnownFileType = text.script.ruby; path = "check-scale-device-evidence.rb"; sourceTree = "<group>"; };
+		A1809C9E308145D400F40853 /* check-toolchain.rb */ = {isa = PBXFileReference; lastKnownFileType = text.script.ruby; path = "check-toolchain.rb"; sourceTree = "<group>"; };
+		A1809C9F308145D400F40853 /* check-undokit-scale.rb */ = {isa = PBXFileReference; lastKnownFileType = text.script.ruby; path = "check-undokit-scale.rb"; sourceTree = "<group>"; };
+		A1809CA0308145D400F40853 /* run-durable-notes.rb */ = {isa = PBXFileReference; lastKnownFileType = text.script.ruby; path = "run-durable-notes.rb"; sourceTree = "<group>"; };
+		A1809CA1308145D400F40853 /* run-durable-notes-uikit.rb */ = {isa = PBXFileReference; lastKnownFileType = text.script.ruby; path = "run-durable-notes-uikit.rb"; sourceTree = "<group>"; };
+		A1809CA2308145D400F40853 /* test-package.rb */ = {isa = PBXFileReference; lastKnownFileType = text.script.ruby; path = "test-package.rb"; sourceTree = "<group>"; };
+		A1809CA3308145D400F40853 /* test-package.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = "test-package.sh"; sourceTree = "<group>"; };
+		A1809CA4308145D400F40853 /* test-scale-runner.rb */ = {isa = PBXFileReference; lastKnownFileType = text.script.ruby; path = "test-scale-runner.rb"; sourceTree = "<group>"; };
 		A1819382306767B600D3F601 /* UndoKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = UndoKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		A181938D306767B700D3F601 /* UndoKitTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = UndoKitTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A18193A43067681900D3F601 /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
@@ -60,15 +93,112 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		A1809C83308145D400F40853 /* Examples */ = {
+			isa = PBXGroup;
+			children = (
+				A1809C82308145D400F40853 /* DurableNotes */,
+			);
+			path = Examples;
+			sourceTree = "<group>";
+		};
+		A1809C88308145D400F40853 /* prototypes */ = {
+			isa = PBXGroup;
+			children = (
+				A1809C84308145D400F40853 /* native */,
+				A1809C85308145D400F40853 /* package */,
+				A1809C86308145D400F40853 /* recovery */,
+				A1809C87308145D400F40853 /* scale */,
+			);
+			path = prototypes;
+			sourceTree = "<group>";
+		};
+		A1809C8A308145D400F40853 /* consumer */ = {
+			isa = PBXGroup;
+			children = (
+				A1809C89308145D400F40853 /* HostFixture.swift */,
+			);
+			path = consumer;
+			sourceTree = "<group>";
+		};
+		A1809C8C308145D400F40853 /* Probe */ = {
+			isa = PBXGroup;
+			children = (
+				A1809C8B308145D400F40853 /* ScaleProbe.swift */,
+			);
+			path = Probe;
+			sourceTree = "<group>";
+		};
+		A1809C91308145D400F40853 /* Workload */ = {
+			isa = PBXGroup;
+			children = (
+				A1809C8D308145D400F40853 /* ScaleArtifact.swift */,
+				A1809C8E308145D400F40853 /* ScaleModel.swift */,
+				A1809C8F308145D400F40853 /* ScaleResources.swift */,
+				A1809C90308145D400F40853 /* ScaleWorkload.swift */,
+			);
+			path = Workload;
+			sourceTree = "<group>";
+		};
+		A1809C93308145D400F40853 /* scale */ = {
+			isa = PBXGroup;
+			children = (
+				A1809C8C308145D400F40853 /* Probe */,
+				A1809C91308145D400F40853 /* Workload */,
+				A1809C92308145D400F40853 /* ScaleDeviceApp.swift */,
+			);
+			path = scale;
+			sourceTree = "<group>";
+		};
+		A1809C96308145D400F40853 /* xcframework */ = {
+			isa = PBXGroup;
+			children = (
+				A1809C94308145D400F40853 /* assembly.rb */,
+				A1809C95308145D400F40853 /* contract_test.rb */,
+			);
+			path = xcframework;
+			sourceTree = "<group>";
+		};
+		A1809CA5308145D400F40853 /* scripts */ = {
+			isa = PBXGroup;
+			children = (
+				A1809C8A308145D400F40853 /* consumer */,
+				A1809C93308145D400F40853 /* scale */,
+				A1809C96308145D400F40853 /* xcframework */,
+				A1809C97308145D400F40853 /* assemble-xcframework.rb */,
+				A1809C98308145D400F40853 /* build-scale-device.rb */,
+				A1809C99308145D400F40853 /* build-support.rb */,
+				A1809C9A308145D400F40853 /* check-binary-consumer.rb */,
+				A1809C9B308145D400F40853 /* check-consumer.sh */,
+				A1809C9C308145D400F40853 /* check-native-consumer.rb */,
+				A1809C9D308145D400F40853 /* check-scale-device-evidence.rb */,
+				A1809C9E308145D400F40853 /* check-toolchain.rb */,
+				A1809C9F308145D400F40853 /* check-undokit-scale.rb */,
+				A1809CA0308145D400F40853 /* run-durable-notes.rb */,
+				A1809CA1308145D400F40853 /* run-durable-notes-uikit.rb */,
+				A1809CA2308145D400F40853 /* test-package.rb */,
+				A1809CA3308145D400F40853 /* test-package.sh */,
+				A1809CA4308145D400F40853 /* test-scale-runner.rb */,
+			);
+			path = scripts;
+			sourceTree = "<group>";
+		};
 		A1819378306767B600D3F601 = {
 			isa = PBXGroup;
 			children = (
+				A1809C83308145D400F40853 /* Examples */,
+				A1809C7D308144E200F40853 /* Package.swift */,
+				A120CDE9306A0D9F0097A0D5 /* Project.xcconfig */,
 				A1819384306767B600D3F601 /* UndoKit */,
 				A1819391306767B700D3F601 /* UndoKitTests */,
-				A120CDE9306A0D9F0097A0D5 /* Project.xcconfig */,
+				A1809C88308145D400F40853 /* prototypes */,
+				A1809CA5308145D400F40853 /* scripts */,
+				A1809C7E3081450000F40853 /* AGENTS.md */,
+				A1809C7F3081450000F40853 /* CODE_OF_CONDUCT.md */,
 				A1F223FD306C28A400633C65 /* CONTEXT.md */,
-				A1F223FE306C28A400633C65 /* UPSTREAM.md */,
+				A1809C803081450000F40853 /* CONTRIBUTING.md */,
 				A18193A43067681900D3F601 /* LICENSE */,
+				A1809C813081450000F40853 /* SECURITY.md */,
+				A1F223FE306C28A400633C65 /* UPSTREAM.md */,
 				A18193A53067681900D3F601 /* README.md */,
 				A1819383306767B600D3F601 /* Products */,
 			);

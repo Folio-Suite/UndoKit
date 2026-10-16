@@ -104,6 +104,7 @@ import UndoKit
         self.lease = lease
         let session = await lease.openSession(in: registry.sessions, mode: existing)
         self.session = session
+        guard session.status.phase == .ready else { updateStatus(); return }
         do { try await attach(to: session) }
         catch { status = "Editor attachment failed: \(error)"; return }
         if session.status.phase == .ready, !known {

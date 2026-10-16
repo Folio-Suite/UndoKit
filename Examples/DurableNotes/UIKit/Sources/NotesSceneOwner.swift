@@ -26,6 +26,7 @@ import UndoKit
     private var protectedData = UIApplication.shared.isProtectedDataAvailable
     private var storageAvailable = true
     private var foreground = true
+    private var closureRequested = false
     private var backgroundLease: UIBackgroundTaskIdentifier = .invalid
     var state: State {
         switch session?.status.phase {
@@ -55,11 +56,12 @@ import UndoKit
             self.lease = lease
             let session = await lease.openSession(in: app.sessions, mode: restored ? .existing : .create)
             self.session = session
-            try await controller?.attach()
             guard session.status.phase == .ready else {
                 events.append("Open refused; original document preserved")
-                controller?.showMessage("Open refused: \(String(describing: session.status.issue))"); return
+                controller?.showMessage("Open refused: \(String(describing: session.status.issue))")
+                controller?.lifecycleChanged(); return
             }
+            try await controller?.attach()
             if !restored {
                 if FileManager.default.fileExists(atPath: registry.path) {
                     known = try JSONDecoder().decode([String].self, from: Data(contentsOf: registry))
@@ -67,6 +69,7 @@ import UndoKit
                 if !known.contains(id) { known.append(id) }
                 try JSONEncoder().encode(known).write(to: registry, options: [.atomic, .completeFileProtection])
             }
+            closureRequested = false
             events.append(restored ? "Restored same document scope" : "Created new scene document")
             if foreground, protectedData, storageAvailable { app.sceneReady(self) }
             else { _ = await close(reason: "availability changed during open") }
@@ -78,6 +81,8 @@ import UndoKit
     }
     func close(reason: String) async -> Bool {
         guard let session else { return true }
+        closureRequested = true
+        controller?.lifecycleChanged()
         events.append("Closure requested: \(reason)")
         if let binding = controller?.binding { await binding.close() }
         else { await session.close() }
@@ -88,6 +93,7 @@ import UndoKit
     }
     func enteredBackground() {
         foreground = false; events.append("UIKit scene entered background")
+        controller?.lifecycleChanged()
         if backgroundLease == .invalid {
             backgroundLease = UIApplication.shared.beginBackgroundTask(withName: "Durable note close") { [weak self] in
                 self?.backgroundExpired()
@@ -115,21 +121,24 @@ import UndoKit
         protectedData = available
         events.append("Protected-data observation: \(available)")
         controller?.view.isHidden = !available
+        controller?.lifecycleChanged()
         if available { Task { await openIfAvailable() } }
         else { Task { _ = await close(reason: "protected data unavailable") } }
     }
     func setStorageAvailable(_ available: Bool) async {
         storageAvailable = available
+        controller?.lifecycleChanged()
         if !available { _ = await close(reason: "storage unavailable") }
         else { await openIfAvailable() }
     }
     func backgroundExpired() {
         events.append("Background budget expired; closure not certified")
-        controller?.binding?.isAvailable = false; controller?.lifecycleChanged()
+        closureRequested = true
+        controller?.lifecycleChanged()
         endBackgroundLease()
     }
     private func endBackgroundLease() {
         if backgroundLease != .invalid { UIApplication.shared.endBackgroundTask(backgroundLease); backgroundLease = .invalid }
     }
-    var mayEdit: Bool { protectedData && storageAvailable && foreground && session?.status.phase != .closed }
+    var mayEdit: Bool { protectedData && storageAvailable && foreground && !closureRequested && session?.status.phase != .closed }
 }

@@ -186,10 +186,26 @@ import UndoKit
             try await pause()
             observations.append("Host rejection has no semantic effect and leaves the draft plus native Undo/Redo callbacks intact.")
 
+            _ = await binding.discardDraft()
+            let afterDiscard = try await lease.read()
+            try require(!session.status.requiresDraftDecision && !binding.hasLiveTransaction
+                && afterDiscard.note == afterRejection.note && afterDiscard.applicationCount == afterRejection.applicationCount
+                && afterDiscard.receiptCount == afterRejection.receiptCount && afterDiscard.deliveryCount == afterRejection.deliveryCount
+                && owner.bodyEditor.text == beforeRejection.note.body,
+                "Explicit discard changed authoritative state or redelivered rejected intent")
+            observations.append("Explicit discard retires the proved-rejected draft without a host callback before an independent semantic request.")
             await lease.delayNextDelivery()
             let delayedValue = Note(title: "Pending", body: owner.bodyEditor.text ?? "")
-            let delayed = Task { @MainActor in await lease.edit(title: delayedValue.title, body: delayedValue.body, in: session) }
-            try await waitUntil("Host did not enter delayed delivery") { await lease.isDeliveryDelayed() }
+            var delayedResult: HistorySubmissionResult?
+            let delayed = Task { @MainActor in
+                let result = await lease.edit(title: delayedValue.title, body: delayedValue.body, in: session)
+                delayedResult = result
+                return result
+            }
+            try await waitUntil("Delayed edit neither entered host delivery nor returned a result") {
+                await lease.isDeliveryDelayed() || delayedResult != nil
+            }
+            try require(await lease.isDeliveryDelayed(), "Delayed edit finished before host wait: \(String(describing: delayedResult))")
             try require(session.status.phase == .busy, "Delayed delivery did not hold admission")
             let textDuringPending = owner.bodyEditor.text
             binding.undoManager.undo()
@@ -197,7 +213,8 @@ import UndoKit
             try require(owner.bodyEditor.text == textDuringPending && session.status.phase == .busy,
                 "Pending admission allowed a native inverse")
             await lease.resumeDelivery()
-            _ = await delayed.value
+            let delayedOutcome = await delayed.value
+            guard case .accepted = delayedOutcome else { throw Failure.check("Delayed edit was not accepted: \(delayedOutcome)") }
             let afterPending = try await lease.read()
             try require(afterPending.note == delayedValue, "Delayed accepted outcome did not reach host state")
             observations.append("Pending delivery blocks document inverses until the host outcome is released.")

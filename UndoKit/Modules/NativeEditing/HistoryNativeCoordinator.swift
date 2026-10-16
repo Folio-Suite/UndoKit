@@ -188,30 +188,35 @@ import Foundation
     func detach(attachment: UUID) {
         guard let adapter = adapters[attachment]?.value else { return }
         if let transaction, transaction.attachment == attachment {
-            do {
-                try capture(transaction)
-                fields[transaction.field]?.requiresDecision = true
-                if let state = fields[transaction.field] { try persist(state) }
-                if !unknown { retire(transaction) }
-            } catch {
+            let state: HistoryNativeFieldState?
+            do { state = try captureValues(transaction) } catch {
+                // An unexplained value cannot replace exact prepared intent on detachment.
                 block(error)
                 return
             }
+            state?.requiresDecision = true
+            do { if let state { try persist(state) } } catch { block(error) }
+            // The session retains captured values even when journaling is blocked.
+            // Unexplained callbacks remain in its separate facade, never this known live stack.
+            retire(transaction)
         }
         adapter.detach()
         adapters.removeValue(forKey: attachment)
         refreshAvailability()
     }
     func capture(_ transaction: Transaction) throws {
+        if let state = try captureValues(transaction) { try persist(state) }
+    }
+    private func captureValues(_ transaction: Transaction) throws -> HistoryNativeFieldState? {
         guard let state = fields[transaction.field],
             let value = transaction.adapter.capture(control: transaction.control)
-        else { return }
+        else { return nil }
         if state.prepared != nil, !state.rejected, value.value != state.proposed {
             throw failure(.identityConflict, suspended: true)
         }
         state.proposed = value.value
         state.composing = value.composing
-        try persist(state)
+        return state
     }
     func persist(_ state: HistoryNativeFieldState) throws {
         guard let configuration = session.configuration, let generation = session.engine?.snapshot.generation else {

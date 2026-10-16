@@ -31,6 +31,19 @@ import MachO
             try await Task.sleep(for: .milliseconds(40))
         }
     }
+    static func presentationReady(_ owner: NotesSceneOwner, controller: NotesUIKitController) -> Bool {
+        guard let session = owner.session, let binding = controller.binding else { return false }
+        return session.status.phase == .ready && binding.status.phase == .ready && binding.isAvailable
+            && owner.mayEdit && controller.titleEditor.delegate === binding && controller.bodyEditor.delegate === binding
+    }
+    static func readyPresentation(_ owner: NotesSceneOwner, controller: NotesUIKitController,
+                                 context: String) throws -> (HistorySession, NativeHistoryUIKitBinding) {
+        guard presentationReady(owner, controller: controller), let session = owner.session,
+              let binding = controller.binding else {
+            throw CheckFailure.observation("\(context): session=\(String(describing: owner.session?.status.phase)), binding=\(String(describing: controller.binding?.status.phase)), available=\(controller.binding?.isAvailable == true), mayEdit=\(owner.mayEdit)")
+        }
+        return (session, binding)
+    }
     static func matches(_ lhs: NotesReadout, _ rhs: NotesReadout) -> Bool {
         lhs.note == rhs.note && lhs.applicationCount == rhs.applicationCount && lhs.receiptCount == rhs.receiptCount
     }
@@ -41,7 +54,8 @@ import MachO
         }
         UIApplication.shared.requestSceneSessionActivation(sceneSession, userActivity: nil, options: nil)
         try await waitUntil("Existing scene failed to reactivate") {
-            owner.state == .active && owner.scene?.activationState == .foregroundActive
+            owner.scene?.activationState == .foregroundActive
+                && owner.controller.map { presentationReady(owner, controller: $0) } == true
         }
     }
     static func stage(_ name: String, app: NotesUIKitApp) {
@@ -160,9 +174,13 @@ import MachO
         if UIApplication.shared.supportsMultipleScenes {
             let oldIDs = Set(app.owners.keys); app.requestNewScene()
             try await waitUntil("Independent scene missing") {
-                app.owners.values.contains { !oldIDs.contains($0.id) && $0.state == .active }
+                app.owners.values.contains { owner in
+                    !oldIDs.contains(owner.id) && owner.controller.map { presentationReady(owner, controller: $0) } == true
+                }
             }
-            peer = app.owners.values.first { !oldIDs.contains($0.id) && $0.state == .active }
+            peer = app.owners.values.first { owner in
+                !oldIDs.contains(owner.id) && owner.controller.map { presentationReady(owner, controller: $0) } == true
+            }
             guard peer?.controller?.binding != nil, let peerLease = peer?.lease else { throw CheckFailure.observation("Peer binding missing") }
             _ = await peerLease.edit(title: "Independent", body: "Peer scope", in: peer!.session!)
             peer?.controller?.bodyEditor.becomeFirstResponder()
@@ -216,11 +234,11 @@ import MachO
             session: session, lease: lease, app: app)
         observations.append("Injected protected-data and budget-expiry policy during actual delayed delivery hides content, blocks editing, retains exclusive ownership, then closes and reopens exactly one accepted effect. This is not physical lock or OS expiry proof.")
         observations.append("Moved document storage refuses existing-only reopening without replacement; restoring the original directory preserves scope, content, and receipt bytes. Protected-data false/true separately closes, hides, and reopens without replay.")
-        session = first.session!; binding = controller.binding!
+        (session, binding) = try readyPresentation(first, controller: controller, context: "Injected lifecycle restoration incomplete")
         stage("durable reopen", app: app)
         let beforeClose = try await lease.read()
         _ = await first.close(reason: "check reopen"); await first.openIfAvailable()
-        session = first.session!; binding = controller.binding!
+        (session, binding) = try readyPresentation(first, controller: controller, context: "Explicit reopen attachment incomplete")
         try require(matches(try await lease.read(), beforeClose) && session.status.phase == .ready, "Reopen changed content or receipts")
         let protection = try FileManager.default.attributesOfItem(atPath: first.directory.appendingPathComponent("Note.json").path)
         let protectionObservation = protection[.protectionKey].map { String(describing: $0) } ?? "unreported by simulator"
@@ -241,7 +259,7 @@ import MachO
         try JSONEncoder().encode(stage).write(to: app.root.appendingPathComponent("Stage.json"), options: .atomic)
         try await waitUntil("Real Settings transition missing") {
             first.events.filter { $0 == "UIKit scene entered background" }.count > beforeBackground
-                && first.scene?.activationState == .foregroundActive && first.state == .active
+                && first.scene?.activationState == .foregroundActive && presentationReady(first, controller: controller)
         }
         try require(matches(try await lease.read(), beforeClose), "Lifecycle replay changed host state")
         observations.append("Real Settings background/foreground closes and reopens the same scope without replay.")
@@ -294,7 +312,7 @@ import MachO
         await lease.resumeDelivery(); _ = await delayed.value
         try await waitUntil("Protected-data drain did not complete") { session.status.phase == .closed && !lease.isOpen }
         first.setProtectedDataAvailable(true)
-        try await waitUntil("Protected-data restoration did not reopen") { first.session?.status.phase == .ready && !controller.view.isHidden }
+        try await waitUntil("Protected-data restoration did not reopen") { presentationReady(first, controller: controller) && !controller.view.isHidden }
         let accepted = try await lease.read()
         try require(accepted.note == Note(title: "Lifecycle", body: "Accepted during closure")
             && accepted.applicationCount == beforeDelivery + 1 && first.session?.snapshot.scope == scope,
@@ -312,7 +330,7 @@ import MachO
             "Unavailable history was replaced by a new document")
         try FileManager.default.moveItem(at: displaced, to: first.directory)
         await first.openIfAvailable()
-        try require(first.session?.status.phase == .ready && first.session?.snapshot.scope == scope,
+        try require(presentationReady(first, controller: controller) && first.session?.snapshot.scope == scope,
             "Restored original storage did not reopen the retained scope")
         let returned = try await lease.read()
         let returnedBytes = try Data(contentsOf: evidenceURL)
@@ -326,7 +344,7 @@ import MachO
         try require(controller.view.isHidden && first.session?.status.phase == .closed && !binding.isAvailable,
             "Protected-data false reopened or exposed protected UI")
         first.setProtectedDataAvailable(true)
-        try await waitUntil("Protected-data true did not restore") { first.session?.status.phase == .ready && !controller.view.isHidden }
+        try await waitUntil("Protected-data true did not restore") { presentationReady(first, controller: controller) && !controller.view.isHidden }
         try require(matches(try await lease.read(), accepted) && first.session?.snapshot.scope == scope,
             "Protected-data transition changed scope or replayed accepted content")
     }

@@ -53,7 +53,7 @@ import Foundation
     }
     public func disconnect() {
         guard !disconnected else { return }
-        // Failed safeguarding leaves the coordinator and callback owner retained by the session.
+        // Captured recovery values and unexplained callback graphs remain owned by the session.
         session.nativeCoordinator.detach(attachment: id)
         disconnected = true
         platform = nil

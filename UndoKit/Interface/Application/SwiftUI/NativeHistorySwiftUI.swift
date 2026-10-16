@@ -60,13 +60,7 @@ extension EnvironmentValues {
     private static let presentations = NSMapTable<UITextView, NativeHistorySwiftUIEditorOwnership>(
         keyOptions: .weakMemory, valueOptions: .strongMemory)
     weak var editor: UITextView?
-    private weak var current: NativeHistorySwiftUIEditorContainer?
-    private var waiting: [WeakContainer] = []
-
-    private final class WeakContainer {
-        weak var value: NativeHistorySwiftUIEditorContainer?
-        init(_ value: NativeHistorySwiftUIEditorContainer) { self.value = value }
-    }
+    private let ownership = NativeHistoryPresentationOwnership()
 
     static func forEditor(_ editor: UITextView) -> NativeHistorySwiftUIEditorOwnership {
         if let existing = presentations.object(forKey: editor) { return existing }
@@ -75,33 +69,9 @@ extension EnvironmentValues {
         presentations.setObject(presentation, forKey: editor)
         return presentation
     }
-    func isCurrent(_ container: NativeHistorySwiftUIEditorContainer) -> Bool { current === container }
-    func attach(_ container: NativeHistorySwiftUIEditorContainer) {
-        waiting.removeAll { $0.value == nil }
-        guard let editor else {
-            container.showUnavailableEditor()
-            return
-        }
-        if current === container { return }
-        guard current == nil, editor.superview == nil else {
-            if !waiting.contains(where: { $0.value === container }) { waiting.append(WeakContainer(container)) }
-            return
-        }
-        current = container
-        container.mount(editor)
-    }
-    func detach(_ container: NativeHistorySwiftUIEditorContainer) {
-        waiting.removeAll { $0.value == nil || $0.value === container }
-        guard current === container else { return }
-        current = nil
-        container.removeEditor()
-        // Make/update of a same-turn .id replacement can precede old dismantle.
-        // The existing presentation releases first; only then may a waiter mount.
-        if let replacement = waiting.compactMap(\.value).first {
-            waiting.removeAll { $0.value === replacement }
-            attach(replacement)
-        }
-    }
+    func isCurrent(_ container: NativeHistorySwiftUIEditorContainer) -> Bool { ownership.isCurrent(container) }
+    func attach(_ container: NativeHistorySwiftUIEditorContainer) { ownership.attach(container) }
+    func detach(_ container: NativeHistorySwiftUIEditorContainer) { ownership.detach(container) }
 }
 
 private struct NativeHistorySwiftUIEditorPresentation: UIViewRepresentable {
@@ -120,9 +90,10 @@ private struct NativeHistorySwiftUIEditorPresentation: UIViewRepresentable {
     }
 }
 
-@MainActor private final class NativeHistorySwiftUIEditorContainer: UIView {
+@MainActor private final class NativeHistorySwiftUIEditorContainer: UIView, NativeHistoryPresentationHost {
     private var reference: NativeHistorySwiftUIEditorReference?
     private weak var mountedEditor: UITextView?
+    var canMountPresentedEditor: Bool { reference?.presentation.editor?.superview == nil }
     private var editorConstraints: [NSLayoutConstraint] = []
     private let diagnostic = UILabel()
 
@@ -148,7 +119,8 @@ private struct NativeHistorySwiftUIEditorPresentation: UIViewRepresentable {
         reference.container = self
         reference.presentation.attach(self)
     }
-    func mount(_ editor: UITextView) {
+    func mountPresentedEditor() {
+        guard let editor = reference?.presentation.editor else { showUnavailableEditor(); return }
         mountedEditor = editor
         diagnostic.isHidden = true
         (editor as? NativeHistoryTextView)?.isManagedBySwiftUI = true
@@ -172,8 +144,8 @@ private struct NativeHistorySwiftUIEditorPresentation: UIViewRepresentable {
         let previous = reference
         reference = nil
         previous?.presentation.detach(self)
-        removeEditor()
     }
+    func unmountPresentedEditor() { removeEditor() }
     func removeEditor() {
         guard let editor = mountedEditor else { return }
         (editor as? NativeHistoryTextView)?.detachSwiftUIPresentation()

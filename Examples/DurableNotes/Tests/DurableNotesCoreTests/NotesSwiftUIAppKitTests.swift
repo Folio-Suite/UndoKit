@@ -227,4 +227,57 @@ import XCTest
             "Only explicit settlement should deliver the durable transaction")
         binding.disconnect(); await session.close()
     }
+
+    func testOverlappingSwiftUIPresentationsPromoteFirstSurvivingHostWithoutStealingEditor() async throws {
+        _ = NSApplication.shared
+        let editor = NativeHistoryAppKitTextView()
+        editor.isRichText = false
+        let firstWindow = makeWindow(editor: editor, generation: 0)
+        let removedWaiterWindow = makeWindow(editor: editor, generation: 1)
+        let survivingWaiterWindow = makeWindow(editor: editor, generation: 2)
+        defer {
+            firstWindow.contentView = nil
+            removedWaiterWindow.contentView = nil
+            survivingWaiterWindow.contentView = nil
+            firstWindow.close(); removedWaiterWindow.close(); survivingWaiterWindow.close()
+        }
+
+        try await Task.sleep(for: .milliseconds(120))
+        XCTAssertTrue(editor.window === firstWindow, "The first mounted host must own the editor")
+        XCTAssertTrue(editor.superview != nil)
+
+        removedWaiterWindow.contentView = nil
+        firstWindow.contentView = nil
+        try await Task.sleep(for: .milliseconds(120))
+        XCTAssertTrue(editor.window === survivingWaiterWindow,
+            "Detaching the current host must promote the first surviving waiter")
+
+        survivingWaiterWindow.contentView = nil
+        try await Task.sleep(for: .milliseconds(120))
+        XCTAssertNil(editor.window, "Removing the current host must release its native presentation")
+
+        let externalWindow = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 440, height: 220),
+            styleMask: [.titled], backing: .buffered, defer: false)
+        let externalParent = NSView(frame: externalWindow.contentView!.bounds)
+        externalWindow.contentView = externalParent
+        externalParent.addSubview(editor)
+        let attemptedSteal = makeWindow(editor: editor, generation: 3)
+        defer { attemptedSteal.contentView = nil; attemptedSteal.close(); externalWindow.close() }
+        try await Task.sleep(for: .milliseconds(120))
+        XCTAssertTrue(editor.superview === externalParent,
+            "SwiftUI presentation must not reparent an editor already owned by native hierarchy")
+        XCTAssertTrue(editor.window === externalWindow)
+    }
+
+    private func makeWindow(editor: NativeHistoryAppKitTextView, generation: Int) -> NSWindow {
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 440, height: 220),
+            styleMask: [.titled], backing: .buffered, defer: false)
+        let hosting = NSHostingView(rootView: EditorHost(editor: editor, generation: generation))
+        hosting.frame = window.contentView!.bounds
+        window.contentView = hosting
+        window.makeKeyAndOrderFront(nil)
+        hosting.layoutSubtreeIfNeeded()
+        hosting.displayIfNeeded()
+        return window
+    }
 }

@@ -107,6 +107,41 @@ import UndoKit
                 "Explicit settlement did not produce one accepted host receipt")
             observations.append("Explicit coarse settlement produced one independently readable host effect.")
 
+            if let primaryWindow = owner.bodyEditor.window, let scene = primaryWindow.windowScene {
+                let competingWindow = UIWindow(windowScene: scene)
+                competingWindow.rootViewController = UIHostingController(
+                    rootView: SwiftUIOverlappingEditorProbe(editor: owner.bodyEditor))
+                competingWindow.makeKeyAndVisible()
+                try await pause()
+                try require(owner.bodyEditor.window === primaryWindow,
+                    "An overlapping SwiftUI host stole an editor from its current presentation")
+                let removedWaiterWindow = UIWindow(windowScene: scene)
+                removedWaiterWindow.rootViewController = UIHostingController(
+                    rootView: SwiftUIOverlappingEditorProbe(editor: owner.bodyEditor))
+                removedWaiterWindow.makeKeyAndVisible()
+                try await pause()
+                removedWaiterWindow.rootViewController = nil
+                removedWaiterWindow.isHidden = true
+
+                owner.showEditor = false
+                try await pause()
+                try require(owner.bodyEditor.window === competingWindow,
+                    "A surviving waiting SwiftUI host did not receive the released editor")
+                competingWindow.rootViewController = nil
+                competingWindow.isHidden = true
+                try await pause()
+                owner.showEditor = true
+                try await pause()
+                try require(owner.bodyEditor.window === primaryWindow && owner.session === originalSession
+                    && owner.binding === originalBinding,
+                    "Primary presentation remount changed session ownership or failed to reclaim the editor")
+                let afterOverlap = try await lease.read()
+                try require(afterOverlap.applicationCount == accepted.applicationCount
+                    && afterOverlap.receiptCount == accepted.receiptCount,
+                    "SwiftUI presentation handoff delivered or lost a durable receipt")
+                observations.append("Two real UIKit-hosted SwiftUI presentations shared one editor at a time; detaching the current host promoted a surviving waiter, and remount restored the same session and binding without another receipt.")
+            }
+
             _ = await binding.undoDocument()
             try require(try await lease.read().note.body.isEmpty, "Durable Undo failed")
             _ = await binding.redoDocument()
@@ -485,5 +520,13 @@ import UndoKit
     var body: some View {
         NativeHistorySwiftUIEditor(textView: owner.bodyEditor)
             .padding()
+    }
+}
+
+@MainActor private struct SwiftUIOverlappingEditorProbe: View {
+    let editor: NativeHistoryTextView
+    var body: some View {
+        NativeHistorySwiftUIEditor(textView: editor)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

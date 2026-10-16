@@ -24,6 +24,56 @@
 
 /* Begin PBXFileReference section */
 		A120CDE9306A0D9F0097A0D5 /* Project.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Project.xcconfig; sourceTree = "<group>"; };
+		A12B7A8A308192AF0022B56F /* 0001-transaction-module-ownership.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "0001-transaction-module-ownership.md"; sourceTree = "<group>"; };
+		A12B7A8B308192AF0022B56F /* 0002-retained-history-module-ownership.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "0002-retained-history-module-ownership.md"; sourceTree = "<group>"; };
+		A12B7A8C308192AF0022B56F /* 0003-host-adaptation-module-ownership.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "0003-host-adaptation-module-ownership.md"; sourceTree = "<group>"; };
+		A12B7A8D308192AF0022B56F /* 0004-independent-source-package.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "0004-independent-source-package.md"; sourceTree = "<group>"; };
+		A12B7A8E308192AF0022B56F /* 0005-preview-source-and-project-platforms.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "0005-preview-source-and-project-platforms.md"; sourceTree = "<group>"; };
+		A12B7A8F308192AF0022B56F /* 0006-uikit-live-and-durable-undo.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "0006-uikit-live-and-durable-undo.md"; sourceTree = "<group>"; };
+		A12B7A91308192AF0022B56F /* domain.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = domain.md; sourceTree = "<group>"; };
+		A12B7A92308192AF0022B56F /* issue-tracker.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "issue-tracker.md"; sourceTree = "<group>"; };
+		A12B7A93308192AF0022B56F /* MATT-POCOCK-LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = "MATT-POCOCK-LICENSE"; sourceTree = "<group>"; };
+		A12B7A94308192AF0022B56F /* triage-labels.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "triage-labels.md"; sourceTree = "<group>"; };
+		A12B7A96308192AF0022B56F /* 2026-10-12-ipados27-simulator.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "2026-10-12-ipados27-simulator.md"; sourceTree = "<group>"; };
+		A12B7A98308192AF0022B56F /* issues-2026-09-27.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "issues-2026-09-27.json"; sourceTree = "<group>"; };
+		A12B7A99308192AF0022B56F /* preservation-checksums.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "preservation-checksums.json"; sourceTree = "<group>"; };
+		A12B7A9A308192AF0022B56F /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+		A12B7A9B308192AF0022B56F /* retirement-snapshot-2026-09-27.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "retirement-snapshot-2026-09-27.json"; sourceTree = "<group>"; };
+		A12B7A9C308192AF0022B56F /* undokit-history.bundle */ = {isa = PBXFileReference; lastKnownFileType = file; path = "undokit-history.bundle"; sourceTree = "<group>"; };
+		A12B7A9E308192AF0022B56F /* 2026-10-11-hygiene.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "2026-10-11-hygiene.md"; sourceTree = "<group>"; };
+		A12B7A9F308192AF0022B56F /* 2026-10-11-preview-foundations.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "2026-10-11-preview-foundations.md"; sourceTree = "<group>"; };
+		A12B7AA0308192AF0022B56F /* 2026-10-15-ios-runtime-evidence.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "2026-10-15-ios-runtime-evidence.json"; sourceTree = "<group>"; };
+		A12B7AA1308192AF0022B56F /* 2026-10-15-runtime-qualification.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "2026-10-15-runtime-qualification.md"; sourceTree = "<group>"; };
+		A12B7AA2308192AF0022B56F /* 2026-10-15-standard-ci-gate.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "2026-10-15-standard-ci-gate.md"; sourceTree = "<group>"; };
+		A12B7AA4308192AF0022B56F /* 2026-10-10-apple-binary-distribution.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "2026-10-10-apple-binary-distribution.md"; sourceTree = "<group>"; };
+		A12B7AA5308192AF0022B56F /* 2026-10-10-ios-qualification.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "2026-10-10-ios-qualification.md"; sourceTree = "<group>"; };
+		A12B7AA6308192AF0022B56F /* 2026-10-11-collections-history.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "2026-10-11-collections-history.md"; sourceTree = "<group>"; };
+		A12B7AA7308192AF0022B56F /* 2026-10-15-coredata-public-import-warning.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "2026-10-15-coredata-public-import-warning.md"; sourceTree = "<group>"; };
+		A12B7AA8308192AF0022B56F /* apple-platform-contracts.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "apple-platform-contracts.md"; sourceTree = "<group>"; };
+		A12B7AA9308192AF0022B56F /* consumer-requirements.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "consumer-requirements.md"; sourceTree = "<group>"; };
+		A12B7AAA308192AF0022B56F /* swift-objc-distribution.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "swift-objc-distribution.md"; sourceTree = "<group>"; };
+		A12B7AAC308192AF0022B56F /* acceptance-measurement-plan.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "acceptance-measurement-plan.md"; sourceTree = "<group>"; };
+		A12B7AAD308192AF0022B56F /* appkit-history-binding.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "appkit-history-binding.md"; sourceTree = "<group>"; };
+		A12B7AAE308192AF0022B56F /* binary-distribution.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "binary-distribution.md"; sourceTree = "<group>"; };
+		A12B7AAF308192AF0022B56F /* documentation-site.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "documentation-site.md"; sourceTree = "<group>"; };
+		A12B7AB0308192AF0022B56F /* durable-acceptance-contract.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "durable-acceptance-contract.md"; sourceTree = "<group>"; };
+		A12B7AB1308192AF0022B56F /* getting-started.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "getting-started.md"; sourceTree = "<group>"; };
+		A12B7AB2308192AF0022B56F /* history-compatibility.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "history-compatibility.md"; sourceTree = "<group>"; };
+		A12B7AB3308192AF0022B56F /* history-reconstruction.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "history-reconstruction.md"; sourceTree = "<group>"; };
+		A12B7AB4308192AF0022B56F /* history-retention-contract.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "history-retention-contract.md"; sourceTree = "<group>"; };
+		A12B7AB5308192AF0022B56F /* implementation-handoff.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "implementation-handoff.md"; sourceTree = "<group>"; };
+		A12B7AB6308192AF0022B56F /* installation.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = installation.md; sourceTree = "<group>"; };
+		A12B7AB7308192AF0022B56F /* native-editing-session-contract.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "native-editing-session-contract.md"; sourceTree = "<group>"; };
+		A12B7AB8308192AF0022B56F /* native-routing-contract.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "native-routing-contract.md"; sourceTree = "<group>"; };
+		A12B7AB9308192AF0022B56F /* persistence-failure-evidence.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "persistence-failure-evidence.md"; sourceTree = "<group>"; };
+		A12B7ABA308192AF0022B56F /* production-scale.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "production-scale.md"; sourceTree = "<group>"; };
+		A12B7ABB308192AF0022B56F /* release-preparation.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "release-preparation.md"; sourceTree = "<group>"; };
+		A12B7ABC308192AF0022B56F /* retention-implementation.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "retention-implementation.md"; sourceTree = "<group>"; };
+		A12B7ABD308192AF0022B56F /* signing-identity.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "signing-identity.md"; sourceTree = "<group>"; };
+		A12B7ABE308192AF0022B56F /* store-lifecycle-contract.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "store-lifecycle-contract.md"; sourceTree = "<group>"; };
+		A12B7ABF308192AF0022B56F /* swiftui-appkit-history-binding.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "swiftui-appkit-history-binding.md"; sourceTree = "<group>"; };
+		A12B7AC0308192AF0022B56F /* typed-interface-contract.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "typed-interface-contract.md"; sourceTree = "<group>"; };
+		A12B7AC1308192AF0022B56F /* uikit-history-binding.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "uikit-history-binding.md"; sourceTree = "<group>"; };
 		A1809C7D308144E200F40853 /* Package.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Package.swift; sourceTree = "<group>"; };
 		A1809C7E3081450000F40853 /* AGENTS.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = AGENTS.md; sourceTree = "<group>"; };
 		A1809C7F3081450000F40853 /* CODE_OF_CONDUCT.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = CODE_OF_CONDUCT.md; sourceTree = "<group>"; };
@@ -93,6 +143,111 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		A12B7A90308192AF0022B56F /* adr */ = {
+			isa = PBXGroup;
+			children = (
+				A12B7A8A308192AF0022B56F /* 0001-transaction-module-ownership.md */,
+				A12B7A8B308192AF0022B56F /* 0002-retained-history-module-ownership.md */,
+				A12B7A8C308192AF0022B56F /* 0003-host-adaptation-module-ownership.md */,
+				A12B7A8D308192AF0022B56F /* 0004-independent-source-package.md */,
+				A12B7A8E308192AF0022B56F /* 0005-preview-source-and-project-platforms.md */,
+				A12B7A8F308192AF0022B56F /* 0006-uikit-live-and-durable-undo.md */,
+			);
+			path = adr;
+			sourceTree = "<group>";
+		};
+		A12B7A95308192AF0022B56F /* agents */ = {
+			isa = PBXGroup;
+			children = (
+				A12B7A91308192AF0022B56F /* domain.md */,
+				A12B7A92308192AF0022B56F /* issue-tracker.md */,
+				A12B7A93308192AF0022B56F /* MATT-POCOCK-LICENSE */,
+				A12B7A94308192AF0022B56F /* triage-labels.md */,
+			);
+			path = agents;
+			sourceTree = "<group>";
+		};
+		A12B7A97308192AF0022B56F /* diagnostics */ = {
+			isa = PBXGroup;
+			children = (
+				A12B7A96308192AF0022B56F /* 2026-10-12-ipados27-simulator.md */,
+			);
+			path = diagnostics;
+			sourceTree = "<group>";
+		};
+		A12B7A9D308192AF0022B56F /* imported-design */ = {
+			isa = PBXGroup;
+			children = (
+				A12B7A98308192AF0022B56F /* issues-2026-09-27.json */,
+				A12B7A99308192AF0022B56F /* preservation-checksums.json */,
+				A12B7A9A308192AF0022B56F /* README.md */,
+				A12B7A9B308192AF0022B56F /* retirement-snapshot-2026-09-27.json */,
+				A12B7A9C308192AF0022B56F /* undokit-history.bundle */,
+			);
+			path = "imported-design";
+			sourceTree = "<group>";
+		};
+		A12B7AA3308192AF0022B56F /* maintenance */ = {
+			isa = PBXGroup;
+			children = (
+				A12B7A9E308192AF0022B56F /* 2026-10-11-hygiene.md */,
+				A12B7A9F308192AF0022B56F /* 2026-10-11-preview-foundations.md */,
+				A12B7AA0308192AF0022B56F /* 2026-10-15-ios-runtime-evidence.json */,
+				A12B7AA1308192AF0022B56F /* 2026-10-15-runtime-qualification.md */,
+				A12B7AA2308192AF0022B56F /* 2026-10-15-standard-ci-gate.md */,
+			);
+			path = maintenance;
+			sourceTree = "<group>";
+		};
+		A12B7AAB308192AF0022B56F /* research */ = {
+			isa = PBXGroup;
+			children = (
+				A12B7AA4308192AF0022B56F /* 2026-10-10-apple-binary-distribution.md */,
+				A12B7AA5308192AF0022B56F /* 2026-10-10-ios-qualification.md */,
+				A12B7AA6308192AF0022B56F /* 2026-10-11-collections-history.md */,
+				A12B7AA7308192AF0022B56F /* 2026-10-15-coredata-public-import-warning.md */,
+				A12B7AA8308192AF0022B56F /* apple-platform-contracts.md */,
+				A12B7AA9308192AF0022B56F /* consumer-requirements.md */,
+				A12B7AAA308192AF0022B56F /* swift-objc-distribution.md */,
+			);
+			path = research;
+			sourceTree = "<group>";
+		};
+		A12B7AC2308192AF0022B56F /* docs */ = {
+			isa = PBXGroup;
+			children = (
+				A12B7A90308192AF0022B56F /* adr */,
+				A12B7A95308192AF0022B56F /* agents */,
+				A12B7A97308192AF0022B56F /* diagnostics */,
+				A12B7A9D308192AF0022B56F /* imported-design */,
+				A12B7AA3308192AF0022B56F /* maintenance */,
+				A12B7AAB308192AF0022B56F /* research */,
+				A12B7AAC308192AF0022B56F /* acceptance-measurement-plan.md */,
+				A12B7AAD308192AF0022B56F /* appkit-history-binding.md */,
+				A12B7AAE308192AF0022B56F /* binary-distribution.md */,
+				A12B7AAF308192AF0022B56F /* documentation-site.md */,
+				A12B7AB0308192AF0022B56F /* durable-acceptance-contract.md */,
+				A12B7AB1308192AF0022B56F /* getting-started.md */,
+				A12B7AB2308192AF0022B56F /* history-compatibility.md */,
+				A12B7AB3308192AF0022B56F /* history-reconstruction.md */,
+				A12B7AB4308192AF0022B56F /* history-retention-contract.md */,
+				A12B7AB5308192AF0022B56F /* implementation-handoff.md */,
+				A12B7AB6308192AF0022B56F /* installation.md */,
+				A12B7AB7308192AF0022B56F /* native-editing-session-contract.md */,
+				A12B7AB8308192AF0022B56F /* native-routing-contract.md */,
+				A12B7AB9308192AF0022B56F /* persistence-failure-evidence.md */,
+				A12B7ABA308192AF0022B56F /* production-scale.md */,
+				A12B7ABB308192AF0022B56F /* release-preparation.md */,
+				A12B7ABC308192AF0022B56F /* retention-implementation.md */,
+				A12B7ABD308192AF0022B56F /* signing-identity.md */,
+				A12B7ABE308192AF0022B56F /* store-lifecycle-contract.md */,
+				A12B7ABF308192AF0022B56F /* swiftui-appkit-history-binding.md */,
+				A12B7AC0308192AF0022B56F /* typed-interface-contract.md */,
+				A12B7AC1308192AF0022B56F /* uikit-history-binding.md */,
+			);
+			path = docs;
+			sourceTree = "<group>";
+		};
 		A1809C83308145D400F40853 /* Examples */ = {
 			isa = PBXGroup;
 			children = (
@@ -185,11 +340,10 @@
 		A1819378306767B600D3F601 = {
 			isa = PBXGroup;
 			children = (
-				A1809C83308145D400F40853 /* Examples */,
-				A1809C7D308144E200F40853 /* Package.swift */,
-				A120CDE9306A0D9F0097A0D5 /* Project.xcconfig */,
 				A1819384306767B600D3F601 /* UndoKit */,
 				A1819391306767B700D3F601 /* UndoKitTests */,
+				A1809C83308145D400F40853 /* Examples */,
+				A12B7AC2308192AF0022B56F /* docs */,
 				A1809C88308145D400F40853 /* prototypes */,
 				A1809CA5308145D400F40853 /* scripts */,
 				A1809C7E3081450000F40853 /* AGENTS.md */,
@@ -200,6 +354,8 @@
 				A1809C813081450000F40853 /* SECURITY.md */,
 				A1F223FE306C28A400633C65 /* UPSTREAM.md */,
 				A18193A53067681900D3F601 /* README.md */,
+				A1809C7D308144E200F40853 /* Package.swift */,
+				A120CDE9306A0D9F0097A0D5 /* Project.xcconfig */,
 				A1819383306767B600D3F601 /* Products */,
 			);
 			sourceTree = "<group>";

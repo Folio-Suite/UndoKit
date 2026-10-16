@@ -10,6 +10,8 @@ For the 2026-10-15 interface consolidation, follow the
 [ADR 0007](adr/0007-shared-native-history-coordination.md). The original handoff
 below remains the provenance for durable acceptance and host ownership; its
 ordinary entry points and initial implementation sequence are historical.
+Implementation and validation are recorded in the
+[shared-session evidence](maintenance/2026-10-15-shared-history-sessions.md).
 
 The maintainer accepted the #51 handoff after accepting the bounded proofs
 #47–#50. Begin implementation under the existing durable acceptance, retention,

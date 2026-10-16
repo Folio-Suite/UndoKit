@@ -9,6 +9,8 @@ This is the implementation design for [ADR 0007](adr/0007-shared-native-history-
 accepted through the architecture review on 2026-10-15. It consolidates ordinary
 application editing around one History Session and typed operation handles.
 The declarations below illustrate responsibilities; they are not shipped symbols.
+See the [implementation evidence](maintenance/2026-10-15-shared-history-sessions.md)
+for the delivered interface, review fixes and validation limits.
 Backward compatibility is not required before shipping, including public
 declarations and pre-release persisted formats. Folio and KitchenMemory will
 conform after the interface stabilizes. Do not add legacy adapters, old-format

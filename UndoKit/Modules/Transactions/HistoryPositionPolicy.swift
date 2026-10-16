@@ -9,7 +9,6 @@ import Foundation
 struct HistoryPositionPolicy {
     struct SessionGroup {
         let id: UUID
-        let sequence: Int64
         let effects: [HistoryEffect]
         var applied = true
         var invalidated = false
@@ -40,41 +39,25 @@ struct HistoryPositionPolicy {
         retainedGroups: [HistoryGroupRecord],
         retainedHistoryInvalidated: Bool
     ) -> Target? {
-        guard !retainedHistoryInvalidated,
-              !sessionGroups.contains(where: \.invalidated) else { return nil }
+        guard !sessionGroups.contains(where: \.invalidated) else { return nil }
 
-        let transient = sessionGroups.filter { kind == .undo ? $0.applied : !$0.applied }
+        let session = kind == .undo
+            ? sessionGroups.last(where: \.applied)
+            : sessionGroups.first(where: { !$0.applied })
+        if let session { return .session(session) }
+        guard !retainedHistoryInvalidated else { return nil }
         let retainedTarget = Self.retainedTarget(for: kind, groups: retainedGroups)
-        switch kind {
-        case .undo:
-            let transientTarget = transient.max(by: { $0.sequence < $1.sequence })
-            if let transientTarget, let retainedTarget {
-                return transientTarget.sequence > retainedTarget.sequence
-                    ? .session(transientTarget) : .retained(retainedTarget)
-            }
-            if let transientTarget { return .session(transientTarget) }
-            return retainedTarget.map(Target.retained)
-        case .redo:
-            let transientTarget = transient.min(by: { $0.sequence < $1.sequence })
-            if let transientTarget, let retainedTarget {
-                return transientTarget.sequence < retainedTarget.sequence
-                    ? .session(transientTarget) : .retained(retainedTarget)
-            }
-            if let transientTarget { return .session(transientTarget) }
-            return retainedTarget.map(Target.retained)
-        case .command:
-            return nil
-        }
+        return retainedTarget.map(Target.retained)
     }
 
     mutating func accepted(
         kind: HistoryDeliveryKind, groupID: UUID, targetID: UUID?,
-        sequence: Int64, effects: [HistoryEffect], maximumGroups: Int
+        effects: [HistoryEffect], maximumGroups: Int
     ) {
         switch kind {
         case .command:
             sessionGroups.removeAll(where: { !$0.applied && !$0.invalidated })
-            sessionGroups.append(SessionGroup(id: groupID, sequence: sequence, effects: effects))
+            sessionGroups.append(SessionGroup(id: groupID, effects: effects))
         case .undo, .redo:
             if let targetID, let index = sessionGroups.firstIndex(where: { $0.id == targetID }) {
                 sessionGroups[index].applied = kind == .redo
@@ -86,7 +69,7 @@ struct HistoryPositionPolicy {
                                   redo: effect.undo, resources: effect.resources)
                 }
                 sessionGroups.append(SessionGroup(
-                    id: targetID, sequence: sequence, effects: swapped,
+                    id: targetID, effects: swapped,
                     applied: kind == .redo))
             }
         }
@@ -138,17 +121,13 @@ struct HistoryPositionPolicy {
     }
 
     mutating func commitRecordingBoundary(enabled: Bool) {
-        if enabled { crossedIntoRecording() }
+        if enabled { sessionGroups.removeAll() }
     }
 
     mutating func rejected(targetID: UUID?) {
         guard let targetID,
               let index = sessionGroups.firstIndex(where: { $0.id == targetID }) else { return }
         sessionGroups[index].invalidated = true
-    }
-
-    mutating func crossedIntoRecording() {
-        sessionGroups.removeAll()
     }
 
     mutating func retiredGeneration() {

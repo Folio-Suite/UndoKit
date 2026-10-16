@@ -110,7 +110,7 @@ extension HistoryTransactionCoordinator {
         }
         positionPolicy.accepted(
             kind: kind, groupID: groupID, targetID: targetID,
-            sequence: token.sequence, effects: effects, maximumGroups: limits.maxUndoGroups)
+            effects: effects, maximumGroups: limits.maxUndoGroups)
         updateSnapshot()
         return .accepted(HistoryReceipt(token: token, groupID: groupID))
     }

@@ -10,6 +10,8 @@ public struct HistoryCommands<Command: Sendable>: Sendable {
     let epoch: UUID
     let generation: UUID
 
+    // MARK: - Submit typed intent
+
     /// Hosts must capture stable intent in their operation declaration when a Command
     /// contains mutable references. Transferability alone does not freeze their values.
     @MainActor public func submit(_ command: Command) async -> HistorySubmissionResult {
@@ -20,6 +22,8 @@ public struct HistoryCommands<Command: Sendable>: Sendable {
     @MainActor public func submitGroup(_ commands: [Command]) async -> HistorySubmissionResult {
         await session.submit(commands, using: self)
     }
+
+    // MARK: - Controlled failure evidence
 
     #if DEBUG
     @MainActor public func submitGroupWithInjectedFinalizationFailure(_ commands: [Command]) async

@@ -74,16 +74,14 @@ import XCTest
         fixture.host.delayed = true
         let completed = expectation(description: "Prepared request must await its authoritative outcome")
         completed.isInverted = true
-        var deliveryReleased = false
         let semantic = Task {
             let result = await fixture.commands.submit("delivered semantic")
-            if !deliveryReleased { completed.fulfill() }
+            if fixture.host.delayed { completed.fulfill() }
             return result
         }
         await fixture.host.waitUntilDelivery()
         semantic.cancel()
         await fulfillment(of: [completed], timeout: 0.05)
-        deliveryReleased = true
         fixture.host.resume()
         guard case .accepted = await semantic.value else {
             XCTFail("Cancellation erased the delivered request's receipt")

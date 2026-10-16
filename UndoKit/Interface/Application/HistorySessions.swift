@@ -3,7 +3,12 @@
 
 import Foundation
 
-/// Application-owned retention of opening, active, closing and blocked sessions.
+/// Retains the application's open documents and their shared editing/recovery owners.
+///
+/// Keep one collection in your application owner. Multiple windows displaying the
+/// same working History Scope share a session, lease and operation declarations.
+/// A blocked opening or closure stays retained even after its presentation disappears.
+/// See <doc:FirstUndoGroup> for a complete example.
 @MainActor public final class HistorySessions {
     private struct WorkingScope: Hashable {
         let working: UUID
@@ -15,8 +20,13 @@ import Foundation
     private var stores: [URL: HistorySessionStoreOwner] = [:]
     private var closingAll = false
     private var closeWaiters: [CheckedContinuation<Void, Never>] = []
+    // MARK: - Observe open documents
+
+    /// Called when retained sessions, their status or attachments change.
     public var entriesDidChange: (@MainActor () -> Void)?
+    /// Creates an empty collection; no domain or history resources are opened.
     public init() {}
+    /// A path-sorted summary of opening, active and blocked document owners.
     public var entries: [HistorySessionEntry] {
         sessions.values.map {
             HistorySessionEntry(
@@ -24,14 +34,18 @@ import Foundation
                 attachmentCount: $0.attachmentCount)
         }.sorted { $0.documentURL.path < $1.documentURL.path }
     }
+    /// Returns the sole session for a document URL, or nil if none or ambiguous.
     public func session(for documentURL: URL) -> HistorySession? {
         let key = canonical(documentURL)
         let matching = Array(documentOwners[key, default: [:]].values)
         return matching.count == 1 ? matching.first : nil
     }
+    /// Finds an already retained owner by its stable working-copy and scope identities.
     public func session(scope: UUID, workingIdentity: UUID) -> HistorySession? {
         scopes[WorkingScope(working: workingIdentity, scope: scope)]
     }
+
+    // MARK: - Open and share a session
 
     /// Retain before acquisition. Conflicting live ownership is reported as a retained
     /// blocked session; no incoming host replaces another session's registered handler.
@@ -64,6 +78,11 @@ import Foundation
         return await create(documentURL: key, mode: mode, lease: lease, configure: configure)
     }
 
+    /// Opens using operations already declared against an available host.
+    ///
+    /// Repeated opens share the existing owner only when the configuration, lease
+    /// instance and operation registrations match. For setup requiring host acquisition,
+    /// use the document-URL overload and its asynchronous configure closure.
     public func open(
         configuration: HistorySessionConfiguration, lease: any HistoryHostLease,
         operations: [AnyHistoryOperation]
@@ -118,6 +137,10 @@ import Foundation
         session.refuse(HistoryFailure(cause, stage: .admission, disposition: .usable))
         return session
     }
+    // MARK: - Close retained documents
+
+    /// Attempts to close every retained session, preserving owners whose closure is blocked.
+    /// Inspect ``entries`` afterward; returning does not guarantee every session is closed.
     public func closeAll() async {
         guard
             !sessions.values.contains(where: { session in

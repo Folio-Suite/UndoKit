@@ -7,7 +7,23 @@ SPDX-License-Identifier: MIT
 
 Select one dynamic runtime and resource owner per process.
 
-## Choose one supply route
+## Add the source package in Xcode
+
+For a first app, choose **File > Add Package Dependencies…**, enter
+`https://github.com/Folio-Suite/UndoKit`, and add the dynamic **UndoKit** product to
+your app target. Select the source revision you intend to use and commit the
+resolved package record. The planned preview has no qualified `0.2.0` tag yet.
+
+Add `import UndoKit` to your Swift sources. Xcode builds the package and its
+resource bundle; keep the matching compiled model and privacy resources when
+embedding the app. Continue with <doc:FirstUndoGroup> to open a document session.
+
+> Tip: To follow the guides with their app-owned `NotesDocumentLease` and
+> `NoteChange` types, open the repository's Durable Notes examples. Those types
+> belong to its separate `DurableNotesCore` product; adding UndoKit alone does
+> not install them into your app.
+
+## Other supply routes
 
 Use the source Swift Package, the native Xcode project's framework product, or a
 complete direct XCFramework. An app and its domain frameworks must resolve the
@@ -51,8 +67,9 @@ concurrency checking. No direct Objective-C or other Apple-platform contract is
 added. Older/newer compilers require explicit qualification.
 
 Build and simulator evidence is source/artifact-bound and does not imply
-floor-OS, Intel execution, physical hardware, binary-distribution or release
-acceptance. A development version label is not qualification. Use retained
+floor-OS behavior, physical hardware, binary-distribution or release acceptance.
+Clean builds covering declared architectures satisfy CPU coverage without
+dedicated Intel execution; actual OS behavior remains a separate requirement. A development version label is not qualification. Use retained
 evidence for the exact selected candidate or published release. Preview updates require rebuild/relink of all
 clients in a process; no drop-in ABI replacement is promised.
 

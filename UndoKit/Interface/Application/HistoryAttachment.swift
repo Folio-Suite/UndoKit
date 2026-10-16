@@ -3,16 +3,26 @@
 
 import Foundation
 
-/// A presentation attached to a shared History Session. The application collection owns recovery.
+/// Connects one window or scene to a shared document session.
+///
+/// Retain the attachment with the presentation and expose its ``undoManager`` through
+/// the platform responder route. Disconnecting it leaves document recovery owned by
+/// ``HistorySessions``. See <doc:AppKitIntegration> and <doc:UIKitIntegration>.
 @MainActor public final class HistoryAttachment {
     let session: HistorySession
     let id: UUID
     private let epoch: UUID
     private(set) var disconnected = false
     var platform: (any HistoryNativePlatformAdapter)?
+    // MARK: - Native presentation
+
+    /// The facade routing native live typing and durable document Undo/Redo.
     public var undoManager: UndoManager { platform?.undoManager ?? session.nativeCoordinator.undoManager }
+    /// The shared session's current editing and recovery state.
     public var status: HistorySessionStatus { session.status }
+    /// Whether this presentation participates in an unsettled native editing transaction.
     public var hasLiveTransaction: Bool { session.nativeCoordinator.hasLiveTransaction(attachment: id) }
+    /// Set false when the presentation cannot safely access its document resources.
     public var isAvailable = true {
         didSet {
             platform?.available = isAvailable
@@ -24,22 +34,29 @@ import Foundation
         self.id = id
         epoch = session.epoch
     }
+    // MARK: - Explicit editing actions
+
+    /// Settles native edits using the shared document operation.
     public func commit() async -> HistorySubmissionResult {
         guard !disconnected, epoch == session.epoch else { return retired() }
         return await session.settleEditing()
     }
+    /// Requests Undo after the shared session settles native editing.
     public func undo() async -> HistorySubmissionResult {
         guard !disconnected, epoch == session.epoch else { return retired() }
         return await session.undo()
     }
+    /// Requests Redo after the shared session settles native editing.
     public func redo() async -> HistorySubmissionResult {
         guard !disconnected, epoch == session.epoch else { return retired() }
         return await session.redo()
     }
+    /// Applies the explicit retry decision for a retained draft.
     public func retryDraft() async -> HistorySubmissionResult {
         guard !disconnected, epoch == session.epoch else { return retired() }
         return await session.nativeCoordinator.retryDraft()
     }
+    /// Applies the explicit discard decision without inventing a new accepted edit.
     public func discardDraft() async -> HistorySubmissionResult {
         guard !disconnected, epoch == session.epoch else { return retired() }
         return await session.nativeCoordinator.discardDraft()
@@ -51,6 +68,10 @@ import Foundation
         }
         try await session.nativeCoordinator.reconcileNativeRegistrations()
     }
+    // MARK: - Presentation lifetime
+
+    /// Releases this presentation's callbacks without closing the shared document session.
+    /// Call explicit session closure when the document itself ends; a blocked close retains recovery.
     public func disconnect() {
         guard !disconnected else { return }
         // Captured recovery values and unexplained callback graphs remain owned by the session.

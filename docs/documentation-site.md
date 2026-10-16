@@ -10,6 +10,31 @@ Generated output is staged from a fixed source checkout and promoted through a
 manual GitHub Pages workflow. A successful DocC build or local stage is not proof
 that the Pages site is live.
 
+## Check the authored guides
+
+The integration guides contain Swift snippets extracted directly into a generated
+consumer by this check. Run both configurations after changing the examples:
+
+```sh
+ruby scripts/check-documentation-examples.rb --configuration Debug
+ruby scripts/check-documentation-examples.rb --configuration Release
+```
+
+The Mac path compiles the AppKit/SwiftUI examples and executes the first-document
+walkthrough, verifying persisted host state, receipts, Undo/Redo and reopen.
+The iOS path compiles the UIKit/SwiftUI examples against the Simulator SDK; it does
+not launch a simulator app or establish native-input acceptance. Use `--platform
+macos` or `--platform ios-simulator` for a focused check. The generated package and
+locked build caches live under the shared DerivedData root. Per-run summaries
+retain source/diff and guide hashes, configuration, toolchain and actual checks.
+
+DocC compilation separately checks symbol/article links and asset references.
+For an editorial pass, add `OTHER_DOCC_FLAGS="--warnings-as-errors"` to the Xcode
+`docbuild` invocation. Inspect the rendered landing page, platform guides and
+diagrams at both narrow and normal widths. Keep generated Core Data declarations
+separate from the supported integration story; do not edit generated code or the
+installed Xcode templates merely to silence their diagnostics.
+
 ## Prepare a candidate
 
 Run the producer build from the selected checkout. It records the checkout's
@@ -20,7 +45,7 @@ full commit, whether the worktree was dirty, the exact Xcode/Swift toolchain, th
 ```sh
 ruby scripts/documentation/site.rb build \
   --source . \
-  --derived-data /tmp/UndoKit-docs-derived \
+  --derived-data "$HOME/Library/Developer/Xcode/DerivedData/UndoKit/Documentation" \
   --producer-output /tmp/UndoKit-docs-producer.json
 ```
 
@@ -30,7 +55,7 @@ as development documentation and receives an explicit dirty-source label.
 
 ```sh
 ruby scripts/documentation/site.rb stage \
-  --archive /tmp/UndoKit-docs-derived/Build/Products/Debug/UndoKit.doccarchive \
+  --archive "$HOME/Library/Developer/Xcode/DerivedData/UndoKit/Documentation/Build/Products/Debug/UndoKit.doccarchive" \
   --producer /tmp/UndoKit-docs-producer.json \
   --output /tmp/undokit-docs-candidate \
   --version 0.2.0 \
@@ -114,7 +139,7 @@ currently retained version snapshot:
 ```sh
 ruby scripts/documentation/site.rb stage-correction \
   --source /tmp/UndoKit-guidance-checkout \
-  --archive /tmp/UndoKit-docs-derived/Build/Products/Debug/UndoKit.doccarchive \
+  --archive "$HOME/Library/Developer/Xcode/DerivedData/UndoKit/Documentation/Build/Products/Debug/UndoKit.doccarchive" \
   --producer /tmp/UndoKit-docs-producer.json \
   --release-provenance /tmp/UndoKit-0.2.0-manifest.json \
   --previous-snapshot /tmp/undokit-pages/versions/0.2.0 \

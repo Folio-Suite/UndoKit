@@ -9,20 +9,32 @@ enum HistorySessionCallbackContext {
 
 enum HistoryNativeOperation { case settle, undo, redo }
 
-/// One retained owner of ordinary editing and recovery for a working History Scope.
+/// Coordinates typed edits, native drafts and recovery for one working History Scope.
+///
+/// Obtain a session from ``HistorySessions`` and share it across the document's
+/// presentations. Get typed command handles once, then attach each native window
+/// or scene separately. See <doc:FirstUndoGroup>.
 @MainActor public final class HistorySession {
+    // MARK: - Document identity and readiness
+
+    /// The canonical document URL used to retain this owner.
     public let documentURL: URL
+    /// History placement and identities, available after successful configuration.
     public internal(set) var configuration: HistorySessionConfiguration?
+    /// Editing readiness, availability and any required recovery decision.
     public internal(set) var status = HistorySessionStatus(
         phase: .opening, canUndo: false,
         canRedo: false, issue: nil, requiresDraftDecision: false)
+    /// Current transaction availability; observe ``status`` for presentation readiness too.
     public var snapshot: HistorySnapshot {
         engine?.snapshot
             ?? HistorySnapshot(
                 canUndo: false, canRedo: false,
                 isSuspended: status.phase == .blocked, hasPending: status.phase == .opening)
     }
+    /// Number of connected native presentations.
     public var attachmentCount: Int { observers.count }
+    /// Focused lower-level capabilities using this session's existing owner.
     public private(set) lazy var advanced = HistorySessionAdvanced(session: self)
 
     let lease: any HistoryHostLease
@@ -53,6 +65,10 @@ enum HistoryNativeOperation { case settle, undo, redo }
         self.collection = collection
     }
 
+    // MARK: - Typed edits and presentation attachment
+
+    /// Creates a handle for this exact registered operation, session epoch and generation.
+    /// Reacquire handles after closing/reopening or retiring a generation.
     public func commands<C: Sendable>(for operation: HistoryOperation<C>) throws -> HistoryCommands<C> {
         guard !closed, !closeRequested, let generation = engine?.snapshot.generation else { throw failure(.busy) }
         guard operations[operation.erased.operation]?.identity == operation.erased.identity else {
@@ -61,6 +77,8 @@ enum HistoryNativeOperation { case settle, undo, redo }
         return HistoryCommands(session: self, operation: operation, epoch: epoch, generation: generation)
     }
 
+    /// Connects one presentation and immediately reports its current status.
+    /// The callback holds `owner` weakly; retain the returned attachment with the window or scene.
     public func attach<Owner: AnyObject>(
         owner: Owner,
         statusDidChange: (@MainActor (Owner, HistorySessionStatus) -> Void)? = nil
@@ -134,7 +152,11 @@ enum HistoryNativeOperation { case settle, undo, redo }
         } catch { return .unexecuted(Self.describe(error, stage: .admission)) }
     }
 
+    // MARK: - Editing and recovery
+
+    /// Settles native editing and requests the next eligible document Undo.
     public func undo() async -> HistorySubmissionResult { await inverse(undo: true) }
+    /// Settles native editing and requests the next eligible document Redo.
     public func redo() async -> HistorySubmissionResult { await inverse(undo: false) }
     private func inverse(undo: Bool) async -> HistorySubmissionResult {
         guard !opening, !closed, !closeRequested, nativeIssue == nil,
@@ -148,10 +170,13 @@ enum HistoryNativeOperation { case settle, undo, redo }
             : await engine.redo(expectedGeneration: engine.snapshot.generation)
         return HistorySubmissionResult(result)
     }
+    /// Settles the current native editing transaction into durable history.
     public func settleEditing() async -> HistorySubmissionResult {
         guard !opening, !closed, !closeRequested, let engine else { return .unexecuted(failure(.busy)) }
         return HistorySubmissionResult(await engine.settleEditing())
     }
+    /// Resolves prepared work through authoritative host receipts and refreshes presentations.
+    /// Returns nil when no transaction outcome needed reconciliation.
     public func reconcile() async -> HistorySubmissionResult? {
         guard !opening, !closed, !closeRequested, let engine else { return .unexecuted(failure(.busy)) }
         guard !engine.transaction.isActive else { return .unexecuted(failure(.busy)) }
@@ -174,8 +199,12 @@ enum HistoryNativeOperation { case settle, undo, redo }
         return result.map(HistorySubmissionResult.init)
     }
 
+    /// Explicitly retries the retained draft through its registered operation.
     public func retryDraft() async -> HistorySubmissionResult { await nativeCoordinator.retryDraft() }
+    /// Explicitly discards the retained draft after authoritative refresh permits it.
     public func discardDraft() async -> HistorySubmissionResult { await nativeCoordinator.discardDraft() }
+    /// Certifies that the host reviewed unexplained native registrations and domain effects.
+    /// Do not call this merely to dismiss a recovery warning.
     public func reconcileNativeRegistrations() async throws {
         try await nativeCoordinator.reconcileNativeRegistrations()
     }
@@ -198,6 +227,7 @@ enum HistoryNativeOperation { case settle, undo, redo }
             self?.nativeOperations.removeValue(forKey: id)
         }
     }
+    /// Waits for native requests already tracked by this session; it does not close the document.
     public func waitForNativeOperations() async {
         for operation in Array(nativeOperations.values) { await operation.value }
     }

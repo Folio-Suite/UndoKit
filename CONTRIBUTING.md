@@ -82,6 +82,12 @@ links, copyright and license notices, and repository-specific references.
 Persistence and recovery changes require meaningful preservation and failure
 recovery checks; report limitations in runtime or consumer validation explicitly.
 
+For DocC integration examples, run `ruby scripts/check-documentation-examples.rb
+--configuration Debug` and repeat with `Release`. The checker compiles the actual
+Markdown snippets for Mac and iOS Simulator; on Mac it also verifies the persisted
+rename/Undo/Redo/reopen walkthrough. See [documentation upkeep and local
+preview](docs/documentation-site.md) for DocC builds and evidence limits.
+
 ## Versioning and dependencies
 
 The source package begins at `0.1.0` with independent release tags. Consumer

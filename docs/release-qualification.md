@@ -6,7 +6,7 @@ SPDX-License-Identifier: MIT
 # Release qualification
 
 The maintainer-approved [2026-10-15 amendment](https://github.com/Folio-Suite/UndoKit/issues/57)
-and [ADR 0007](adr/0007-os-behavioral-qualification.md) distinguish CPU build
+and [ADR 0008](adr/0008-os-behavioral-qualification.md) distinguish CPU build
 coverage from OS behavioral execution. They replace the blanket Intel/physical
 hardware procurement requirements in the earlier [platform](https://github.com/Folio-Suite/UndoKit/issues/5)
 and [acceptance](https://github.com/Folio-Suite/UndoKit/issues/8) resolutions.

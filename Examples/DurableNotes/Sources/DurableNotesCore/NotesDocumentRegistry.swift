@@ -13,7 +13,7 @@ public struct NotesDocumentRegistry {
         var documents: Set<String>
     }
     public init(root: URL) { self.root = root.standardizedFileURL }
-    public func openMode(for directory: URL) throws -> NativeHistoryOpenMode {
+    public func openMode(for directory: URL) throws -> HistoryOpenMode {
         let directory = directory.standardizedFileURL
         guard directory.deletingLastPathComponent().path == root.path else {
             throw HistoryFailure(.invalidInput, stage: .admission, disposition: .usable)
@@ -30,7 +30,7 @@ public struct NotesDocumentRegistry {
         }
         let name = directory.lastPathComponent
         if record.documents.contains(name) { return .existing }
-        let hasEvidence = ["Note.json", "History.sqlite", "Draft.json"].contains {
+        let hasEvidence = ["Note.json", "History.sqlite", "HistoryDrafts"].contains {
             FileManager.default.fileExists(atPath: directory.appendingPathComponent($0).path)
         }
         // Persist discovery before attempting creation. A partial/failed first creation

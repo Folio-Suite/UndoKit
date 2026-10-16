@@ -11,53 +11,35 @@ import XCTest
         let parent = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: parent) }
-        let beforeCreation = parent.appendingPathComponent("Document")
-        let owners = NativeHistorySessions<NotesDocumentLease>()
-        let first = await owners.open(documentURL: beforeCreation, mode: .create, codec: .json(),
-            draftURL: beforeCreation.appendingPathComponent("Draft.json")) { NotesDocumentLease(directory: beforeCreation) }
-        let afterCreation = parent.appendingPathComponent("Document")
-        let second = await owners.open(documentURL: afterCreation, mode: .existing, codec: .json(),
-            draftURL: afterCreation.appendingPathComponent("Draft.json")) { NotesDocumentLease(directory: afterCreation) }
-        XCTAssertTrue(first === second, "Filesystem creation changed the canonical owner identity")
+        let directory = parent.appendingPathComponent("Document")
+        let owners = HistorySessions()
+        let lease = NotesDocumentLease(directory: directory)
+        let first = await lease.openSession(in: owners, mode: .create)
+        let second = await lease.openSession(in: owners, mode: .existing)
+        XCTAssertTrue(first === second)
         XCTAssertEqual(second.status.phase, .ready)
         await owners.closeAll()
     }
-    func testExistingLegacyDraftIsRefusedWithoutReplacingOriginalEvidence() async throws {
+    func testSessionOwnsTypedGroupedEditingAndExclusiveDomainLease() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
-        let owners = NativeHistorySessions<NotesDocumentLease>()
-        let draftURL = directory.appendingPathComponent("Draft.json")
-        let original = await owners.open(documentURL: directory, mode: .create, codec: .json(), draftURL: draftURL) {
-            NotesDocumentLease(directory: directory)
-        }
-        await original.close()
-        let evidence = Data(#"{"title":"Unsettled title","body":"Unsettled body"}"#.utf8)
-        try evidence.write(to: draftURL)
-        let reopened = await owners.open(documentURL: directory, mode: .existing, codec: .json(), draftURL: draftURL) {
-            NotesDocumentLease(directory: directory)
-        }
-        XCTAssertEqual(reopened.status.phase, .blocked)
-        _ = await reopened.discardDraft()
-        XCTAssertEqual(try Data(contentsOf: draftURL), evidence)
-        await reopened.close()
-        XCTAssertEqual(try Data(contentsOf: draftURL), evidence)
-    }
-    func testNativeSessionOwnsGroupedNoteEditingAndExclusiveDocumentLease() async throws {
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let owners = NativeHistorySessions<NotesDocumentLease>()
+        let owners = HistorySessions()
         let lease = NotesDocumentLease(directory: directory)
-        let session = await owners.open(documentURL: directory, mode: .create, codec: .json(),
-            draftURL: directory.appendingPathComponent("Draft.json")) { lease }
+        let session = await lease.openSession(in: owners, mode: .create)
         XCTAssertEqual(session.status.phase, .ready)
-        try session.updateDraft(Note(title: "Shopping", body: "Tea and bread"))
-        guard case .accepted = await session.commit() else { return XCTFail("Grouped draft was not accepted") }
+        let commands = try lease.commands(in: session)
+        guard case .accepted = await commands.submitGroup([
+            NoteChange(field: .title, expected: "", replacement: "Shopping"),
+            NoteChange(field: .body, expected: "", replacement: "Tea and bread")]) else {
+            return XCTFail("Typed group was not accepted")
+        }
+        XCTAssertEqual(try session.advanced.historyPage(limit: 10).map(\.memberCount), [2])
         let edited = try await lease.read()
         XCTAssertEqual(edited.note, Note(title: "Shopping", body: "Tea and bread"))
         XCTAssertEqual(edited.applicationCount, 1)
-        let otherOwners = NativeHistorySessions<NotesDocumentLease>()
-        let refused = await otherOwners.open(documentURL: directory, mode: .existing, codec: .json(),
-            draftURL: directory.appendingPathComponent("OtherDraft.json")) { NotesDocumentLease(directory: directory) }
+        let otherOwners = HistorySessions()
+        let refusedLease = NotesDocumentLease(directory: directory)
+        let refused = await refusedLease.openSession(in: otherOwners, mode: .existing)
         XCTAssertEqual(refused.status.phase, .blocked)
         await refused.close()
         guard case .accepted = await session.undo() else { return XCTFail("Undo failed") }
@@ -66,13 +48,15 @@ import XCTest
         XCTAssertEqual(undone.applicationCount, 2)
         await session.close()
         let reopenedLease = NotesDocumentLease(directory: directory)
-        let reopened = await owners.open(documentURL: directory, mode: .existing, codec: .json(),
-            draftURL: directory.appendingPathComponent("Draft.json")) { reopenedLease }
+        let reopened = await reopenedLease.openSession(in: owners, mode: .existing)
+        XCTAssertFalse(reopened === session)
         XCTAssertTrue(reopened.status.canRedo)
         guard case .accepted = await reopened.redo() else { return XCTFail("Reopened Redo failed") }
         let redone = try await reopenedLease.read()
         XCTAssertEqual(redone.note, Note(title: "Shopping", body: "Tea and bread"))
         XCTAssertEqual(redone.applicationCount, 3)
+        let stale = await commands.submit(NoteChange(field: .body, expected: "Tea and bread", replacement: "Stale"))
+        guard case .unexecuted = stale else { return XCTFail("Retired handle executed") }
         await reopened.close()
     }
     func testKnownDocumentRegistryRefusesUnavailableOriginalAcrossFreshAppOwners() async throws {
@@ -81,29 +65,27 @@ import XCTest
         let directory = root.appendingPathComponent("Document-A")
         let moved = root.appendingPathComponent("Moved-original")
         let registry = NotesDocumentRegistry(root: root)
-        let initialMode = try registry.openMode(for: directory)
-        XCTAssertEqual(initialMode, .create)
-        let owners = NativeHistorySessions<NotesDocumentLease>()
-        let session = await owners.open(documentURL: directory, mode: initialMode, codec: .json(),
-            draftURL: directory.appendingPathComponent("Draft.json")) { NotesDocumentLease(directory: directory) }
+        guard case .create = try registry.openMode(for: directory) else { return XCTFail("New document was not selected for creation") }
+        let owners = HistorySessions()
+        let lease = NotesDocumentLease(directory: directory)
+        let session = await lease.openSession(in: owners, mode: .create)
         await session.close()
         let receipt = try Data(contentsOf: directory.appendingPathComponent("Note.json"))
         try FileManager.default.moveItem(at: directory, to: moved)
         let relaunched = NotesDocumentRegistry(root: root)
-        XCTAssertEqual(try relaunched.openMode(for: directory), .existing)
-        let newOwners = NativeHistorySessions<NotesDocumentLease>()
-        let refused = await newOwners.open(documentURL: directory, mode: try relaunched.openMode(for: directory),
-            codec: .json(), draftURL: directory.appendingPathComponent("Draft.json")) { NotesDocumentLease(directory: directory) }
+        guard case .existing = try relaunched.openMode(for: directory) else { return XCTFail("Known document was selected for replacement") }
+        let newOwners = HistorySessions()
+        let refusedLease = NotesDocumentLease(directory: directory)
+        let refused = await refusedLease.openSession(in: newOwners, mode: try relaunched.openMode(for: directory))
         XCTAssertEqual(refused.status.phase, .blocked)
         XCTAssertFalse(FileManager.default.fileExists(atPath: directory.path))
         XCTAssertEqual(try Data(contentsOf: moved.appendingPathComponent("Note.json")), receipt)
         await refused.close()
         try FileManager.default.moveItem(at: moved, to: directory)
-        let restored = await newOwners.open(documentURL: directory, mode: try relaunched.openMode(for: directory),
-            codec: .json(), draftURL: directory.appendingPathComponent("Draft.json")) { NotesDocumentLease(directory: directory) }
+        let restoredLease = NotesDocumentLease(directory: directory)
+        let restored = await restoredLease.openSession(in: newOwners, mode: try relaunched.openMode(for: directory))
         XCTAssertEqual(restored.status.phase, .ready)
         XCTAssertEqual(try Data(contentsOf: directory.appendingPathComponent("Note.json")), receipt)
         await restored.close()
     }
-
 }

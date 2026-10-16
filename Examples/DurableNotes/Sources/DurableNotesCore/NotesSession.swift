@@ -29,17 +29,16 @@ final class NotesOwnership {
     deinit { if descriptor >= 0 { Darwin.close(descriptor) } }
 }
 
-/// Shared portable example core. Shells own focus, editing groups and native barriers.
+/// Portable host facade using the same typed History Session as native presentations.
 @MainActor public final class NotesSession {
-    public let engine: HistoryEngine
+    public let history: HistorySession
     public let directory: URL
-    private let host: DurableNotesHost
-    private let ownership: NotesOwnership
+    private let lease: NotesDocumentLease
+    private let owners: HistorySessions
 
-    private init(engine: HistoryEngine, host: DurableNotesHost, directory: URL, ownership: NotesOwnership) {
-        self.engine = engine; self.host = host; self.directory = directory; self.ownership = ownership
+    private init(history: HistorySession, lease: NotesDocumentLease, owners: HistorySessions) {
+        self.history = history; self.lease = lease; self.owners = owners; directory = lease.directory
     }
-    /// Lifecycle restoration must never turn an unavailable document into a new scope.
     public static func openExisting(at directory: URL) async throws -> NotesSession {
         try await open(at: directory, existingOnly: true)
     }
@@ -47,72 +46,44 @@ final class NotesOwnership {
         try await open(at: directory, existingOnly: false)
     }
     private static func open(at directory: URL, existingOnly: Bool) async throws -> NotesSession {
-        let ownership = try NotesOwnership(directory: directory, createDirectory: !existingOnly)
-        let history = directory.appendingPathComponent("History.sqlite")
-        let exists = FileManager.default.fileExists(atPath: history.path)
-        let hostURL = directory.appendingPathComponent("Note.json")
-        guard !existingOnly || (exists && FileManager.default.fileExists(atPath: hostURL.path)) else {
+        let exists = FileManager.default.fileExists(atPath: directory.appendingPathComponent("History.sqlite").path)
+        let hostExists = FileManager.default.fileExists(atPath: directory.appendingPathComponent("Note.json").path)
+        guard !existingOnly || (exists && hostExists), exists == hostExists else {
             throw HistoryFailure(.missingHistory, stage: .admission, disposition: .suspended)
         }
-        guard !exists || FileManager.default.fileExists(atPath: hostURL.path) else {
-            throw HistoryFailure(.missingHistory, stage: .admission, disposition: .suspended)
+        let mode: HistoryOpenMode = exists ? .existing : .create
+        let owners = HistorySessions()
+        let lease = NotesDocumentLease(directory: directory)
+        let history = await owners.open(documentURL: directory, mode: mode, lease: lease) {
+            try await lease.setup(mode: mode)
         }
-        let host = try DurableNotesHost(url: hostURL)
-        let identity = await host.identity()
-        let readout = await host.read()
-        guard exists || readout.receiptCount == 0 else {
-            throw HistoryFailure(.missingHistory, stage: .admission, disposition: .suspended)
+        guard history.status.phase == .ready else {
+            let failure = history.status.issue ?? HistoryFailure(.storage, stage: .admission, disposition: .suspended)
+            await history.close()
+            throw failure
         }
-        let engine = try await HistoryEngine.open(at: history, scope: identity.scope,
-            workingIdentity: identity.working, mode: exists ? .existing : .create, host: host)
-        #if os(iOS)
-        do {
-            // Protect the directory and every current SQLite sidecar/ownership file.
-            // Future atomic host writes explicitly request complete protection too.
-            for url in [directory] + (try FileManager.default.contentsOfDirectory(at: directory,
-                includingPropertiesForKeys: nil)) {
-                try FileManager.default.setAttributes([.protectionKey: FileProtectionType.complete], ofItemAtPath: url.path)
-            }
-        } catch { try? await engine.close(); throw error }
-        #endif
-        return NotesSession(engine: engine, host: host, directory: directory, ownership: ownership)
+        return NotesSession(history: history, lease: lease, owners: owners)
     }
-    public func read() async -> NotesReadout { await host.read() }
-    public func edit(title: String, body: String) async -> HistoryResult {
-        do {
-            guard let command = try await makeEdit(title: title, body: body) else { return .rejected }
-            return await engine.submit(command)
-        } catch { return .failure(HistoryFailure(.invalidInput, stage: .admission, disposition: .usable)) }
+    public func read() async throws -> NotesReadout { try await lease.read() }
+    public func edit(title: String, body: String) async -> HistorySubmissionResult {
+        await lease.edit(title: title, body: body, in: history)
     }
-    private func makeEdit(title: String, body: String) async throws -> HistoryCommand? {
-        let old = await host.read().note
-        var changes: [NoteChange] = []
-        if title != old.title { changes.append(NoteChange(field: .title, expected: old.title, replacement: title)) }
-        if body != old.body { changes.append(NoteChange(field: .body, expected: old.body, replacement: body)) }
-        guard !changes.isEmpty else { return nil }
-        let members = try changes.map { HistoryMember(payload: try $0.payload()) }
-        let intentEncoder = JSONEncoder()
-        intentEncoder.outputFormatting = [.sortedKeys]
-        let fingerprint = try intentEncoder.encode(changes)
-        return HistoryCommand(fingerprint: fingerprint, members: members,
-                presentation: HistoryPayload(family: "durable-notes.label", data: Data("Edit Note".utf8)),
-                expectedGeneration: engine.snapshot.generation)
+    public func undo() async -> HistorySubmissionResult { await history.undo() }
+    public func redo() async -> HistorySubmissionResult { await history.redo() }
+    public func close() async throws {
+        await history.close()
+        guard history.status.phase == .closed else {
+            throw history.status.issue ?? HistoryFailure(.storage, stage: .finalization, disposition: .suspended)
+        }
     }
-    public func undo() async -> HistoryResult { await engine.undo(expectedGeneration: engine.snapshot.generation) }
-    public func redo() async -> HistoryResult { await engine.redo(expectedGeneration: engine.snapshot.generation) }
-    public func close() async throws { try await engine.close(); ownership.release() }
-    public func rejectNextDelivery() async { await host.rejectNextDelivery() }
-    public func delayNextDelivery() async { await host.delayNextDelivery() }
-    public func resumeDelivery() async { await host.resumeDelivery() }
-    public func isDeliveryDelayed() async -> Bool { await host.isDeliveryDelayed() }
+    public func rejectNextDelivery() async { await lease.rejectNextDelivery() }
+    public func delayNextDelivery() async { await lease.delayNextDelivery() }
+    public func resumeDelivery() async { await lease.resumeDelivery() }
+    public func isDeliveryDelayed() async -> Bool { await lease.isDeliveryDelayed() }
 
     #if DEBUG
-    /// Real history context-save failure after durable host acceptance; absent in Release.
-    public func demonstrateFinalizationFailure(title: String, body: String) async -> HistoryResult {
-        do {
-            guard let command = try await makeEdit(title: title, body: body) else { return .rejected }
-            return await engine.submitWithInjectedFinalizationFailure(command)
-        } catch { return .failure(HistoryFailure(.invalidInput, stage: .admission, disposition: .usable)) }
+    public func demonstrateFinalizationFailure(title: String, body: String) async -> HistorySubmissionResult {
+        await lease.demonstrateFinalizationFailure(title: title, body: body, in: history)
     }
     #endif
 }

@@ -8,12 +8,33 @@ SPDX-License-Identifier: MIT
 The [SwiftUI Mac host](SwiftUIApp/README.md) provides the same example with native-backed SwiftUI editors.
 
 A small runnable AppKit host using UndoKit's supported
-[AppKit binding](../../docs/appkit-history-binding.md) and shared native session.
+[AppKit binding](../../docs/appkit-history-binding.md) and shared History Session.
 Two document windows edit separate
 persisted notes, each with a title and body. `DurableNotesCore` is a bounded,
 Foundation-only host module shared with the [UIKit shell](UIKit/README.md)
 and [SwiftUI iPhone/iPad shell](SwiftUI/README.md).
 It contains no AppKit routing or UI code.
+
+## Shared typed integration
+
+The application retains a `HistorySessions` collection. `NotesDocumentLease` acquires only the domain file and exclusive writer lock. Session setup declares `HistoryOperation<NoteChange>` once, binding the typed host handler, JSON codecs and canonical intent fingerprint. UndoKit acquires and closes its own history resources before releasing that domain lease.
+
+```swift
+let lease = NotesDocumentLease(directory: directory)
+let session = await lease.openSession(in: sessions, mode: .existing)
+let commands = try lease.commands(in: session)
+await commands.submitGroup([
+    NoteChange(field: .title, expected: "", replacement: "Shopping"),
+    NoteChange(field: .body, expected: "", replacement: "Tea and bread")
+])
+let attachment = try session.attach(owner: windowController)
+let binding = try await attachment.bindAppKit(editors: [
+    (titleEditor, try lease.field(.title, in: session)),
+    (bodyEditor, try lease.field(.body, in: session))
+])
+```
+
+Keep the attachment with the presentation. Each field supplies its own stable identity, mapping and authoritative revision; equal strings do not establish equal revisions. Ordinary edits, native settlement, durable Undo/Redo and recovery share one session admission owner. Results distinguish accepted/rejected work from unexecuted requests and unresolved delivered work. A successfully closed session and its handles are retired; reopening acquires a fresh session for the same durable scope.
 
 ## Build and run
 
@@ -96,10 +117,9 @@ applications/receipts.
    The host note changes to `Recovery` / `Durably accepted once`, its application
    count increases once, and a receipt is persisted. History finalization
    actually fails at its production Core Data save boundary. Semantic editing
-   remains suspended. Click **Retry draft**: history consults the existing host
-   receipt using the exact prepared Command, restores availability and leaves
-   the host application count and receipt bytes unchanged. **Close / reopen**
-   also retains that draft for an explicit Retry/Discard decision. Cmd-Z reverses
+   remains suspended; in-place reconciliation preserves the same evidence. Click **Close / reopen** to acquire a clean context and
+   finalize the original prepared Command. The host application count and exact
+   receipt bytes stay unchanged, with zero new delivery callbacks. Cmd-Z reverses
    the complete recovered group once recovery has succeeded.
    The injection method/button is absent in Release.
 8. Undo, then **Close / reopen**. Redo remains available from the committed
@@ -111,7 +131,7 @@ termination. Closing or disconnecting preserves unsettled draft evidence;
 reopening that evidence requires **Retry draft** or **Discard draft**. A pending
 or uncertain prepared Command cannot be discarded until its authoritative outcome
 permits it. The sample keeps no generic editing queue: `NotesDocumentLease` owns
-Note semantics and receipts, while `NativeHistorySession` and the binding own
+Note semantics and receipts, while `HistorySession` and the binding own
 admission, journaling, settlement, callback cleanup and recovery. A pending accepted outcome retains its original scope. This sample
 does not redirect a transaction to whichever window is currently focused.
 
@@ -168,7 +188,7 @@ existing-only restoration without replacement storage creation. The root
 busy refusal and inherited task-local isolation when independently owned stores
 reuse both scope and Command IDs. Injection binds the selected engine owner too.
 
-On 2026-10-15, the migrated source-package installed AppKit host passed Debug
+Before the shared History Session migration, the source-package installed AppKit host passed Debug on 2026-10-15
 and Release public-session and native-control checks on the selected arm64 Mac
 with macOS 27.0.1 (26A434), Xcode 27.0 (27A266a)/Swift 6.4. The runner now includes
 all `Notes` host, native-session and AppKit-binding tests. Binding checks cover

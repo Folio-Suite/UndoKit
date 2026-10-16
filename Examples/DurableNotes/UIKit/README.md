@@ -72,14 +72,16 @@ Marked text prevents settlement without forced unmarking.
 
 **Delay next edit** and **Release delayed outcome** exercise asynchronous
 acceptance. The framework delegate barrier blocks native user editing while
-admitted work is pending; host programmatic edits use the binding API. Scratch
+admitted work is pending; host programmatic edits use typed command handles. Scratch
 and other scene scopes remain independent. Debug's finalization-failure seam
-preserves accepted receipt evidence for exact retry; it is absent in Release.
+preserves accepted receipt evidence. A failed writable context requires an explicit
+**Close / reopen**; clean existing-only acquisition finalizes the original group
+without new delivery callbacks or changed receipt bytes. The seam is absent in Release.
 No hardware keyboard or physical IME proof follows from programmatic checks.
 
 ## Scenes, ownership, and recovery
 
-The app owns `NativeHistorySessions`. The domain lease owns Note meaning,
+The app owns `HistorySessions`. The domain lease owns Note meaning,
 receipts and exclusive document acquisition; UndoKit owns draft journaling,
 admission, settlement, draining and recovery retention. Scene adapters supply
 platform availability, restoration mapping, protected-content visibility and
@@ -92,11 +94,11 @@ A genuine presentation disconnect captures synchronously and releases recognized
 local callbacks and controls even when the session's lease remains blocked.
 Micro-history belongs to the live presentation, not the recovery journal.
 
-Existing plain `{title,body}` Draft.json files from the former sample are refused
-and preserved as incompatible evidence. Opening, retry or discard never silently
-migrates, deletes, or replaces their bytes. Preserve Note.json, History.sqlite,
-Owner.lock and available draft evidence together. No missing-document recovery
-creates an empty replacement.
+The framework uses field journals bound to the scope, working identity, generation,
+field and mapping. Unknown current journal formats fail explicitly and preserve
+their bytes. The sample provides no reader or migration for former whole-document
+drafts. Preserve Note.json, History.sqlite, Owner.lock and available field-journal
+evidence together. Missing-document recovery never creates an empty replacement.
 
 Complete file protection is requested for the document directory, current store
 files/ownership files, atomic host replacements and typed journal. Simulator

@@ -6,15 +6,17 @@ import UndoKit
 
 /// This bounded example has one writer and one atomic JSON file per document.
 /// Domain state and authoritative token receipts always commit in the same rename.
-actor DurableNotesHost: HistoryHost {
-    struct Effect: Codable {
+actor DurableNotesHost: HistoryOperationHandler {
+    typealias Command = NoteChange
+    typealias Effect = NoteChange
+    struct StoredEffect: Codable {
         let member: UUID
         let undo: NoteChange
         let redo: NoteChange
     }
     struct Receipt: Codable {
         let accepted: Bool
-        let effects: [Effect]
+        let effects: [StoredEffect]
     }
     struct State: Codable {
         var scope = UUID()
@@ -25,6 +27,7 @@ actor DurableNotesHost: HistoryHost {
     }
     private let url: URL
     private var state: State
+    private var deliveryCount = 0
     private var rejectNext = false
     private var delayNext = false
     private var delayed: CheckedContinuation<Void, Never>?
@@ -49,27 +52,36 @@ actor DurableNotesHost: HistoryHost {
     }
     func identity() -> (scope: UUID, working: UUID) { (state.scope, state.workingIdentity) }
     func read() -> NotesReadout {
-        NotesReadout(note: state.note, receiptCount: state.receipts.count, applicationCount: state.applicationCount)
+        NotesReadout(note: state.note, receiptCount: state.receipts.count, applicationCount: state.applicationCount, deliveryCount: deliveryCount)
     }
     func rejectNextDelivery() { rejectNext = true }
     func delayNextDelivery() { delayNext = true }
     func resumeDelivery() { delayed?.resume(); delayed = nil }
     func isDeliveryDelayed() -> Bool { delayed != nil }
 
-    func deliver(_ delivery: HistoryDelivery) async -> HistoryHostOutcome {
-        let key = Self.key(delivery.token)
+    func apply(_ commands: [(UUID, NoteChange)], context: HistoryOperationContext) async -> HistoryTypedOutcome<NoteChange> {
+        await execute(commands, token: context.token)
+    }
+    func undo(_ effects: [(UUID, NoteChange)], context: HistoryOperationContext) async -> HistoryTypedOutcome<NoteChange> {
+        await execute(effects, token: context.token)
+    }
+    func redo(_ effects: [(UUID, NoteChange)], context: HistoryOperationContext) async -> HistoryTypedOutcome<NoteChange> {
+        await execute(effects, token: context.token)
+    }
+    private func execute(_ changes: [(UUID, NoteChange)], token: HistoryToken) async -> HistoryTypedOutcome<NoteChange> {
+        deliveryCount += 1
+        let key = Self.key(token)
         if let receipt = state.receipts[key] { return Self.outcome(receipt) }
         if delayNext {
             delayNext = false
             await withCheckedContinuation { delayed = $0 }
         }
         var next = state
-        var effects: [Effect] = []
+        var effects: [StoredEffect] = []
         var accepted = !rejectNext
         rejectNext = false
         do {
-            for member in delivery.members {
-                let change = try NoteChange.decode(member.payload)
+            for (memberID, change) in changes {
                 let prior = change.field == .title ? next.note.title : next.note.body
                 guard prior == change.expected, change.replacement.utf8.count <= 32_768 else {
                     accepted = false
@@ -77,7 +89,7 @@ actor DurableNotesHost: HistoryHost {
                 }
                 if change.field == .title { next.note.title = change.replacement }
                 else { next.note.body = change.replacement }
-                effects.append(Effect(member: member.id,
+                effects.append(StoredEffect(member: memberID,
                     undo: NoteChange(field: change.field, expected: change.replacement, replacement: prior), redo: change))
             }
             if !accepted { next = state; effects = [] }
@@ -90,7 +102,7 @@ actor DurableNotesHost: HistoryHost {
         } catch { return .unresolved }
     }
 
-    func outcome(for token: HistoryToken) async -> HistoryHostOutcome {
+    func outcome(for token: HistoryToken) async -> HistoryTypedOutcome<NoteChange> {
         // Reload after an uncertain write: a rename may have succeeded before an error.
         // An intact file with no token proves this single writer committed no effect.
         do {
@@ -101,12 +113,10 @@ actor DurableNotesHost: HistoryHost {
     private static func key(_ token: HistoryToken) -> String {
         "\(token.scope):\(token.generation):\(token.sequence):\(token.command)"
     }
-    private static func outcome(_ receipt: Receipt) -> HistoryHostOutcome {
+    private static func outcome(_ receipt: Receipt) -> HistoryTypedOutcome<NoteChange> {
         guard receipt.accepted else { return .rejected }
-        do {
-            return .accepted(try receipt.effects.map {
-                HistoryEffect(memberID: $0.member, undo: try $0.undo.payload(), redo: try $0.redo.payload())
-            })
-        } catch { return .unresolved }
+        return .accepted(receipt.effects.map {
+            HistoryTypedEffect(memberID: $0.member, undo: $0.undo, redo: $0.redo)
+        })
     }
 }

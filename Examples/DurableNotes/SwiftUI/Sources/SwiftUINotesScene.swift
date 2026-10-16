@@ -7,7 +7,7 @@ import DurableNotesCore
 import UndoKit
 
 @MainActor final class SwiftUINotesRegistry: ObservableObject {
-    let sessions = NativeHistorySessions<NotesDocumentLease>()
+    let sessions = HistorySessions()
     var checksStarted = false
     private(set) var ownerIDs: Set<String> = []
     private var scenes: [String: WeakSwiftUINotesOwner] = [:]
@@ -41,11 +41,12 @@ import UndoKit
 @MainActor final class SwiftUINotesOwner: ObservableObject {
     private(set) var id: String
     let registry: SwiftUINotesRegistry
+    private var attachment: HistoryAttachment?
     let titleEditor = NativeHistoryTextView()
     let bodyEditor = NativeHistoryTextView()
     let scratchEditor = UITextView()
-    @Published private(set) var session: NativeHistorySession<NotesDocumentLease>?
-    @Published private(set) var binding: NativeHistoryUIKitBinding<NotesDocumentLease>?
+    @Published private(set) var session: HistorySession?
+    @Published private(set) var binding: NativeHistoryUIKitBinding?
     private(set) var lease: NotesDocumentLease?
     @Published private(set) var status = "Opening durable note…"
     @Published var showEditor = true
@@ -84,28 +85,26 @@ import UndoKit
 
     private func openNow() async {
         guard foreground, protectedDataAvailable else { updateStatus(); return }
-        if let session {
-            if session.status.phase == .blocked || session.status.phase == .suspended {
-                await session.close()
+        if let session, session.status.phase != .closed {
+            if session.status.phase == .blocked || session.status.phase == .suspended { await session.close() }
+            if session.status.phase != .closed {
+                if binding == nil { try? await attach(to: session) }
+                binding?.isAvailable = foreground && protectedDataAvailable
+                updateStatus(); return
             }
-            if session.status.phase == .closed { await registry.sessions.reopen(session) }
-            if binding == nil { try? attach(to: session) }
-            binding?.isAvailable = foreground && protectedDataAvailable
-            updateStatus()
-            return
         }
+        binding?.disconnect(); binding = nil
         let marker = Self.fixtureRoot.appendingPathComponent("SceneRegistry.json")
         let knownIDs: Set<String>
         do { knownIDs = try registry.loadOwnerIDs(at: marker) }
         catch { status = "Scene registry is unreadable; existing data was preserved: \(error)"; return }
         let known = knownIDs.contains(id)
-        let existing = known ? NativeHistoryOpenMode.existing : .create
-        let lease = NotesDocumentLease(directory: documentURL)
+        let existing = known ? HistoryOpenMode.existing : .create
+        let lease = self.lease ?? NotesDocumentLease(directory: documentURL)
         self.lease = lease
-        let session = await registry.sessions.open(documentURL: documentURL,
-            mode: existing, codec: .json(), draftURL: documentURL.appendingPathComponent("Draft.json")) { lease }
+        let session = await lease.openSession(in: registry.sessions, mode: existing)
         self.session = session
-        do { try attach(to: session) }
+        do { try await attach(to: session) }
         catch { status = "Editor attachment failed: \(error)"; return }
         if session.status.phase == .ready, !known {
             do { try registry.register(id, at: marker) }
@@ -114,16 +113,13 @@ import UndoKit
         updateStatus()
     }
 
-    private func attach(to session: NativeHistorySession<NotesDocumentLease>) throws {
+    private func attach(to session: HistorySession) async throws {
         guard binding == nil else { return }
-        binding = try session.connectUIKit(owner: self, editors: [titleEditor, bodyEditor], localEditors: [scratchEditor],
-            actionName: "Edit Note",
-            captureDraft: { owner in
-                NativeDraftCapture(value: Note(title: owner.titleEditor.text ?? "", body: owner.bodyEditor.text ?? ""),
-                    isComposing: owner.titleEditor.markedTextRange != nil || owner.bodyEditor.markedTextRange != nil)
-            },
-            draftDidChange: { owner, note in owner.render(note) },
-            statusDidChange: { owner, _ in owner.updateStatus() })
+        guard let lease else { return }
+        attachment = try session.attach(owner: self, statusDidChange: { owner, _ in owner.updateStatus() })
+        binding = try await attachment!.bindUIKit(editors: [
+            (titleEditor, try lease.field(.title, in: session)),
+            (bodyEditor, try lease.field(.body, in: session))], localEditors: [scratchEditor])
     }
 
     private func render(_ note: Note) {
@@ -253,6 +249,9 @@ import UndoKit
                         HStack {
                             SwiftUINotesUndoButtons(status: owner.status).nativeHistory(binding)
                             Button("Commit typing") { owner.commit() }
+                        }
+                        if owner.session?.snapshot.isSuspended == true {
+                            Button("Reconcile accepted outcome") { Task { _ = await owner.session?.reconcile() } }
                         }
                         if binding.status.requiresDraftDecision {
                             HStack {

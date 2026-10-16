@@ -19,11 +19,13 @@ import UndoKit
 
 /// Host-owned mapping and presentation only; UndoKit owns editing and recovery.
 @MainActor final class NotesWindowController: NSWindowController, NSWindowDelegate {
-    static let sessions = NativeHistorySessions<NotesDocumentLease>()
-    let session: NativeHistorySession<NotesDocumentLease>
+    static let sessions = HistorySessions()
+    private static var leases: [String: NotesDocumentLease] = [:]
+    var session: HistorySession
     let lease: NotesDocumentLease
     let directory: URL
-    var binding: NativeHistoryAppKitBinding<NotesDocumentLease>!
+    var binding: NativeHistoryAppKitBinding!
+    private var attachment: HistoryAttachment?
     let titleEditor = NativeHistoryAppKitTextView()
     let bodyEditor = NativeHistoryAppKitTextView()
     let scratch = NativeHistoryAppKitTextView()
@@ -31,20 +33,21 @@ import UndoKit
     private var operationButtons: [NSButton] = []
     private var uiOperation: Task<Void, Never>?
     private var readout: NotesReadout?
-    var lastResult: HistoryResult? { binding.lastResult }
+    var lastResult: HistorySubmissionResult? { binding.lastResult }
     private(set) var refreshCount = 0
 
     static func open(at directory: URL, name: String) async throws -> NotesWindowController {
-        let lease = NotesDocumentLease(directory: directory)
+        let key = directory.standardizedFileURL.resolvingSymlinksInPath().path
+        let lease = leases[key] ?? NotesDocumentLease(directory: directory)
+        leases[key] = lease
         let mode = try NotesDocumentRegistry(root: directory.deletingLastPathComponent()).openMode(for: directory)
-        let session = await sessions.open(documentURL: directory, mode: mode, codec: .json(),
-            draftURL: directory.appendingPathComponent("Draft.json")) { lease }
+        let session = await lease.openSession(in: sessions, mode: mode)
         guard session.status.phase == .ready else { throw session.status.issue ?? HistoryFailure(.storage, stage: .admission, disposition: .suspended) }
         let controller = NotesWindowController(session: session, lease: lease, directory: directory, name: name)
-        try controller.connect(); await controller.refresh()
+        try await controller.connect(); await controller.refresh()
         return controller
     }
-    private init(session: NativeHistorySession<NotesDocumentLease>, lease: NotesDocumentLease, directory: URL, name: String) {
+    private init(session: HistorySession, lease: NotesDocumentLease, directory: URL, name: String) {
         self.session = session; self.lease = lease; self.directory = directory
         let window = NotesWindow(contentRect: NSRect(x: 0, y: 0, width: 680, height: 700),
             styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
@@ -85,7 +88,7 @@ import UndoKit
         recovery.addArrangedSubview(NSButton(title: "Close / reopen", target: self, action: #selector(reopen(_:))))
         stack.addArrangedSubview(recovery)
         let decisions = NSStackView(); decisions.orientation = .horizontal; decisions.spacing = 8
-        decisions.addArrangedSubview(NSButton(title: "Retry draft", target: self, action: #selector(retry(_:))))
+        decisions.addArrangedSubview(NSButton(title: "Retry draft / reconcile", target: self, action: #selector(retry(_:))))
         decisions.addArrangedSubview(NSButton(title: "Discard draft", target: self, action: #selector(discard(_:))))
         stack.addArrangedSubview(decisions)
         status.lineBreakMode = .byWordWrapping; status.maximumNumberOfLines = 3
@@ -107,17 +110,14 @@ import UndoKit
         NSLayoutConstraint.activate([scroll.heightAnchor.constraint(equalToConstant: height),
             scroll.widthAnchor.constraint(equalTo: stack.widthAnchor)])
     }
-    private func connect() throws {
-        binding = try session.connectAppKit(owner: self, editors: [titleEditor, bodyEditor], localEditors: [scratch],
-            actionName: "Edit Note", captureDraft: {
-                NativeDraftCapture(value: Note(title: $0.titleEditor.string, body: $0.bodyEditor.string),
-                    isComposing: $0.titleEditor.hasMarkedText() || $0.bodyEditor.hasMarkedText())
-            }, draftDidChange: { owner, note in
-                owner.render(note)
-            }, statusDidChange: { owner, value in
-                owner.renderStatus()
-                if value.phase == .ready { Task { [weak owner] in await owner?.refresh() } }
-            })
+    private func connect() async throws {
+        attachment = try session.attach(owner: self, statusDidChange: { owner, _ in
+            owner.renderStatus()
+            Task { [weak owner] in await owner?.refresh() }
+        })
+        binding = try await attachment!.bindAppKit(editors: [
+            (titleEditor, try lease.field(.title, in: session)),
+            (bodyEditor, try lease.field(.body, in: session))], localEditors: [scratch])
         (window as? NotesWindow)?.history = binding.undoManager
         renderStatus()
     }
@@ -157,7 +157,7 @@ import UndoKit
     }
     func apply(title: String, body: String) {
         uiOperation = Task { [weak self] in
-            guard let self else { return }; _ = await binding.applyDraft(Note(title: title, body: body)); await refresh()
+            guard let self else { return }; _ = await lease.edit(title: title, body: body, in: session); await refresh()
         }
     }
     @objc private func applyExample(_ sender: Any?) { apply(title: "Shopping", body: "Tea and bread") }
@@ -174,7 +174,8 @@ import UndoKit
     }
     @objc private func resume(_ sender: Any?) { Task { await lease.resumeDelivery() } }
     @objc private func retry(_ sender: Any?) {
-        uiOperation = Task { [weak self] in guard let self else { return }; _ = await binding.retryDraft(); await refresh() }
+        uiOperation = Task { [weak self] in guard let self else { return }; if session.snapshot.isSuspended { _ = await session.reconcile() }
+            else { _ = await binding.retryDraft() }; await refresh() }
     }
     @objc private func discard(_ sender: Any?) {
         uiOperation = Task { [weak self] in guard let self else { return }; _ = await binding.discardDraft(); await refresh() }
@@ -183,9 +184,8 @@ import UndoKit
     @objc private func failFinalization(_ sender: Any?) {
         uiOperation = Task { [weak self] in
             guard let self else { return }
-            try? session.updateDraft(Note(title: "Recovery", body: "Durably accepted once"))
             titleEditor.string = "Recovery"; bodyEditor.string = "Durably accepted once"
-            _ = await binding.demonstrateFinalizationFailure(); await refresh()
+            _ = await lease.demonstrateFinalizationFailure(title: titleEditor.string, body: bodyEditor.string, in: session); await refresh()
         }
     }
     #endif
@@ -197,11 +197,10 @@ import UndoKit
     func reopenSession() async throws {
         await binding.close()
         guard session.status.phase == .closed else { throw session.status.issue ?? HistoryFailure(.busy, stage: .admission, disposition: .suspended) }
-        // Reacquire while still attached: a disconnected closed owner is deliberately retired.
-        await Self.sessions.reopen(session)
         binding.disconnect()
+        session = await lease.openSession(in: Self.sessions, mode: .existing)
         guard session.status.phase == .ready else { throw session.status.issue ?? HistoryFailure(.storage, stage: .admission, disposition: .suspended) }
-        try connect(); await refresh()
+        try await connect(); await refresh()
     }
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         guard settleEditing() else { return false }; sender.orderOut(nil); return false

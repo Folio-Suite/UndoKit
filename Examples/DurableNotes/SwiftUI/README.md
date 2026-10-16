@@ -30,7 +30,7 @@ supplement existing preview gates; they do not add a new release gate.
 
 Each scene owns one `SwiftUINotesOwner` through `@StateObject`. That owner retains
 the standard native text controls, `NativeHistoryUIKitBinding` and
-`NativeHistorySession`; transient SwiftUI value views only present them.
+`HistorySession`; transient SwiftUI value views only present them.
 `NativeHistorySwiftUIEditor(textView:)` wraps the standard UIKit control. SwiftUI
 values hold a weak editor reference, while the mounted native container retains
 its subview. The scene owner keeps that editor alive between presentations;
@@ -44,8 +44,8 @@ dismantles the old one. The adapter keeps a weak waiting presentation and mounts
 it as soon as the old presentation releases the editor. Simultaneous active
 presentations display an attachment diagnostic instead of stealing the editor.
 
-Create the binding once with `session.connectUIKit(owner:editors:localEditors:...)`.
-Supply domain draft capture/rendering and status presentation. Present each
+Create the binding once with `session.attach(owner:statusDidChange:), then await attachment.bindUIKit(editors:localEditors:)`.
+Supply typed title/body `HistoryField<String>` mappings with authoritative value/revision reads. The framework captures and renders each field; status observation belongs to the attachment. Present each
 editor in one location at a time. Give another scene its own editor, session and
 stable document identity. Never connect again from `body` or `updateUIView`.
 
@@ -76,10 +76,10 @@ even if the editor reappears before classification. Visible-editor focus moves
 still establish an admission barrier before another edit.
 
 The scene closes and drains its retained session on backgrounding and protected-data
-unavailability, then reopens that same owner when access returns. Unsettled
+unavailability, then opens a replacement History Session for the same scope when access returns. Unsettled
 drafts reopen with an explicit decision; retry or discard is the host's visible
 choice. A real presentation teardown calls `binding.disconnect()` and closes the
-session. The application-level `NativeHistorySessions` collection retains any
+session. The application-level `HistorySessions` collection retains any
 blocked recovery owner until complete closure succeeds. Dropping a SwiftUI view
 is never permission to discard unresolved evidence.
 
@@ -95,7 +95,9 @@ The in-app checks use actual UIKit text controls inside the SwiftUI host. They
 exercise local native Undo/Redo, coarse acceptance, durable Undo/Redo, reopen,
 view reconstruction/navigation, visible-editor focus changes, scratch priority,
 marked ranges, rejection, delayed admission, Debug finalization uncertainty,
-original-storage preservation and injected protected-data policy. The runner
+original-storage preservation and injected protected-data policy. A failed
+writable context requires complete close and existing-only reopening; the checks
+require unchanged receipt bytes and zero new host delivery callbacks. The runner
 also performs an actual Settings background/foreground transition. The iPad
 route requests a second real `UIWindowScene` and verifies a separate durable
 scope; the iPhone route records that multi-window isolation belongs to iPad.

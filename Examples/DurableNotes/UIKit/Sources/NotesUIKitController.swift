@@ -7,16 +7,18 @@ import UndoKit
 
 @MainActor final class NotesUIKitController: UIViewController {
     let owner: NotesSceneOwner
+    private var attachment: HistoryAttachment?
     let titleEditor = NativeHistoryTextView()
     let bodyEditor = NativeHistoryTextView()
     let scratch = UITextView()
     let status = UILabel()
     private(set) var undoButton: UIButton!
     private(set) var redoButton: UIButton!
-    private(set) var binding: NativeHistoryUIKitBinding<NotesDocumentLease>?
+    private(set) var binding: NativeHistoryUIKitBinding?
     private var buttons: [UIButton] = []
     private var feedback: String?
-    var lastResult: HistoryResult? { binding?.lastResult }
+    private var uiOperation: Task<Void, Never>?
+    var lastResult: HistorySubmissionResult? { binding?.lastResult }
 
     init(owner: NotesSceneOwner) { self.owner = owner; super.init(nibName: nil, bundle: nil) }
     required init?(coder: NSCoder) { fatalError("Use init(owner:)") }
@@ -79,14 +81,15 @@ import UndoKit
         button.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
         stack.addArrangedSubview(button); return button
     }
-    func attach() throws {
+    func attach() async throws {
         guard let session = owner.session else { return }
+        if binding?.status.phase == .closed { binding?.disconnect(); binding = nil }
         guard binding == nil else { lifecycleChanged(); return }
-        binding = try session.connectUIKit(owner: self, editors: [titleEditor, bodyEditor], localEditors: [scratch],
-            actionName: "Edit Note",
-            captureDraft: { NativeDraftCapture(value: Note(title: $0.titleEditor.text ?? "", body: $0.bodyEditor.text ?? ""),
-                isComposing: $0.titleEditor.markedTextRange != nil || $0.bodyEditor.markedTextRange != nil) },
-            draftDidChange: { $0.render($1) }, statusDidChange: { controller, _ in controller.renderStatus() })
+        guard let lease = owner.lease else { return }
+        attachment = try session.attach(owner: self, statusDidChange: { controller, _ in controller.renderStatus() })
+        binding = try await attachment!.bindUIKit(editors: [
+            (titleEditor, try lease.field(.title, in: session)),
+            (bodyEditor, try lease.field(.body, in: session))], localEditors: [scratch])
         lifecycleChanged()
     }
     private func render(_ note: Note) {
@@ -115,11 +118,11 @@ import UndoKit
         status.text = "Scene \(owner.state.rawValue); history \(String(describing: state?.phase)); live editing \(binding?.hasLiveTransaction == true).\n\(state?.requiresDraftDecision == true ? "Draft retained: retry or discard. " : "")\(feedback ?? "")"
     }
     func showMessage(_ message: String) { feedback = message; renderStatus() }
-    func waitForOperations() async { await binding?.waitForOperations() }
+    func waitForOperations() async { await uiOperation?.value; await binding?.waitForOperations() }
     func apply(title: String, body: String) {
-        guard let binding else { return }
-        Task { @MainActor in
-            _ = await binding.applyDraft(Note(title: title, body: body))
+        guard let session = owner.session, let lease = owner.lease else { return }
+        uiOperation = Task { @MainActor in
+            _ = await lease.edit(title: title, body: body, in: session)
         }
     }
     func discardDraft() async { _ = await binding?.discardDraft() }
@@ -127,7 +130,9 @@ import UndoKit
     @objc private func undoTapped() { binding?.undoManager.undo(); renderStatus() }
     @objc private func redoTapped() { binding?.undoManager.redo(); renderStatus() }
     @objc private func commitTapped() {
-        if owner.session?.status.requiresDraftDecision == true {
+        if let session = owner.session, session.snapshot.isSuspended {
+            Task { _ = await session.reconcile() }
+        } else if owner.session?.status.requiresDraftDecision == true {
             Task { _ = await binding?.retryDraft() }
         } else { commitDraft() }
     }
@@ -137,7 +142,10 @@ import UndoKit
     @objc private func delayTapped() { Task { await owner.lease?.delayNextDelivery(); showMessage("Next delivery waits for Release delayed outcome") } }
     @objc private func releaseTapped() { Task { await owner.lease?.resumeDelivery() } }
     #if DEBUG
-    @objc private func failureTapped() { Task { _ = await binding?.demonstrateFinalizationFailure() } }
+    @objc private func failureTapped() {
+        guard let session = owner.session, let lease = owner.lease else { return }
+        Task { _ = await lease.demonstrateFinalizationFailure(title: titleEditor.text ?? "", body: bodyEditor.text ?? "", in: session) }
+    }
     #endif
     @objc private func reopenTapped() { Task { if await owner.close(reason: "explicit reopen") { await owner.openIfAvailable() } } }
     @objc private func sceneTapped() { owner.app?.requestNewScene() }

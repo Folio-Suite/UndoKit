@@ -14,22 +14,17 @@ public struct NotesReadout: Sendable {
     public let note: Note
     public let receiptCount: Int
     public let applicationCount: Int
+    /// Delivery callbacks since this domain host was acquired; outcome lookup does not deliver.
+    public let deliveryCount: Int
 }
 
-struct NoteChange: Codable, Sendable {
-    enum Field: String, Codable, Sendable { case title, body }
-    let field: Field
-    let expected: String
-    let replacement: String
+public struct NoteChange: Codable, Sendable {
+    public enum Field: String, Codable, Sendable { case title, body }
+    public let field: Field
+    public let expected: String
+    public let replacement: String
 
-    func payload() throws -> HistoryPayload {
-        HistoryPayload(family: "durable-notes.change", version: 1, data: try JSONEncoder().encode(self))
-    }
-
-    static func decode(_ payload: HistoryPayload) throws -> Self {
-        guard payload.family == "durable-notes.change", payload.version == 1 else {
-            throw HistoryFailure(.compatibility, stage: .delivery, disposition: .suspended)
-        }
-        return try JSONDecoder().decode(Self.self, from: payload.data)
+    public init(field: Field, expected: String, replacement: String) {
+        self.field = field; self.expected = expected; self.replacement = replacement
     }
 }

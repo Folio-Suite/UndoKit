@@ -10,6 +10,7 @@ import XCTest
 @MainActor final class NotesSwiftUIAppKitTests: XCTestCase {
     @MainActor final class EditorOwner {
         let editor = NativeHistoryAppKitTextView()
+        var attachment: HistoryAttachment?
         init() { editor.isRichText = false; editor.allowsUndo = true }
     }
 
@@ -37,14 +38,12 @@ import XCTest
         _ = NSApplication.shared
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
-        let sessions = NativeHistorySessions<NotesDocumentLease>()
+        let sessions = HistorySessions()
         let lease = NotesDocumentLease(directory: directory)
-        let session = await sessions.open(documentURL: directory, mode: .create, codec: .json(),
-            draftURL: directory.appendingPathComponent("Draft.json")) { lease }
+        let session = await lease.openSession(in: sessions, mode: .create)
         let owner = EditorOwner()
-        let binding = try session.connectAppKit(owner: owner, editors: [owner.editor],
-            captureDraft: { NativeDraftCapture(value: Note(body: $0.editor.string)) },
-            draftDidChange: { $0.editor.string = $1.body })
+        owner.attachment = try session.attach(owner: owner)
+        let binding = try await owner.attachment!.bindAppKit(editors: [(owner.editor, try lease.field(.body, in: session))])
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 440, height: 220),
             styleMask: [.titled], backing: .buffered, defer: false)
         let hosting = NSHostingView(rootView: EditorHost(editor: owner.editor, generation: 0))
@@ -102,34 +101,31 @@ import XCTest
         let receiptBytes = try Data(contentsOf: directory.appendingPathComponent("Note.json"))
 
         await binding.close()
-        await sessions.reopen(session)
-        binding.isAvailable = session.status.phase == .ready
-        let reopened = try await lease.read()
+        binding.disconnect()
+        let reopenedLease = NotesDocumentLease(directory: directory)
+        let reopenedSession = await reopenedLease.openSession(in: sessions, mode: .existing)
+        let reopened = try await reopenedLease.read()
         XCTAssertEqual(reopened.note, accepted.note)
         XCTAssertEqual(reopened.applicationCount, accepted.applicationCount)
         XCTAssertEqual(reopened.receiptCount, accepted.receiptCount)
         XCTAssertEqual(try Data(contentsOf: directory.appendingPathComponent("Note.json")), receiptBytes,
             "Reopen must restore the accepted host receipt without replaying its effect")
-
-        binding.disconnect()
-        await session.close()
-        XCTAssertEqual(session.status.phase, .closed)
+        await reopenedSession.close()
+        XCTAssertEqual(reopenedSession.status.phase, .closed)
     }
 
     func testSwiftUIWindowDisposalReleasesPresentationDuringBlockedRecovery() async throws {
         _ = NSApplication.shared
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
-        let sessions = NativeHistorySessions<NotesDocumentLease>()
+        let sessions = HistorySessions()
         let lease = NotesDocumentLease(directory: directory)
-        let session = await sessions.open(documentURL: directory, mode: .create, codec: .json(),
-            draftURL: directory.appendingPathComponent("Draft.json")) { lease }
+        let session = await lease.openSession(in: sessions, mode: .create)
         var owner: EditorOwner? = autoreleasepool { EditorOwner() }
         weak let weakOwner = owner
         weak let weakEditor = owner?.editor
-        var binding: NativeHistoryAppKitBinding<NotesDocumentLease>? = try session.connectAppKit(owner: owner!, editors: [owner!.editor],
-            captureDraft: { NativeDraftCapture(value: Note(body: $0.editor.string)) },
-            draftDidChange: { $0.editor.string = $1.body })
+        owner!.attachment = try session.attach(owner: owner!)
+        var binding: NativeHistoryAppKitBinding? = try await owner!.attachment!.bindAppKit(editors: [(owner!.editor, try lease.field(.body, in: session))])
         weak let weakBinding = binding
         var window: NSWindow?
         var hosting: NSHostingView<EditorHost>?
@@ -170,7 +166,7 @@ import XCTest
         XCTAssertNil(weakEditor, "A dismantled SwiftUI host must not retain the native editor")
         await session.close()
         XCTAssertEqual(session.status.phase, .blocked)
-        XCTAssertNotNil(lease.history)
+        XCTAssertNotNil(session.configuration)
         XCTAssertNotNil(weakEvidence)
         XCTAssertTrue(sessions.session(for: directory) === session)
         try await session.reconcileNativeRegistrations()
@@ -183,14 +179,12 @@ import XCTest
         _ = NSApplication.shared
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
-        let owners = NativeHistorySessions<NotesDocumentLease>()
+        let owners = HistorySessions()
         let lease = NotesDocumentLease(directory: directory)
-        let session = await owners.open(documentURL: directory, mode: .create, codec: .json(),
-            draftURL: directory.appendingPathComponent("Draft.json")) { lease }
+        let session = await lease.openSession(in: owners, mode: .create)
         let owner = EditorOwner()
-        let binding = try session.connectAppKit(owner: owner, editors: [owner.editor],
-            captureDraft: { NativeDraftCapture(value: Note(body: $0.editor.string)) },
-            draftDidChange: { $0.editor.string = $1.body })
+        owner.attachment = try session.attach(owner: owner)
+        let binding = try await owner.attachment!.bindAppKit(editors: [(owner.editor, try lease.field(.body, in: session))])
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 400, height: 200),
             styleMask: [.titled], backing: .buffered, defer: false)
         let firstContainer = NSView(frame: window.contentView!.bounds)

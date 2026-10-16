@@ -35,7 +35,7 @@ import UndoKit
     }
 
     static func run(a: DurableNotesSwiftUIDocumentOwner, b: DurableNotesSwiftUIDocumentOwner, root: URL) async throws {
-        guard let aBinding = a.binding, b.binding != nil else {
+        guard var aBinding = a.binding, b.binding != nil else {
             throw CheckFailure.observation("SwiftUI host did not connect its native bindings")
         }
         var observations: [String] = []
@@ -85,7 +85,7 @@ import UndoKit
         observations.append("Focused standard NSTextView insert/live Undo/baseline Redo produced zero host applications/receipts; explicit commit produced exactly one; responder Undo/Redo then used durable history.")
 
         a.apply(title: "Shopping", body: "Tea and bread"); await a.waitForOperations()
-        let grouped = try a.lease.history!.historyPage(limit: 20).last
+        let grouped = try a.session!.advanced.historyPage(limit: 20).last
         try require(grouped?.memberCount == 2, "Host grouped fields did not persist as one two-member group")
         focus(a, editor: a.titleEditor); await pump(); _ = command("undo:"); await a.waitForOperations()
         try require(try await a.read().note == Note(body: "Alpha"), "Grouped Undo was partial")
@@ -97,7 +97,10 @@ import UndoKit
         await a.lease.rejectNextDelivery()
         let beforeRejection = try await a.read()
         let rejected = await aBinding.undoDocument()
-        try require(rejected == .rejected, "Expected authoritative rejection")
+        guard case .unexecuted(let prerequisiteFailure) = rejected else {
+            throw CheckFailure.observation("Dependent Undo was delivered after rejected native settlement")
+        }
+        try require(prerequisiteFailure.cause == .prerequisiteRejected, "Rejected prerequisite was not identified")
         try require(try await a.read().applicationCount == beforeRejection.applicationCount, "Rejected draft fell through to older group")
         try require(a.bodyEditor.string == "Tea and bread live" && a.bodyEditor.undoManager!.canUndo, "Rejected draft lost native history")
         _ = command("undo:"); _ = command("redo:")
@@ -149,22 +152,43 @@ import UndoKit
         focus(a, editor: a.bodyEditor)
         a.titleEditor.string = "Recovered"; a.bodyEditor.string = "Accepted once"
         let beforeFailure = try await a.read()
-        _ = await aBinding.demonstrateFinalizationFailure()
+        let groupCount = try a.session!.advanced.historyPage(limit: 100).count
+        let failed = await a.lease.demonstrateFinalizationFailure(title: a.titleEditor.string, body: a.bodyEditor.string, in: a.session!)
+        guard case .unresolved(let failure) = failed else { throw CheckFailure.observation("Finalization injection did not suspend") }
+        try require(failure.cause == .storage && failure.stage == .finalization, "Unexpected finalization failure")
         try require(!aBinding.permitsEditing, "Failed finalization did not block input")
+        let acceptedOnce = try await a.read()
+        try require(acceptedOnce.applicationCount == beforeFailure.applicationCount + 1
+            && acceptedOnce.receiptCount == beforeFailure.receiptCount + 1
+            && acceptedOnce.deliveryCount == beforeFailure.deliveryCount + 1, "Acceptance was not persisted exactly once")
         let receipt = try Data(contentsOf: a.directory.appendingPathComponent("Note.json"))
-        let recovered = await aBinding.retryDraft()
-        guard case .accepted = recovered else { throw CheckFailure.observation("Exact retry did not reconcile acceptance") }
-        try require(try await a.read().applicationCount == beforeFailure.applicationCount + 1, "Recovery duplicated domain effect")
+        let blocked = await a.session!.reconcile()
+        guard case .unresolved(let blockedFailure)? = blocked else { throw CheckFailure.observation("Failed writable context was reused") }
+        try require(blockedFailure.cause == .storage, "Failed context did not require clean reopening")
+        try require(try await a.read().deliveryCount == acceptedOnce.deliveryCount, "In-place reconciliation redelivered accepted work")
+        try await a.reopenSession()
+        guard let replacement = a.binding else { throw CheckFailure.observation("Reopened SwiftUI binding missing") }
+        aBinding = replacement
+        let recovered = try await a.read()
+        try require(a.session!.status.phase == .ready && !aBinding.hasLiveTransaction, "Clean reopening did not reconcile acceptance")
+        try require(recovered.note == acceptedOnce.note && recovered.applicationCount == acceptedOnce.applicationCount
+            && recovered.receiptCount == acceptedOnce.receiptCount && recovered.deliveryCount == 0, "Recovery replayed domain delivery")
+        let groups = try a.session!.advanced.historyPage(limit: 100)
+        try require(groups.count == groupCount + 1 && groups.last?.memberCount == 2, "Recovery lost the complete accepted group")
         try require(try Data(contentsOf: a.directory.appendingPathComponent("Note.json")) == receipt, "Recovery rewrote host receipt")
-        observations.append("Debug accepted-effect/failed-finalization retained exact intent; explicit retry reconciled unchanged host receipt bytes with one effect.")
+        observations.append("Debug accepted-effect/failed-finalization required a clean existing-only reopen, finalized the original two-member group, preserved exact receipt bytes and made zero new host delivery callbacks.")
         #endif
         let persisted = try await a.read()
         let reopenReceipt = try Data(contentsOf: a.directory.appendingPathComponent("Note.json"))
         try await a.reopenSession()
+        guard let reopenedBinding = a.binding else { throw CheckFailure.observation("Reopened SwiftUI binding missing") }
+        aBinding = reopenedBinding
         try require(try await a.read().note == persisted.note && aBinding.undoManager.canUndo, "Reopen lost persisted availability")
         try require(try Data(contentsOf: a.directory.appendingPathComponent("Note.json")) == reopenReceipt, "Reopen replayed domain delivery")
         focus(a, editor: a.bodyEditor); _ = command("undo:"); await a.waitForOperations()
         try await a.reopenSession()
+        guard let redoneBinding = a.binding else { throw CheckFailure.observation("Reopened SwiftUI binding missing") }
+        aBinding = redoneBinding
         try require(aBinding.undoManager.canRedo, "Reopen lost durable Redo")
         observations.append("Complete host/history close and existing-only reopen independently read persisted Note/receipts without replay, then rebuilt durable Undo and reopened Redo.")
         #if arch(arm64)

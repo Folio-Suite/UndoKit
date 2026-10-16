@@ -39,11 +39,11 @@ import UndoKit
     static func run(owner: SwiftUINotesOwner) async {
         let fixtureRoot = owner.documentURL.deletingLastPathComponent()
         do {
-            guard let session = owner.session, let binding = owner.binding, let lease = owner.lease else {
+            guard var session = owner.session, var binding = owner.binding, let lease = owner.lease else {
                 throw Failure.check("Stable scene owner did not open its session and presentation")
             }
             var observations: [String] = []
-            try require(session.status.phase == .ready && session.hasConnection, "Initial presentation is not ready")
+            try require(session.status.phase == .ready && (session.attachmentCount > 0), "Initial presentation is not ready")
             try require(owner.registry.sessions.entries.count == 1, "Initial open created an unexpected second session")
             let originalSession = session
             let originalBinding = binding
@@ -73,7 +73,7 @@ import UndoKit
             try require(owner.session === originalSession && owner.binding === originalBinding
                 && owner.bodyEditor === originalEditor && owner.titleEditor === originalTitleEditor
                 && owner.bodyEditor.window != nil && owner.titleEditor.window != nil
-                && session.hasConnection && binding.hasLiveTransaction
+                && (session.attachmentCount > 0) && binding.hasLiveTransaction
                 && owner.bodyEditor.undoManager?.canUndo == true
                 && afterIdentityReplacement.applicationCount == 0 && afterIdentityReplacement.receiptCount == 0,
                 "Same-turn SwiftUI identity replacement failed: \(reconstructionSnapshot(owner: owner, session: session, binding: binding)), titleAttached=\(owner.titleEditor.window != nil), applications=\(afterIdentityReplacement.applicationCount), receipts=\(afterIdentityReplacement.receiptCount)")
@@ -93,7 +93,7 @@ import UndoKit
             try require(owner.session === originalSession && owner.binding === originalBinding
                 && owner.bodyEditor === originalEditor && owner.titleEditor === originalTitleEditor
                 && owner.bodyEditor.window != nil && owner.titleEditor.window != nil
-                && session.hasConnection && binding.hasLiveTransaction
+                && (session.attachmentCount > 0) && binding.hasLiveTransaction
                 && owner.bodyEditor.undoManager?.canUndo == true,
                 "SwiftUI reconstruction failed; removed=\(afterConditionalRemoval); remounted=\(afterConditionalRemount); pushed=\(afterNavigationPush); final=\(reconstructionSnapshot(owner: owner, session: session, binding: binding))")
             try require(owner.registry.sessions.entries.count == 1, "SwiftUI reconstruction created another writer")
@@ -114,9 +114,9 @@ import UndoKit
             try require(beforeClose.note.body == "SwiftUI draft", "Durable Redo failed")
             await owner.closeForBackground()
             await owner.open()
-            try require(owner.session === originalSession && owner.binding === originalBinding
-                && session.status.phase == .ready && session.hasConnection,
-                "Reopen replaced or lost the stable session connection")
+            session = owner.session!; binding = owner.binding!
+            try require(session !== originalSession && session.status.phase == .ready && session.attachmentCount > 0,
+                "Reopen did not establish a replacement session attachment")
             let afterReopen = try await lease.read()
             try require(afterReopen.note == beforeClose.note && afterReopen.receiptCount == beforeClose.receiptCount
                 && afterReopen.applicationCount == beforeClose.applicationCount,
@@ -188,7 +188,7 @@ import UndoKit
 
             await lease.delayNextDelivery()
             let delayedValue = Note(title: "Pending", body: owner.bodyEditor.text ?? "")
-            let delayed = Task { @MainActor in await binding.applyDraft(delayedValue) }
+            let delayed = Task { @MainActor in await lease.edit(title: delayedValue.title, body: delayedValue.body, in: session) }
             try await waitUntil("Host did not enter delayed delivery") { await lease.isDeliveryDelayed() }
             try require(session.status.phase == .busy, "Delayed delivery did not hold admission")
             let textDuringPending = owner.bodyEditor.text
@@ -206,16 +206,37 @@ import UndoKit
             owner.bodyEditor.insertText(" uncertain")
             try await pause()
             let beforeUncertain = try await lease.read()
-            let uncertain = await binding.demonstrateFinalizationFailure()
-            if case .failure = uncertain { } else { throw Failure.check("Injected finalization failure did not occur") }
-            try require(binding.hasLiveTransaction && session.status.phase == .suspended,
-                "Uncertain finalization did not suspend the connected presentation")
-            _ = await binding.retryDraft()
+            let groupCount = try session.advanced.historyPage(limit: 100).count
+            let uncertain = await lease.demonstrateFinalizationFailure(title: owner.titleEditor.text ?? "", body: owner.bodyEditor.text ?? "", in: session)
+            guard case .unresolved(let storage) = uncertain else { throw Failure.check("Injected finalization failure did not occur") }
+            try require(storage.cause == .storage && storage.stage == .finalization && session.status.phase == .suspended,
+                "Unexpected finalization failure")
+            let acceptedOnce = try await lease.read()
+            try require(acceptedOnce.applicationCount == beforeUncertain.applicationCount + 1
+                && acceptedOnce.receiptCount == beforeUncertain.receiptCount + 1
+                && acceptedOnce.deliveryCount == beforeUncertain.deliveryCount + 1, "Acceptance was not persisted exactly once")
+            let receipt = try Data(contentsOf: owner.documentURL.appendingPathComponent("Note.json"))
+            let blocked = await session.reconcile()
+            guard case .unresolved(let blockedFailure)? = blocked else { throw Failure.check("Failed writable context was reused") }
+            let stillAccepted = try await lease.read()
+            try require(blockedFailure.cause == .storage && stillAccepted.deliveryCount == acceptedOnce.deliveryCount,
+                "In-place reconciliation redelivered accepted work")
+            await owner.closeForBackground()
+            try require(session.status.phase == .closed, "Failed store could not safely close")
+            await owner.open()
+            guard let replacement = owner.session, let replacementBinding = owner.binding else {
+                throw Failure.check("Existing-only recovery did not attach")
+            }
+            session = replacement; binding = replacementBinding
             let afterRecovery = try await lease.read()
             try require(session.status.phase == .ready && !binding.hasLiveTransaction
-                && afterRecovery.applicationCount == beforeUncertain.applicationCount + 1,
+                && afterRecovery.note == acceptedOnce.note && afterRecovery.applicationCount == acceptedOnce.applicationCount
+                && afterRecovery.receiptCount == acceptedOnce.receiptCount && afterRecovery.deliveryCount == 0,
                 "Exact accepted outcome recovery replayed or lost the command")
-            observations.append("Debug exact recovery reconciles an accepted host receipt once after finalization uncertainty.")
+            let groups = try session.advanced.historyPage(limit: 100)
+            try require(groups.count == groupCount + 1 && groups.last?.memberCount == 1, "Recovery lost the accepted group")
+            try require(try Data(contentsOf: owner.documentURL.appendingPathComponent("Note.json")) == receipt, "Recovery rewrote host receipt")
+            observations.append("Debug failed finalization required clean existing-only reopening, finalized the original group and preserved exact receipt bytes with zero new host delivery callbacks.")
             #endif
 
             if UIDevice.current.userInterfaceIdiom == .pad {
@@ -226,10 +247,10 @@ import UndoKit
                     owner.registry.activeScenes.contains { !priorIDs.contains($0.id) && $0.session?.status.phase == .ready }
                 }
                 guard let peer = owner.registry.activeScenes.first(where: { !priorIDs.contains($0.id) }),
-                      let peerBinding = peer.binding, let peerLease = peer.lease else {
+                      peer.binding != nil, let peerLease = peer.lease else {
                     throw Failure.check("Second scene did not retain an independent session owner")
                 }
-                _ = await peerBinding.applyDraft(Note(title: "Independent", body: "Peer scope"))
+                _ = await peerLease.edit(title: "Independent", body: "Peer scope", in: peer.session!)
                 let peerReadout = try await peerLease.read()
                 let localReadout = try await lease.read()
                 try require(peerReadout.applicationCount == 1 && localReadout.note.title == "Pending",
@@ -257,7 +278,8 @@ import UndoKit
             try require(session.status.phase == .closed, "Protected-data closure did not fully close the store")
             owner.protectedDataChanged(true)
             await owner.open()
-            try require(session.status.phase == .ready && session.hasConnection,
+            session = owner.session!; binding = owner.binding!
+            try require(session.status.phase == .ready && (session.attachmentCount > 0),
                 "Protected-data recovery failed to reopen the same retained session")
             let afterProtection = try await lease.read()
             try require(afterProtection.note == beforeProtection.note
@@ -273,12 +295,14 @@ import UndoKit
             try FileManager.default.moveItem(at: owner.documentURL, to: movedDirectory)
             await owner.open()
             let preservedHostData = try Data(contentsOf: movedDirectory.appendingPathComponent("Note.json"))
+            session = owner.session!
             try require(session.status.phase != .ready
                 && !FileManager.default.fileExists(atPath: owner.documentURL.path)
                 && preservedHostData == originalHostData,
                 "Unavailable original storage was replaced or its original host data changed")
             try FileManager.default.moveItem(at: movedDirectory, to: owner.documentURL)
             await owner.open()
+            session = owner.session!; binding = owner.binding!
             try require(session.status.phase == .ready, "Returning original storage did not recover the same owner")
             observations.append("Existing-only reopen refuses unavailable original storage and preserves the exact host file; restoring it recovers the same owner.")
 
@@ -303,16 +327,14 @@ import UndoKit
             } catch {
                 throw Failure.check("Transient presentation release failed: \(lifetimeProbe.diagnostic)")
             }
-            try require(lifetimeProbe.session?.status.phase == .blocked && lifetimeProbe.lease?.history != nil
+            try require(lifetimeProbe.session?.status.phase == .blocked && lifetimeProbe.lease?.isOpen == true
                 && owner.registry.sessions.session(for: lifetimeProbe.documentURL) === lifetimeProbe.session,
                 "Blocked presentation release lost its exact retained session or lease: \(lifetimeProbe.diagnostic)")
-            let obstruction = lifetimeProbe.documentURL.appendingPathComponent("Draft.json")
-            try require(try FileManager.default.contentsOfDirectory(atPath: obstruction.path).isEmpty,
-                "The probe's journal obstruction unexpectedly contains other files")
+            let obstruction = lifetimeProbe.session!.configuration!.journalDirectory
             try FileManager.default.removeItem(at: obstruction)
             await lifetimeProbe.session?.close()
             try require(owner.registry.sessions.session(for: lifetimeProbe.documentURL) == nil
-                && lifetimeProbe.lease?.history == nil,
+                && lifetimeProbe.lease?.isOpen == false,
                 "Repaired blocked recovery owner did not completely retire")
             observations.append("A real journal-path obstruction blocks closure while the application collection retains the exact session and lease independently of released SwiftUI presentation objects; repairing only that obstruction permits complete closure.")
             let recovered = SwiftUINotesOwner(id: lifetimeProbe.id, registry: owner.registry)
@@ -341,7 +363,7 @@ import UndoKit
             }
             await owner.registry.sessions.closeAll()
             let allClosed = owner.registry.sessions.entries.allSatisfy { $0.status.phase == .closed }
-            let released = sceneOwners.allSatisfy { $0.session?.hasConnection == false }
+            let released = sceneOwners.allSatisfy { ($0.session?.attachmentCount ?? 0) == 0 }
             try require(allClosed && released, "Recovery owners or SwiftUI presentations remain connected after final closure")
 
             let report = Report(runtime: UIDevice.current.systemVersion, model: UIDevice.current.model,
@@ -364,11 +386,11 @@ import UndoKit
     @MainActor private final class PresentationLifetimeProbe {
         let id: String
         let documentURL: URL
-        weak var session: NativeHistorySession<NotesDocumentLease>?
+        weak var session: HistorySession?
         weak var lease: NotesDocumentLease?
         weak var owner: SwiftUINotesOwner?
         weak var editor: UITextView?
-        weak var binding: NativeHistoryUIKitBinding<NotesDocumentLease>?
+        weak var binding: NativeHistoryUIKitBinding?
         weak var hostingController: UIViewController?
         weak var nativeContainer: UIView?
         weak var hostingView: UIView?
@@ -398,13 +420,14 @@ import UndoKit
         window.rootViewController = hosting
         window.makeKeyAndVisible()
         try await pause()
-        let obstruction = transient.documentURL.appendingPathComponent("Draft.json")
-        try FileManager.default.createDirectory(at: obstruction, withIntermediateDirectories: false)
+        let obstruction = transient.session!.configuration!.journalDirectory
+        if FileManager.default.fileExists(atPath: obstruction.path) { try FileManager.default.removeItem(at: obstruction) }
+        try Data("blocked journal directory".utf8).write(to: obstruction)
         transient.bodyEditor.becomeFirstResponder()
         transient.bodyEditor.insertText("Unsettled release")
         try await pause()
         try require(binding.hasLiveTransaction && transient.session?.status.phase == .blocked
-            && transient.session?.draft == Note(title: "", body: "Unsettled release"),
+            && transient.bodyEditor.text == "Unsettled release",
             "Journal obstruction did not retain the exact native draft in its blocked session")
         probe.session = transient.session; probe.lease = transient.lease
         probe.owner = transient; probe.editor = transient.bodyEditor
@@ -414,7 +437,7 @@ import UndoKit
         transient.disconnectPresentation()
         window.endEditing(true)
         await transient.closeForBackground()
-        try require(transient.session?.status.phase == .blocked && transient.lease?.history != nil,
+        try require(transient.session?.status.phase == .blocked && transient.lease?.isOpen == true,
             "Blocked journal closure discarded the original lease")
         window.isHidden = true
         window.rootViewController = nil
@@ -424,9 +447,9 @@ import UndoKit
         return probe
     }
 
-    private static func reconstructionSnapshot(owner: SwiftUINotesOwner, session: NativeHistorySession<NotesDocumentLease>,
-                                                binding: NativeHistoryUIKitBinding<NotesDocumentLease>) -> String {
-        "phase=\(session.status.phase), connection=\(session.hasConnection), live=\(binding.hasLiveTransaction), undo=\(owner.bodyEditor.undoManager?.canUndo == true), attached=\(owner.bodyEditor.window != nil), detail=\(!owner.navigationPath.isEmpty)"
+    private static func reconstructionSnapshot(owner: SwiftUINotesOwner, session: HistorySession,
+                                                binding: NativeHistoryUIKitBinding) -> String {
+        "phase=\(session.status.phase), connection=\((session.attachmentCount > 0)), live=\(binding.hasLiveTransaction), undo=\(owner.bodyEditor.undoManager?.canUndo == true), attached=\(owner.bodyEditor.window != nil), detail=\(!owner.navigationPath.isEmpty)"
     }
 }
 

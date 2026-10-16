@@ -40,15 +40,17 @@ Undo and an empty stack never falls through to the document's history.
 The recovery, marked-text, delayed-outcome, rejection and close/reopen buttons
 follow the AppKit example's observation sequence. Debug additionally demonstrates
 accepted-effect/failed-finalization reconciliation at the real history save
-boundary. Retry consults the exact existing receipt rather than delivering twice.
+boundary. A failed writable context requires **Close / reopen**; clean acquisition
+finalizes the exact existing receipt with zero new host delivery callbacks.
+Uncertain replies on a still-writable store can reconcile in place.
 The owner renders authoritative text only when its value changes, preserving
 native selection during unchanged refreshes.
 
 Closing a window releases its SwiftUI graph, editors and binding. The application
 retains complete blocked session/lease ownership without retaining all closed
 editors. File > Open Document A/B reattaches those identities. Graceful app quit
-refuses unresolved closure. **Close / reopen** closes and opens the same session
-with its presentation still attached; retained drafts require an explicit
+refuses unresolved closure. **Close / reopen** closes and opens a replacement session for the same scope
+and attaches a fresh presentation; retained drafts require an explicit
 Retry/Discard decision. Release intentionally delayed outcomes before quitting.
 
 `--check` runs public-session/native-binding tests and the installed SwiftUI app
@@ -61,7 +63,7 @@ separate from human input-source/IME qualification; actual keyboard/menu review
 is reported separately from responder API checks. Floor macOS, Intel, publisher
 signing, binary distribution and forced termination remain unqualified.
 
-On 2026-10-15, the selected arm64 Mac running macOS 27.0.1 (26A434), Xcode
+Historical evidence from before this shared-session migration: on 2026-10-15, the selected arm64 Mac running macOS 27.0.1 (26A434), Xcode
 27.0 (27A266a) and Swift 6.4 passed Debug (18 Notes tests) and Release (17),
 plus both installed native harnesses. Retained evidence is under the shared
 `Evidence/DurableNotesSwiftUI` root, runs `20261015T175732Z-6fd29e` (Debug)

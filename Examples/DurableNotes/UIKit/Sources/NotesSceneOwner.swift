@@ -13,7 +13,7 @@ import UndoKit
     weak var app: NotesUIKitApp?
     weak var controller: NotesUIKitController?
     private let restoring: Bool
-    private(set) var session: NativeHistorySession<NotesDocumentLease>?
+    private(set) var session: HistorySession?
     private(set) var lease: NotesDocumentLease?
     private(set) var events: [String] = [] {
         didSet {
@@ -41,12 +41,11 @@ import UndoKit
     }
     func openIfAvailable() async {
         guard foreground, protectedData, storageAvailable, let app else { return }
-        if let session {
-            if session.status.phase == .blocked { await session.close() }
-            if session.status.phase == .closed { await app.sessions.reopen(session) }
-            controller?.lifecycleChanged()
-            return
+        if let session, session.status.phase != .closed {
+            if session.status.phase == .blocked || session.status.phase == .suspended { await session.close() }
+            if session.status.phase != .closed { controller?.lifecycleChanged(); return }
         }
+        controller?.binding?.disconnect()
         do {
             let registry = app.root.appendingPathComponent("SceneRegistry.json")
             var known = FileManager.default.fileExists(atPath: registry.path)
@@ -54,10 +53,9 @@ import UndoKit
             let restored = restoring || known.contains(id)
             let lease = app.domainLease(at: directory)
             self.lease = lease
-            let session = await app.sessions.open(documentURL: directory, mode: restored ? .existing : .create,
-                codec: .json(), draftURL: directory.appendingPathComponent("Draft.json")) { lease }
+            let session = await lease.openSession(in: app.sessions, mode: restored ? .existing : .create)
             self.session = session
-            try controller?.attach()
+            try await controller?.attach()
             guard session.status.phase == .ready else {
                 events.append("Open refused; original document preserved")
                 controller?.showMessage("Open refused: \(String(describing: session.status.issue))"); return

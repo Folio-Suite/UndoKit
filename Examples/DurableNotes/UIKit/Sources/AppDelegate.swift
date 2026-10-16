@@ -7,7 +7,7 @@ import UndoKit
 
 @main @MainActor final class NotesUIKitApp: UIResponder, UIApplicationDelegate {
     var owners: [String: NotesSceneOwner] = [:]
-    let sessions = NativeHistorySessions<NotesDocumentLease>()
+    let sessions = HistorySessions()
     private var leaseReferences: [URL: WeakNotesLease] = [:]
     func domainLease(at directory: URL) -> NotesDocumentLease {
         if let lease = leaseReferences[directory]?.value { return lease }

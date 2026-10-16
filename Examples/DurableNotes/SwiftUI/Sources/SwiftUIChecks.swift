@@ -107,6 +107,19 @@ import UndoKit
                 "Explicit settlement did not produce one accepted host receipt")
             observations.append("Explicit coarse settlement produced one independently readable host effect.")
 
+            guard let primaryWindow = owner.bodyEditor.window, let scene = primaryWindow.windowScene else {
+                throw Failure.check("Mounted editor has no UIWindowScene for overlap checks")
+            }
+            try await checkOverlappingPresentations(scene: scene)
+            try require(owner.bodyEditor.window === primaryWindow && owner.session === originalSession
+                && owner.binding === originalBinding,
+                "Independent overlap probes changed the original editor or session")
+            let afterOverlap = try await lease.read()
+            try require(afterOverlap.applicationCount == accepted.applicationCount
+                && afterOverlap.receiptCount == accepted.receiptCount,
+                "SwiftUI presentation handoff delivered or lost a durable receipt")
+            observations.append("Standalone UIKit-hosted SwiftUI roots used one editor at a time; removing a weak waiter preserved deterministic survivor promotion, and an unrelated native parent retained control until released.")
+
             _ = await binding.undoDocument()
             try require(try await lease.read().note.body.isEmpty, "Durable Undo failed")
             _ = await binding.redoDocument()
@@ -177,6 +190,10 @@ import UndoKit
                 && afterRejection.applicationCount == beforeRejection.applicationCount
                 && binding.hasLiveTransaction && owner.bodyEditor.undoManager?.canUndo == true,
                 "Rejected outcome lost evidence, applied an effect or cleared native callbacks")
+            owner.editorGeneration += 1
+            try await pause()
+            try require(owner.bodyEditor.window != nil && owner.binding === binding
+                && binding.hasLiveTransaction, "SwiftUI replacement lost the rejected draft or binding")
             owner.bodyEditor.undoManager?.undo()
             try await pause()
             try require(owner.bodyEditor.text == beforeRejection.note.body
@@ -206,6 +223,13 @@ import UndoKit
                 await lease.isDeliveryDelayed() || delayedResult != nil
             }
             try require(await lease.isDeliveryDelayed(), "Delayed edit finished before host wait: \(String(describing: delayedResult))")
+            owner.editorGeneration += 1
+            try await pause()
+            try require(owner.bodyEditor.window != nil && owner.binding === binding
+                && !binding.permitsEditing
+                && !binding.textView(owner.bodyEditor, shouldChangeTextIn: NSRange(location: 0, length: 0),
+                    replacementText: "unsafe"),
+                "Pending SwiftUI replacement lost ownership or enabled native editing")
             try require(session.status.phase == .busy, "Delayed delivery did not hold admission")
             let textDuringPending = owner.bodyEditor.text
             binding.undoManager.undo()
@@ -474,6 +498,76 @@ import UndoKit
         return probe
     }
 
+    /// Form rows may remain cached after disappearance. Dispose standalone hosting
+    /// roots here so this probe exercises actual representable dismantling.
+    private static func checkOverlappingPresentations(scene: UIWindowScene) async throws {
+        let editor = NativeHistoryTextView()
+        func window() -> UIWindow {
+            let window = UIWindow(windowScene: scene)
+            window.rootViewController = UIHostingController(rootView: SwiftUIOverlappingEditorProbe(editor: editor))
+            window.isHidden = false
+            window.layoutIfNeeded()
+            return window
+        }
+        let first = window()
+        try await waitUntil("Initial standalone SwiftUI editor did not mount") { editor.window === first }
+        let removed = window()
+        try await pause()
+        let second = window()
+        try await pause()
+        let third = window()
+        defer {
+            for window in [first, removed, second, third] {
+                window.rootViewController = nil
+                window.isHidden = true
+            }
+        }
+        try await pause()
+        try require(editor.window === first, "An overlapping SwiftUI host stole the current editor")
+        // Repeated updates keep the same representable identity and must not duplicate its waiter.
+        if let hosting = second.rootViewController as? UIHostingController<SwiftUIOverlappingEditorProbe> {
+            hosting.rootView = SwiftUIOverlappingEditorProbe(editor: editor)
+            hosting.view.layoutIfNeeded()
+        }
+        weak let removedHosting = removed.rootViewController
+        removed.rootViewController = nil
+        removed.isHidden = true
+        try await waitUntil("Waiting SwiftUI host was retained after removal") { removedHosting == nil }
+        first.rootViewController = nil
+        first.isHidden = true
+        try await waitUntil("First surviving SwiftUI waiter did not receive editor") { editor.window === second }
+        second.rootViewController = nil
+        second.isHidden = true
+        try await waitUntil("Surviving SwiftUI waiters lost attachment order") { editor.window === third }
+        third.rootViewController = nil
+        third.isHidden = true
+        try await waitUntil("Last SwiftUI host did not release editor") { editor.superview == nil }
+
+        let externalWindow = UIWindow(windowScene: scene)
+        let externalController = UIViewController()
+        externalWindow.rootViewController = externalController
+        externalWindow.isHidden = false
+        let externalParent = externalController.view!
+        externalParent.addSubview(editor)
+        let attemptedSteal = window()
+        defer {
+            attemptedSteal.rootViewController = nil
+            attemptedSteal.isHidden = true
+            editor.removeFromSuperview()
+            externalWindow.rootViewController = nil
+            externalWindow.isHidden = true
+        }
+        try await pause()
+        try require(editor.superview === externalParent,
+            "SwiftUI reparented an editor already owned by an unrelated native view")
+        attemptedSteal.rootViewController = nil
+        attemptedSteal.isHidden = true
+        editor.removeFromSuperview()
+        let remounted = window()
+        defer { remounted.rootViewController = nil; remounted.isHidden = true }
+        try await waitUntil("Editor did not remount after its unrelated parent released it") { editor.window === remounted }
+    }
+
     private static func reconstructionSnapshot(owner: SwiftUINotesOwner, session: HistorySession,
                                                 binding: NativeHistoryUIKitBinding) -> String {
         "phase=\(session.status.phase), connection=\((session.attachmentCount > 0)), live=\(binding.hasLiveTransaction), undo=\(owner.bodyEditor.undoManager?.canUndo == true), attached=\(owner.bodyEditor.window != nil), detail=\(!owner.navigationPath.isEmpty)"
@@ -485,5 +579,13 @@ import UndoKit
     var body: some View {
         NativeHistorySwiftUIEditor(textView: owner.bodyEditor)
             .padding()
+    }
+}
+
+@MainActor private struct SwiftUIOverlappingEditorProbe: View {
+    let editor: NativeHistoryTextView
+    var body: some View {
+        NativeHistorySwiftUIEditor(textView: editor)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

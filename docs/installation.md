@@ -89,9 +89,11 @@ command's help for evidence retention. Run only one simulator at a time; local 2
 compositor issue from framework behavior.
 
 These checks do not constitute signed downloadable-binary qualification,
-floor/current coverage, Intel execution, physical-device acceptance or a release
-approval. Inspect the recorded route and environment rather than treating a
-passing source consumer as proof of a different artifact.
+complete floor/current OS behavioral coverage or release approval. Dedicated
+Intel execution is waived under [the qualification policy](release-qualification.md);
+physical testing answers specific unresolved behavioral questions. Inspect the
+recorded route and environment rather than treating a passing source consumer
+as proof of a different artifact.
 
 ## Updating or recovering
 

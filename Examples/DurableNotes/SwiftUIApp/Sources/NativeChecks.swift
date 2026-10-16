@@ -103,6 +103,11 @@ import UndoKit
         try require(prerequisiteFailure.cause == .prerequisiteRejected, "Rejected prerequisite was not identified")
         try require(try await a.read().applicationCount == beforeRejection.applicationCount, "Rejected draft fell through to older group")
         try require(a.bodyEditor.string == "Tea and bread live" && a.bodyEditor.undoManager!.canUndo, "Rejected draft lost native history")
+        a.presentationGeneration += 1
+        await pump()
+        try require(a.bodyEditor.window === a.window && a.binding === aBinding
+            && aBinding.hasLiveTransaction && a.bodyEditor.string == "Tea and bread live",
+            "SwiftUI replacement discarded the rejected draft or replaced its binding")
         _ = command("undo:"); _ = command("redo:")
         try require(a.bodyEditor.string == "Tea and bread live", "Rejected baseline native Redo failed")
         _ = await aBinding.discardDraft()
@@ -136,7 +141,11 @@ import UndoKit
         a.apply(title: "Delayed", body: "Waits for receipt")
         for _ in 0..<100 { if await a.lease.isDeliveryDelayed() { break }; await pump() }
         try require(await a.lease.isDeliveryDelayed(), "Controlled pending delivery absent")
-        try require(!aBinding.permitsEditing && !a.bodyEditor.isEditable, "Pending editing barrier absent")
+        a.presentationGeneration += 1
+        await pump()
+        try require(a.bodyEditor.window === a.window && a.binding === aBinding,
+            "Pending SwiftUI replacement changed editor or binding ownership")
+        try require(!aBinding.permitsEditing && !a.bodyEditor.isEditable, "Pending editing barrier absent after SwiftUI replacement")
         try require(!a.bodyEditor.shouldChangeText(in: NSRange(location: 0, length: 0), replacementString: "unsafe"), "Native input admission failed while pending")
         focus(a, editor: a.bodyEditor); _ = command("undo:"); _ = command("undo:")
         focus(b, editor: b.bodyEditor)

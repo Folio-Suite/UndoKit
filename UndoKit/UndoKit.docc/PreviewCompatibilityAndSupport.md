@@ -44,11 +44,15 @@ release is available. Corrections must be visible; newer API guidance must not
 silently replace a historical contract. GitHub release and Pages deployment are
 coordinated steps, without an atomic-publication promise.
 
-Floor/current OS, Intel execution, physical iPhone/iPad lifecycle/IME/hardware and
-binary archive/export/symbolication evidence are distinct from compilation or
-simulator checks. Qualification names its exact source/artifact/configuration,
-environment and limitations. Actual abrupt termination remains unqualified for
-this preview. Missing required evidence cannot be labelled passing.
+The [qualification amendment](https://github.com/Folio-Suite/UndoKit/issues/57)
+accepts clean declared-architecture builds without dedicated Intel execution.
+Actual floor/current OS behavioral tests remain required using appropriate
+runners, simulators, VMs or hardware. Physical tests address specific unresolved
+behaviors rather than a blanket device matrix. Binary archive/export/symbolication
+evidence remains separate. Qualification names its source/artifact/configuration,
+environment and limitations; a waived execution is not a runtime pass. Actual
+abrupt termination remains unqualified. Missing required behavioral evidence
+cannot be labelled passing.
 
 ## Get help safely
 

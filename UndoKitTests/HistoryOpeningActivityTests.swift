@@ -51,6 +51,7 @@ import XCTest
         }
         let reconciling = Task { await engine.reconcile() }
         await recovery.waitForLookup()
+        reconciling.cancel()
         var closeStarted = false
         var closeFinished = false
         let closing = Task {
@@ -121,6 +122,54 @@ import XCTest
         XCTAssertEqual(host.deliveries, 1, "Recovery must not apply the accepted effect again")
         try await reopened.close()
     }
+    func testMaintenanceDrainsSuspendedOpeningAndPreservesAuthoritativeOriginal() async throws {
+        let directory = try testDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("History.sqlite")
+        let hostURL = directory.appendingPathComponent("Host.json")
+        let scope = UUID(), working = UUID()
+        let host = try CounterHost(url: hostURL)
+        let original = try await HistoryEngine.open(
+            at: url, scope: scope, workingIdentity: working, mode: .create, host: host)
+        host.loseReplyAfterSave = true
+        guard case .failure = await original.submit(HistoryCommand(fingerprint: Data([7]), payload: payload(7))) else {
+            return XCTFail("Lost reply must require recovery")
+        }
+        try await original.close()
+        let originalHost = try Data(contentsOf: hostURL)
+        let store = try await HistoryStore.open(at: url, workingIdentity: working, mode: .existing)
+        let recovery = OpeningRecoveryHost(host)
+        let opening = Task { try await store.openScope(scope, mode: .existing, host: recovery) }
+        await recovery.waitForLookup()
+        let started = expectation(description: "Maintenance installed its store fence")
+        var captured = false
+        let copyURL = directory.appendingPathComponent("Copy.sqlite")
+        let copying = Task {
+            started.fulfill()
+            try await store.withCoordinatedCopy(to: copyURL) { _ in captured = true }
+        }
+        await fulfillment(of: [started], timeout: 2)
+        XCTAssertFalse(captured)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: copyURL.path))
+        do {
+            try await store.close()
+            XCTFail("Close bypassed the maintenance fence")
+        } catch let failure as HistoryFailure { XCTAssertEqual(failure.cause, .busy) }
+        recovery.resumeLookup()
+        let engine = try await opening.value
+        try await copying.value
+        XCTAssertTrue(captured)
+        XCTAssertTrue(engine.snapshot.canUndo)
+        XCTAssertEqual(try Data(contentsOf: hostURL), originalHost)
+        XCTAssertEqual(host.deliveries, 1)
+        try await store.close()
+        let copied = try await HistoryStore.open(at: copyURL, workingIdentity: UUID(),
+            mode: .independentCopy(sourceWorkingIdentity: working))
+        XCTAssertEqual(try copied.inspectScope(scope).pendingRecoveryCount, 0)
+        XCTAssertEqual(try copied.historyPage(scope: scope, limit: 10).count, 1)
+        try await copied.close()
+    }
+
     private func assertWriterIsExclusivelyOwned(at url: URL, workingIdentity: UUID) async throws {
         do {
             let competitor = try await HistoryStore.open(at: url, workingIdentity: workingIdentity, mode: .existing)

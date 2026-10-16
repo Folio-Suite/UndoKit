@@ -10,10 +10,7 @@ extension RetainedHistory {
         to target: HistoryRecoveryTarget,
         using evidence: HistoryReconstructionEvidence
     ) throws -> HistoryRecoveryPlan {
-        guard !activity.closed, !activity.closing, !activity.isActive,
-              !snapshot.isSuspended else {
-            throw HistoryFailure(.busy, stage: .admission, disposition: .usable)
-        }
+        try activity.requireIdle()
         guard recoveryPlanCount < limits.maxRecoveryPlans else {
             throw HistoryFailure(.capacity, stage: .admission, disposition: .usable)
         }

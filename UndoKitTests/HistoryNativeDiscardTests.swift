@@ -7,6 +7,61 @@ import XCTest
 @testable import UndoKit
 
 @MainActor final class HistoryNativeDiscardTests: XCTestCase {
+    func testCheckpointCannotMutateHistoryDuringDiscardAuthoritativeRead() async throws {
+        let fixture = try await NativeFieldTestFixture.open()
+        let (attachment, adapter) = try await fixture.adapter()
+        try adapter.change("draft to discard")
+        let gate = NativeFieldReadGate()
+        fixture.host.fieldReadGate = gate
+        let engine = try XCTUnwrap(fixture.session.engine)
+        let discard = Task { await attachment.discardDraft() }
+        await gate.waitUntilStarted()
+        XCTAssertThrowsError(try engine.createCheckpoint(name: "during discard", state: payload(1))) { error in
+            XCTAssertEqual((error as? HistoryFailure)?.cause, .busy)
+        }
+        gate.resume()
+        let result = await discard.value
+        XCTAssertEqual(result, .rejected)
+        XCTAssertTrue(try engine.checkpoints(limit: 10).isEmpty)
+        fixture.host.fieldReadGate = nil
+        _ = try engine.createCheckpoint(name: "after discard", state: payload(1))
+        attachment.disconnect()
+        await fixture.close()
+    }
+
+    func testCancelledDiscardKeepsExclusionUntilThrowingHostReadCompletes() async throws {
+        let fixture = try await NativeFieldTestFixture.open()
+        let (attachment, adapter) = try await fixture.adapter()
+        try adapter.change("preserved draft")
+        let gate = NativeFieldReadGate()
+        fixture.host.fieldReadGate = gate
+        let engine = try XCTUnwrap(fixture.session.engine)
+        let original = try Data(contentsOf: fixture.root.appendingPathComponent("Domain.json"))
+        let discard = Task { await attachment.discardDraft() }
+        await gate.waitUntilStarted()
+        discard.cancel()
+        let reconciliation = await fixture.session.reconcile()
+        guard case .unexecuted(let reconciliationFailure)? = reconciliation else {
+            return XCTFail("Reconciliation during active discard was not explicitly unexecuted")
+        }
+        XCTAssertEqual(reconciliationFailure.cause, .busy)
+        let submit = await fixture.commands.submit("must not enter")
+        guard case .unexecuted(let failure) = submit else { return XCTFail("Cancelled active discard lost exclusion") }
+        XCTAssertEqual(failure.cause, .busy)
+        XCTAssertThrowsError(try engine.createCheckpoint(name: nil, state: payload(1)))
+        fixture.host.failReads = true
+        gate.resume()
+        guard case .unexecuted = await discard.value else { return XCTFail("Throwing field read succeeded") }
+        XCTAssertEqual(try Data(contentsOf: fixture.root.appendingPathComponent("Domain.json")), original)
+        fixture.host.failReads = false
+        fixture.host.fieldReadGate = nil
+        let retried = await attachment.discardDraft()
+        XCTAssertEqual(retried, .rejected)
+        _ = try engine.createCheckpoint(name: "after read failure", state: payload(1))
+        attachment.disconnect()
+        await fixture.close()
+    }
+
     func testCloseWaitsForDiscardAuthoritativeReadBeforeReleasingDomainLease() async throws {
         let fixture = try await NativeFieldTestFixture.open()
         let (attachment, adapter) = try await fixture.adapter()

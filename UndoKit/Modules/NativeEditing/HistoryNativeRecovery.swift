@@ -157,23 +157,13 @@ extension HistoryNativeCoordinator {
         do { try engine.transaction.requireIdle() } catch {
             return .unexecuted(HistorySession.describe(error, stage: .admission))
         }
-        // Discard owns the same activity fence as authoritative reconciliation.
-        // Closure waits for this read; retry and new delivery cannot mutate its evidence.
-        engine.transaction.reconciling = true
-        session.refreshStatus()
-        defer {
-            engine.transaction.reconciling = false
-            engine.transaction.updateSnapshot()
-            engine.transaction.resumeClosureIfIdle()
-            session.refreshStatus()
-        }
-        let callbacks = HistoryHostCallbackContext.activeTransactions.union([ObjectIdentifier(engine.transaction)])
-        return await HistoryHostCallbackContext.$activeTransactions.withValue(callbacks) {
-            let stores = HistoryStore.deliveringStores.union([ObjectIdentifier(engine.store)])
-            return await HistoryStore.$deliveringStores.withValue(stores) {
-                await discardCurrentFields()
+        defer { session.refreshStatus() }
+        do {
+            return try await engine.transaction.withReconciliation {
+                session.refreshStatus()
+                return await engine.transaction.withHostCallback { await discardCurrentFields() }
             }
-        }
+        } catch { return .unexecuted(HistorySession.describe(error, stage: .admission)) }
     }
     private func discardCurrentFields() async -> HistorySubmissionResult {
         do {

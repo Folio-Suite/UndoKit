@@ -9,8 +9,6 @@ import Foundation
 /// The transaction module exposes only the activity needed to admit retained-history work.
 @MainActor protocol HistoryRetainedActivity: AnyObject {
     var snapshot: HistorySnapshot { get }
-    var isExecuting: Bool { get }
-    var isActive: Bool { get }
     var closing: Bool { get }
     var closed: Bool { get }
     func requireIdle() throws

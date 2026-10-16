@@ -28,14 +28,9 @@ extension HistoryTransactionCoordinator {
         }
         var prerequisite: HistoryResult?
         if let id = reservation.prerequisite, let participant {
-            let callbacks = HistoryHostCallbackContext.activeTransactions.union([ObjectIdentifier(self)])
-            prerequisite = await HistoryStore.$deliveringStores.withValue(
-                HistoryStore.deliveringStores.union([ObjectIdentifier(store)])
-            ) {
-                await HistoryHostCallbackContext.$activeTransactions.withValue(callbacks) {
-                    await participant.settlePrerequisite(id) { command in
-                        await self.executePrerequisite(command, for: request, reservation: reservation)
-                    }
+            prerequisite = await withHostCallback {
+                await participant.settlePrerequisite(id) { command in
+                    await self.executePrerequisite(command, for: request, reservation: reservation)
                 }
             }
             // The caller may already have received an unexecuted cancellation.

@@ -72,9 +72,12 @@ scripts/check-consumer.sh --route both --platform both --configuration Release
 Use Xcode's configured default DerivedData. Repository runners reuse locked build
 databases under `~/Library/Developer/Xcode/DerivedData/UndoKit`; see
 [contributor prerequisites and scoped checks](CONTRIBUTING.md). Build settings and
-universal compilation do not establish Intel, floor-OS or physical-device passes.
-The [guarded production scale protocol](docs/production-scale.md) is opt-in and
-separates Mac measurements, simulator smoke and physical qualification.
+universal compilation do not establish OS behavioral passes. The
+[qualification policy](docs/release-qualification.md) accepts declared-architecture
+builds without dedicated Intel execution while retaining floor/current OS tests
+and physical checks for specific unresolved behaviors. The
+[guarded production scale protocol](docs/production-scale.md) is opt-in; its
+reports distinguish full workloads, simulator smoke and physical measurements.
 
 ## Compatibility, support and provenance
 

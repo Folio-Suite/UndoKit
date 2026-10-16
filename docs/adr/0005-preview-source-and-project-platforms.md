@@ -20,6 +20,8 @@ integration routes. Swift Package Manager remains authoritative for unit tests.
 Debug and Release checks cover different conditional-code paths.
 
 These source/project checks do not qualify a binary release. The later
-XCFramework, signing, installation, deployment-floor/current OS, Intel, and
-physical-device gates remain required by the preview plan. Unsupported Apple
-platforms are outside this contract.
+XCFramework, signing, installation and deployment-floor/current OS behavioral
+gates remain required. [ADR 0007](0007-os-behavioral-qualification.md) supersedes
+the original blanket Intel/physical execution requirements with architecture
+build acceptance and behavior-driven hardware checks. Unsupported Apple platforms
+are outside this contract.

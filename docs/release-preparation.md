@@ -23,6 +23,12 @@ Qualification remains governed by [the acceptance gates](https://github.com/Foli
 
 ## Inputs and authority
 
+The [qualification policy](release-qualification.md) accepts declared-architecture
+builds without dedicated Intel execution and retains floor/current OS behavioral
+tests. Hardware is used for specific unresolved behaviors. Preparing a candidate
+does not establish those results. If revised release documentation affects
+qualification, prepare a new candidate rather than changing retained bytes.
+
 Select an exact clean source commit containing the intended release changes.
 Use the pinned Xcode 27.0 (27A266a), Apple Swift 6.4 producer. Marketing version
 is `0.2.0`; choose a positive integer framework build larger than every previously

@@ -109,6 +109,9 @@ executable hash, and the exact failure and launch log. The probe does not modify
 the selected candidate or inject anything into another process. It can accompany
 the development export, but refuses simulator or combined-platform invocations.
 
-These commands produce and inspect an unsigned candidate. They do not sign,
-publish, or qualify OS-floor/current-OS runtime behavior, Intel execution, or
-physical-device behavior. Those checks remain separate release gates.
+Assembly produces an unsigned XCFramework; the consumer command also accepts a
+retained signed candidate after full capsule verification. Neither command
+publishes or establishes complete floor/current OS behavioral qualification.
+Under [the qualification policy](release-qualification.md), architecture builds
+replace dedicated Intel execution; specific unresolved physical behaviors and
+other release gates retain their own evidence requirements.

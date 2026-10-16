@@ -71,9 +71,11 @@ stores and reports. Without `--device`, CI retains its latest-runtime selection
 and creates and deletes its own simulator. For the tracked iPadOS 27 simulator
 failure (FB25165352), use the available 26.5 device for local runtime checks.
 CI repeats both configurations. Debug-only injected failure cases do not exist
-in Release; all ordinary durability and consumer cases run in both. Floor-OS,
-Intel runtime, physical device and binary distribution acceptance remain later
-release gates.
+in Release; all ordinary durability and consumer cases run in both. Clean builds
+covering declared architectures satisfy CPU coverage without dedicated Intel
+execution. Floor/current OS behavior, specific unresolved physical-device
+questions and binary distribution acceptance remain separate release gates;
+see [the qualification policy](docs/release-qualification.md).
 
 Scale other checks to the change. For documentation and templates, check local
 links, copyright and license notices, and repository-specific references.

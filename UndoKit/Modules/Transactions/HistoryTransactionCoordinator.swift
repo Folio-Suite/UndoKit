@@ -83,17 +83,11 @@ extension HistoryAdmissionParticipant {
     var closing: Bool { activity.closing }
     var closed: Bool { activity.closed }
     var reconciling: Bool { activity.exclusive == .reconciliation }
-    struct SessionGroup {
-        let id: UUID
-        let effects: [HistoryEffect]
-        var applied = true
-        var invalidated = false
-    }
-    var sessionGroups: [SessionGroup] = []
+    var positionPolicy = HistoryPositionPolicy()
     /// Prepared transactions below this sequence predate this engine session.
     var sessionStartSequence: Int64 = 1
     var sessionEffectBytes: Int64 {
-        sessionGroups.reduce(0) { total, group in
+        positionPolicy.sessionGroups.reduce(0) { total, group in
             total
                 + group.effects.reduce(0) { bytes, effect in
                     bytes + Int64(effect.undo.data.count + effect.redo.data.count)

@@ -101,48 +101,18 @@ extension HistoryTransactionCoordinator {
         for member in try history.transactionMembers(transaction) { context.delete(member) }
         context.delete(transaction)
         let scopeRow = try history.scopeRecord()
-        if scopeRow.offStartSequence > 0 &&
-           token.sequence >= scopeRow.offStartSequence &&
-           scopeRow.undoFloorSequence < scopeRow.offStartSequence {
-            scopeRow.undoFloorSequence = token.sequence
-        }
+        positionPolicy.acceptTransientBoundary(sequence: token.sequence, scopeRow: scopeRow)
         scopeRow.committedVersion += 1
         try history.saveContext()
         guard token.sequence >= sessionStartSequence else {
             updateSnapshot()
             return .accepted(HistoryReceipt(token: token, groupID: groupID))
         }
-        updateSessionGroups(kind: kind, groupID: groupID, targetID: targetID, effects: effects)
+        positionPolicy.accepted(
+            kind: kind, groupID: groupID, targetID: targetID,
+            effects: effects, maximumGroups: limits.maxUndoGroups)
         updateSnapshot()
         return .accepted(HistoryReceipt(token: token, groupID: groupID))
-    }
-
-    private func updateSessionGroups(kind: HistoryDeliveryKind, groupID: UUID,
-                                     targetID: UUID?, effects: [HistoryEffect]) {
-        switch kind {
-        case .command:
-            sessionGroups.removeAll(where: { !$0.applied && !$0.invalidated })
-            sessionGroups.append(SessionGroup(id: groupID, effects: effects))
-            while sessionGroups.count > limits.maxUndoGroups,
-                  let index = sessionGroups.firstIndex(where: { !$0.invalidated }) {
-                sessionGroups.remove(at: index)
-            }
-        case .undo, .redo:
-            if let target = targetID,
-               let index = sessionGroups.firstIndex(where: { $0.id == target }) {
-                sessionGroups[index].applied = kind == .redo
-            } else if let target = targetID {
-                // The first Off operation may reverse a previously retained
-                // group. Its counterpart remains available in this session,
-                // while the durable group itself stays historical across the gap.
-                let swapped = effects.map { effect in
-                    HistoryEffect(memberID: effect.memberID, undo: effect.redo,
-                                  redo: effect.undo, resources: effect.resources)
-                }
-                sessionGroups.append(SessionGroup(id: target, effects: swapped,
-                                                  applied: kind == .redo))
-            }
-        }
     }
 
     private func closeUsableFailure(_ failure: HistoryFailure,
@@ -170,7 +140,6 @@ extension HistoryTransactionCoordinator {
         group.scopeKey = scope.uuidString
         group.sequence = transaction.sequence
         group.kind = kind.rawValue
-        group.state = kind == .command ? "applied" : "historical"
         group.sourceGroupID = transaction.targetGroupID
         try linkCompensation(on: group, transaction: transaction, kind: kind)
         group.restorationOrigin = transaction.restorationOrigin
@@ -183,15 +152,15 @@ extension HistoryTransactionCoordinator {
             group.presentationDigest = transaction.presentationDigest
         }
         try materializeActions(for: transaction, in: group, kind: kind)
-        switch kind {
-        case .command:
-            for row in try history.ordinaryGroups(state: "undone") { row.state = "branched" }
-        case .undo, .redo:
-            if let key = transaction.targetGroupID,
-               let target = try history.groupRecord(key: key) {
-                target.state = kind == .undo ? "undone" : "applied"
-            }
+        let retainedTarget: HistoryGroupRecord?
+        if let targetKey = transaction.targetGroupID {
+            retainedTarget = try history.groupRecord(key: targetKey)
+        } else {
+            retainedTarget = nil
         }
+        positionPolicy.acceptedRetained(
+            kind: kind, group: group, target: retainedTarget,
+            redoBranch: kind == .command ? try history.ordinaryGroups(state: "undone") : [])
         transaction.stage = "accepted"
         transaction.presentationPayload = nil
         transaction.presentationDigest = nil
@@ -243,19 +212,21 @@ extension HistoryTransactionCoordinator {
 
     func finalizeRejected(_ transaction: HistoryTransactionRecord) throws -> HistoryResult {
         let kind = HistoryDeliveryKind(rawValue: transaction.kind ?? "") ?? .command
-        if kind != .command, let targetKey = transaction.targetGroupID,
-           let target = try history.groupRecord(key: targetKey) {
-            target.state = "invalid"
+        let retainedTarget: HistoryGroupRecord?
+        if let targetKey = transaction.targetGroupID {
+            retainedTarget = try history.groupRecord(key: targetKey)
+        } else {
+            retainedTarget = nil
         }
+        positionPolicy.prepareRejection(kind: kind, retainedTarget: retainedTarget)
         transaction.stage = "rejected"
         for member in try history.fetch(HistoryMemberRecord.self, predicate: NSPredicate(
             format: "\(#keyPath(HistoryMemberRecord.transaction)) == %@", transaction)) { context.delete(member) }
         transaction.presentationPayload = nil
         transaction.presentationDigest = nil
         try history.saveContext()
-        if kind != .command, let targetKey = transaction.targetGroupID,
-           let index = sessionGroups.firstIndex(where: { $0.id.uuidString == targetKey }) {
-            sessionGroups[index].invalidated = true
+        if kind != .command {
+            positionPolicy.rejected(targetID: transaction.targetGroupID.flatMap(UUID.init(uuidString:)))
         }
         updateSnapshot()
         return .rejected

@@ -10,8 +10,13 @@ import XCTest
     var deliveries = 0
     var requiredResource: HistoryObjectReference?
     var rejectNext = false
+    var deliveredDeltas: [Int] = []
     func deliver(_ delivery: HistoryDelivery) async -> HistoryHostOutcome {
         deliveries += 1
+        if let text = delivery.members.first.flatMap({ String(data: $0.payload.data, encoding: .utf8) }),
+           let delta = Int(text) {
+            deliveredDeltas.append(delta)
+        }
         if rejectNext {
             rejectNext = false
             return .rejected

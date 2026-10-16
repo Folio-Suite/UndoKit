@@ -5,20 +5,11 @@ import CoreData
 import Foundation
 
 extension HistoryTransactionCoordinator {
-    enum InverseTarget {
-        case session(SessionGroup)
-        case retained(HistoryGroupRecord)
-    }
-
-    func eligibleInverse(for kind: HistoryDeliveryKind) throws -> InverseTarget? {
-        // Like a retained invalid group, a transient invalid group is a
-        // traversal barrier until the host establishes a new coherent baseline.
-        guard !sessionGroups.contains(where: { $0.invalidated }) else { return nil }
-        let session = kind == .undo
-            ? sessionGroups.last(where: { $0.applied })
-            : sessionGroups.first(where: { !$0.applied })
-        if let session { return .session(session) }
-        return try history.eligibleGroup(for: kind).map(InverseTarget.retained)
+    func eligibleInverse(for kind: HistoryDeliveryKind) throws -> HistoryPositionPolicy.Target? {
+        let retained = try history.positionGroups()
+        return positionPolicy.eligibleInverse(
+            for: kind, retainedGroups: retained.groups,
+            retainedHistoryInvalidated: retained.invalidated)
     }
 
     func updateSnapshot() {

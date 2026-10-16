@@ -46,8 +46,11 @@ extension RetainedHistory {
         resolve: (HistoryPayload) throws -> String?
     ) throws -> (snapshot: HistorySnapshot, names: HistoryNativeActionNames) {
         guard !activity.closed else { throw HistoryFailure(.busy, stage: .admission, disposition: .usable) }
-        let undoRow = try history.eligibleGroup(for: .undo)
-        let redoRow = try history.eligibleGroup(for: .redo)
+        let retained = try history.positionGroups()
+        let undoRow = retained.invalidated ? nil : HistoryPositionPolicy.retainedTarget(
+            for: .undo, groups: retained.groups)
+        let redoRow = retained.invalidated ? nil : HistoryPositionPolicy.retainedTarget(
+            for: .redo, groups: retained.groups)
         func name(_ row: HistoryGroupRecord?) throws -> String {
             guard let row, let id = try? row.uuid(row.key),
                   let presentation = try? presentation(forGroup: id) else { return "" }

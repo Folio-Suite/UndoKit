@@ -103,7 +103,7 @@ extension HistoryTransactionCoordinator {
             try history.addResourceReferences(resources, ownerType: "checkpoint",
                                       ownerKey: history.transactionKey(checkpointID))
             try history.saveContext()
-            sessionGroups.removeAll()
+            positionPolicy.retiredGeneration()
             protection.invalidateRecoveryPlans()
             updateSnapshot()
             return generation

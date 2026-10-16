@@ -115,13 +115,13 @@ extension HistoryTransactionCoordinator {
             ]
             guard let row = try context.fetch(request).first else {
                 unsuspend()
-                if sessionGroups.isEmpty { try releaseSessionReferences() }
+                if positionPolicy.sessionGroups.isEmpty { try releaseSessionReferences() }
                 return nil
             }
             let result = await reconcile(row)
             if case .accepted = result, try context.fetch(request).isEmpty { unsuspend() }
             if case .rejected = result, try context.fetch(request).isEmpty { unsuspend() }
-            if !snapshot.isSuspended && sessionGroups.isEmpty { try releaseSessionReferences() }
+            if !snapshot.isSuspended && positionPolicy.sessionGroups.isEmpty { try releaseSessionReferences() }
             return result
         } catch {
             return .failure(HistoryFailure(.storage, stage: .reconciliation, disposition: .suspended))

@@ -188,8 +188,8 @@ extension HistoryStore {
     /// Registers or reopens one scope. Each scope has its own host and ordered queue.
     public func openScope(_ scope: UUID, mode: HistoryScopeOpenMode,
                           host: any HistoryHost) async throws -> HistoryEngine {
-        guard access == .readWrite, !closing, !closed, !maintenance, !writeFailed,
-              engines[scope] == nil else {
+        try activity.requireMutationAdmission(in: self)
+        guard engines[scope] == nil else {
             throw HistoryFailure(.busy, stage: .admission, disposition: .usable)
         }
         let engine = HistoryEngine(store: self, scope: scope, limits: limits, host: host)

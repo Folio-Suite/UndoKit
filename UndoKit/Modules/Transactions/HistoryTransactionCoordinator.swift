@@ -45,6 +45,7 @@ extension HistoryAdmissionParticipant {
         let id = UUID()
         let generation: UUID
         let prerequisite: UUID?
+        private let activity: HistoryActivityCompletion
         #if DEBUG
         var injectFinalizationFailure = false
         #endif
@@ -53,13 +54,15 @@ extension HistoryAdmissionParticipant {
         var executionStarted = false
         var terminal: HistoryResult?
         var waiters: [CheckedContinuation<HistoryResult, Never>] = []
-        init(generation: UUID, prerequisite: UUID?) {
+        init(generation: UUID, prerequisite: UUID?, activity: HistoryActivityCompletion) {
             self.generation = generation
             self.prerequisite = prerequisite
+            self.activity = activity
         }
         func finish(_ result: HistoryResult) {
             guard terminal == nil else { return }
             terminal = result
+            activity.finish()
             let pending = waiters
             waiters.removeAll()
             for waiter in pending { waiter.resume(returning: result) }
@@ -75,12 +78,11 @@ extension HistoryAdmissionParticipant {
     var context: NSManagedObjectContext { history.context }
     private var queue: [Reservation] = []
     private var activeReservation: Reservation?
-    private var draining = false
-    private var opening = false
-    private(set) var closing = false
-    private(set) var closed = false
-    var reconciling = false
-    private var closeWaiters: [CheckedContinuation<Void, Never>] = []
+    private var drainActivity: HistoryActivityCompletion?
+    let activity: HistoryScopeActivity
+    var closing: Bool { activity.closing }
+    var closed: Bool { activity.closed }
+    var reconciling: Bool { activity.exclusive == .reconciliation }
     var positionPolicy = HistoryPositionPolicy()
     /// Prepared transactions below this sequence predate this engine session.
     var sessionStartSequence: Int64 = 1
@@ -96,23 +98,21 @@ extension HistoryAdmissionParticipant {
     init(history: HistoryScopeStorage, host: any HistoryHost) {
         self.history = history
         self.host = host
+        activity = HistoryScopeActivity(store: history.store, scope: history.scope)
     }
 
-    var isExecuting: Bool { draining }
-    var isActive: Bool { opening || draining || !queue.isEmpty || reconciling }
-    var hasPending: Bool { draining || !queue.isEmpty }
+    var isExecuting: Bool { drainActivity != nil }
+    var isActive: Bool { activity.isActive }
+    var hasPending: Bool { isExecuting || !queue.isEmpty }
 
     func open(mode: HistoryScopeOpenMode) async throws {
-        opening = true
-        defer {
-            opening = false
-            resumeClosureIfIdle()
+        try await activity.withExclusive(.opening) {
+            try history.register(mode: mode)
+            sessionStartSequence = try history.scopeRecord().nextSequence
+            await reconcileOnOpen()
+            try refreshSnapshot()
+            try releaseSessionReferences()
         }
-        try history.register(mode: mode)
-        sessionStartSequence = try history.scopeRecord().nextSequence
-        await reconcileOnOpen()
-        try refreshSnapshot()
-        try releaseSessionReferences()
     }
 
     func reserve() -> Result<Reservation, HistoryFailure> {
@@ -128,9 +128,10 @@ extension HistoryAdmissionParticipant {
                     store.writeFailed ? .storage : .unresolved,
                     stage: .admission, disposition: .suspended))
         }
-        guard !opening, !closed, !closing, !reconciling, !store.closing, !store.closed,
-            !store.maintenance, let generation = snapshot.generation
-        else {
+        do { try activity.requireAdmission(exclusive: false, fromCallback: true) } catch let failure as HistoryFailure {
+            return .failure(failure)
+        } catch { return .failure(HistoryFailure(.busy, stage: .admission, disposition: .usable)) }
+        guard let generation = snapshot.generation else {
             return .failure(HistoryFailure(.busy, stage: .admission, disposition: .usable))
         }
         guard queue.count < limits.maxQueueDepth else {
@@ -139,7 +140,8 @@ extension HistoryAdmissionParticipant {
         do {
             let reservation = Reservation(
                 generation: generation,
-                prerequisite: try participant?.capturePrerequisite())
+                prerequisite: try participant?.capturePrerequisite(),
+                activity: activity.beginAdmitted())
             queue.append(reservation)
             updateSnapshot()
             return .success(reservation)
@@ -194,8 +196,8 @@ extension HistoryAdmissionParticipant {
     }
 
     private func startDrain() {
-        guard !draining, queue.first?.request != nil else { return }
-        draining = true
+        guard !isExecuting, queue.first?.request != nil else { return }
+        drainActivity = activity.beginAdmitted()
         Task { await drain() }
     }
 
@@ -205,14 +207,7 @@ extension HistoryAdmissionParticipant {
             activeReservation = waiting
             let result = await executeReserved(request, reservation: waiting)
             // Publication refresh is part of this slot. It cannot change an accepted receipt.
-            let callbacks = HistoryHostCallbackContext.activeTransactions.union([ObjectIdentifier(self)])
-            await HistoryStore.$deliveringStores.withValue(
-                HistoryStore.deliveringStores.union([ObjectIdentifier(store)])
-            ) {
-                await HistoryHostCallbackContext.$activeTransactions.withValue(callbacks) {
-                    await participant?.admissionCompleted(result)
-                }
-            }
+            await withHostCallback { await participant?.admissionCompleted(result) }
             waiting.finish(result)
             activeReservation = nil
             updateSnapshot()
@@ -228,9 +223,10 @@ extension HistoryAdmissionParticipant {
                         stage: .admission, disposition: .suspended))
             }
         }
-        draining = false
+        let completion = drainActivity
+        drainActivity = nil
         updateSnapshot()
-        resumeClosureIfIdle()
+        completion?.finish()
     }
 
     private func finishWaiting(_ failure: HistoryFailure) {
@@ -239,17 +235,10 @@ extension HistoryAdmissionParticipant {
         for slot in waiting { slot.finish(.failure(failure)) }
     }
 
-    func resumeClosureIfIdle() {
-        guard !opening, !draining, !reconciling else { return }
-        let waiters = closeWaiters
-        closeWaiters.removeAll()
-        for waiter in waiters { waiter.resume() }
-    }
-
     func beginClosing(protection: any HistoryRecoveryProtection) {
         protection.invalidateRecoveryPlans()
         guard !closing, !closed else { return }
-        closing = true
+        activity.beginClosing()
         if let activeReservation, !activeReservation.executionStarted {
             activeReservation.finish(.failure(HistoryFailure(.busy, stage: .admission, disposition: .usable)))
         }
@@ -262,9 +251,7 @@ extension HistoryAdmissionParticipant {
         try store.activity.requireClosureAdmission(in: store)
         if closed { return }
         beginClosing(protection: protection)
-        if opening || draining || reconciling {
-            await withCheckedContinuation { continuation in closeWaiters.append(continuation) }
-        }
+        try await activity.waitUntilIdle()
         do {
             try releaseSessionReferences()
             try history.saveContext()
@@ -276,7 +263,7 @@ extension HistoryAdmissionParticipant {
                 .storage, stage: .finalization, disposition: .suspended,
                 underlyingDescription: String(describing: error))
         }
-        closed = true
+        activity.didClose()
         updateSnapshot()
     }
 }

@@ -128,10 +128,7 @@ extension HistoryTransactionCoordinator {
             let delivery = try prepare(
                 command, kind: kind, targetGroup: targetGroup,
                 token: token, scopeRow: scopeRow)
-            let activeStores = HistoryStore.deliveringStores.union([ObjectIdentifier(store)])
-            let outcome = await HistoryStore.$deliveringStores.withValue(activeStores) {
-                await deliverToHost(delivery)
-            }
+            let outcome = await withHostCallback { await host.deliver(delivery) }
             return await finish(transactionKey: key, outcome: outcome)
         } catch let failure as HistoryFailure where failure.cause == .identityConflict {
             return .failure(failure)
@@ -184,13 +181,6 @@ extension HistoryTransactionCoordinator {
             HistoryFailure(
                 .storage, stage: .preparation,
                 disposition: .usable, underlyingDescription: String(describing: error)))
-    }
-
-    private func deliverToHost(_ delivery: HistoryDelivery) async -> HistoryHostOutcome {
-        let activeTransactions = HistoryHostCallbackContext.activeTransactions.union([ObjectIdentifier(self)])
-        return await HistoryHostCallbackContext.$activeTransactions.withValue(activeTransactions) {
-            await host.deliver(delivery)
-        }
     }
 
     private func admissionFailure(for command: HistoryCommand) -> HistoryFailure? {

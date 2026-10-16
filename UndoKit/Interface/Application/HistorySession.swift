@@ -155,36 +155,22 @@ enum HistoryNativeOperation { case settle, undo, redo }
     public func reconcile() async -> HistorySubmissionResult? {
         guard !opening, !closed, !closeRequested, let engine else { return .unexecuted(failure(.busy)) }
         guard !engine.transaction.isActive else { return .unexecuted(failure(.busy)) }
-        let result = await engine.reconcile()
-        // Core reconciliation can resume a waiting close before this continuation runs.
-        // Keep its authoritative result, but never reopen presentation activity on a retiring owner.
-        guard !closed, !closeRequested, self.engine === engine,
-            !engine.transaction.closing, !engine.transaction.isActive,
-            !engine.store.closing, !engine.store.closed, !engine.store.maintenance
-        else { return result.map(HistorySubmissionResult.init) }
-        let mayRefresh: Bool
-        switch result {
-        case nil, .accepted: mayRefresh = true
-        case .rejected, .failure: mayRefresh = false
-        }
-        if mayRefresh {
-            engine.transaction.reconciling = true
-            refreshStatus()
-            defer {
-                engine.transaction.reconciling = false
-                engine.transaction.updateSnapshot()
-                engine.transaction.resumeClosureIfIdle()
-                refreshStatus()
-            }
-            let callbacks = HistoryHostCallbackContext.activeTransactions.union([ObjectIdentifier(engine.transaction)])
-            await HistoryHostCallbackContext.$activeTransactions.withValue(callbacks) {
-                let stores = HistoryStore.deliveringStores.union([ObjectIdentifier(engine.store)])
-                await HistoryStore.$deliveringStores.withValue(stores) {
-                    if let result { await nativeCoordinator.admissionCompleted(result) }
-                    await nativeCoordinator.reconcilePresentation()
+        let result = await engine.transaction.reconcile { result in
+            // Closure is monotonic. Keep the authoritative receipt, but do not
+            // begin a presentation refresh on a retiring session.
+            guard !self.closed, !self.closeRequested, self.engine === engine,
+                !engine.transaction.closing, !engine.store.closing, !engine.store.closed
+            else { return }
+            switch result {
+            case nil, .accepted:
+                await engine.transaction.withHostCallback {
+                    if let result { await self.nativeCoordinator.admissionCompleted(result) }
+                    await self.nativeCoordinator.reconcilePresentation()
                 }
+            case .rejected, .failure: break
             }
         }
+        refreshStatus()
         return result.map(HistorySubmissionResult.init)
     }
 

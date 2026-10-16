@@ -10,13 +10,7 @@ extension RetainedHistory {
         id: UUID = UUID(), name: String?, state: HistoryPayload,
         resources: [HistoryObjectReference] = []
     ) throws -> HistoryCheckpointInfo {
-        if store.writeFailed {
-            throw HistoryFailure(.storage, stage: .admission, disposition: .suspended)
-        }
-        guard !activity.isExecuting, !activity.closed, !store.closing, !store.closed, !store.maintenance,
-              !snapshot.isSuspended else {
-            throw HistoryFailure(.busy, stage: .admission, disposition: .usable)
-        }
+        try activity.requireIdle()
         guard history.valid(state), (name?.utf8.count ?? 0) <= 4096,
               history.valid(resources), history.hasCapacity(bytes: state.data.count) else {
             throw HistoryFailure(.capacity, stage: .admission, disposition: .usable)

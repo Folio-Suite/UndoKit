@@ -41,11 +41,8 @@ extension HistoryTransactionCoordinator {
         adopting baseline: HistoryPayload, resources: [HistoryObjectReference] = [],
         quarantineAt destination: URL, protection: any HistoryRecoveryProtection
     ) throws -> UUID {
-        guard store.access == .readWrite, !store.writeFailed, !closed, !closing,
-              !store.closed, !store.closing, !store.maintenance,
-              !isActive, !protection.hasRecoveryPlans,
-              snapshot.isSuspended,
-              !HistoryStore.deliveringStores.contains(ObjectIdentifier(store)) else {
+        try activity.requireAdmission()
+        guard !protection.hasRecoveryPlans, snapshot.isSuspended else {
             throw HistoryFailure(.busy, stage: .admission, disposition: .usable)
         }
         let pending = try history.fetch(HistoryTransactionRecord.self, predicate: NSPredicate(

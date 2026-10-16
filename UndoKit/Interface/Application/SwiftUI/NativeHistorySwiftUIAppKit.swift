@@ -49,7 +49,6 @@ import SwiftUI
         return presentation
     }
 
-    func isCurrent(_ container: NativeHistorySwiftUIEditorContainer) -> Bool { ownership.isCurrent(container) }
     func attach(_ container: NativeHistorySwiftUIEditorContainer) { ownership.attach(container) }
     func detach(_ container: NativeHistorySwiftUIEditorContainer) { ownership.detach(container) }
 }
@@ -57,7 +56,10 @@ import SwiftUI
 @MainActor final class NativeHistorySwiftUIEditorContainer: NSView, NativeHistoryPresentationHost {
     private var presentation: NativeHistorySwiftUIEditorPresentation?
     private weak var mountedEditor: NativeHistoryAppKitTextView?
-    var canMountPresentedEditor: Bool { presentation?.editor?.superview == nil }
+    var canMountPresentedEditor: Bool {
+        guard let editor = presentation?.editor else { return false }
+        return editor.superview == nil
+    }
     private let diagnostic = NSTextField(
         wrappingLabelWithString: "This editor is already presented by another SwiftUI view.")
     private let scrollView = NSScrollView(frame: .zero)

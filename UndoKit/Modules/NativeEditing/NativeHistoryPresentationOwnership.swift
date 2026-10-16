@@ -1,9 +1,6 @@
 // SPDX-FileCopyrightText: 2026 the Folio Project
 // SPDX-License-Identifier: MIT
 
-#if canImport(SwiftUI) && (canImport(AppKit) || canImport(UIKit))
-import SwiftUI
-
 /// Platform hosts implement mounting and native visibility; this policy owns only
 /// which weakly-held host may present one editor and in what order hosts wait.
 @MainActor protocol NativeHistoryPresentationHost: AnyObject {
@@ -67,4 +64,3 @@ import SwiftUI
         }
     }
 }
-#endif

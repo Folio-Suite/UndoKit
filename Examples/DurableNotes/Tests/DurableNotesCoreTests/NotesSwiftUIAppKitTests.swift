@@ -235,18 +235,34 @@ import XCTest
         let firstWindow = makeWindow(editor: editor, generation: 0)
         let removedWaiterWindow = makeWindow(editor: editor, generation: 1)
         let survivingWaiterWindow = makeWindow(editor: editor, generation: 2)
+        let lastWaiterWindow = makeWindow(editor: editor, generation: 3)
+        weak let removedHosting = removedWaiterWindow.contentView
         defer {
             firstWindow.contentView = nil
             removedWaiterWindow.contentView = nil
             survivingWaiterWindow.contentView = nil
-            firstWindow.close(); removedWaiterWindow.close(); survivingWaiterWindow.close()
+            lastWaiterWindow.contentView = nil
+            firstWindow.close(); removedWaiterWindow.close(); survivingWaiterWindow.close(); lastWaiterWindow.close()
         }
 
         try await Task.sleep(for: .milliseconds(120))
         XCTAssertTrue(editor.window === firstWindow, "The first mounted host must own the editor")
         XCTAssertTrue(editor.superview != nil)
 
+        // Updating the same representable repeatedly must neither steal nor enqueue duplicates.
+        for window in [firstWindow, survivingWaiterWindow] {
+            let hosting = try XCTUnwrap(window.contentView as? NSHostingView<EditorHost>)
+            hosting.rootView = EditorHost(editor: editor, generation: window === firstWindow ? 0 : 2)
+            hosting.layoutSubtreeIfNeeded()
+        }
+        try await Task.sleep(for: .milliseconds(120))
+        XCTAssertTrue(editor.window === firstWindow)
         removedWaiterWindow.contentView = nil
+        for _ in 0..<100 {
+            if removedHosting == nil { break }
+            try await Task.sleep(for: .milliseconds(40))
+        }
+        XCTAssertNil(removedHosting, "Waiting presentation must be weakly held")
         firstWindow.contentView = nil
         try await Task.sleep(for: .milliseconds(120))
         XCTAssertTrue(editor.window === survivingWaiterWindow,
@@ -254,14 +270,19 @@ import XCTest
 
         survivingWaiterWindow.contentView = nil
         try await Task.sleep(for: .milliseconds(120))
-        XCTAssertNil(editor.window, "Removing the current host must release its native presentation")
+        XCTAssertTrue(editor.window === lastWaiterWindow,
+            "Repeated attachment must preserve survivor order without promoting a retired host")
+        lastWaiterWindow.contentView = nil
+        try await Task.sleep(for: .milliseconds(120))
+        XCTAssertNil(editor.window, "Removing all current hosts must release the native presentation")
 
         let externalWindow = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 440, height: 220),
             styleMask: [.titled], backing: .buffered, defer: false)
+        externalWindow.isReleasedWhenClosed = false
         let externalParent = NSView(frame: externalWindow.contentView!.bounds)
         externalWindow.contentView = externalParent
         externalParent.addSubview(editor)
-        let attemptedSteal = makeWindow(editor: editor, generation: 3)
+        let attemptedSteal = makeWindow(editor: editor, generation: 4)
         defer { attemptedSteal.contentView = nil; attemptedSteal.close(); externalWindow.close() }
         try await Task.sleep(for: .milliseconds(120))
         XCTAssertTrue(editor.superview === externalParent,
@@ -272,6 +293,7 @@ import XCTest
     private func makeWindow(editor: NativeHistoryAppKitTextView, generation: Int) -> NSWindow {
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 440, height: 220),
             styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
         let hosting = NSHostingView(rootView: EditorHost(editor: editor, generation: generation))
         hosting.frame = window.contentView!.bounds
         window.contentView = hosting

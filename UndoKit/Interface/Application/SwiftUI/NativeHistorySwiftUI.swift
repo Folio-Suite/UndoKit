@@ -93,7 +93,10 @@ private struct NativeHistorySwiftUIEditorPresentation: UIViewRepresentable {
 @MainActor private final class NativeHistorySwiftUIEditorContainer: UIView, NativeHistoryPresentationHost {
     private var reference: NativeHistorySwiftUIEditorReference?
     private weak var mountedEditor: UITextView?
-    var canMountPresentedEditor: Bool { reference?.presentation.editor?.superview == nil }
+    var canMountPresentedEditor: Bool {
+        guard let editor = reference?.presentation.editor else { return false }
+        return editor.superview == nil
+    }
     private var editorConstraints: [NSLayoutConstraint] = []
     private let diagnostic = UILabel()
 

@@ -39,13 +39,7 @@ import SwiftUI
     private static let presentations = NSMapTable<NativeHistoryAppKitTextView, NativeHistorySwiftUIEditorPresentation>(
         keyOptions: .weakMemory, valueOptions: .strongMemory)
     weak var editor: NativeHistoryAppKitTextView?
-    private weak var current: NativeHistorySwiftUIEditorContainer?
-    private var waiting: [WeakContainer] = []
-
-    private final class WeakContainer {
-        weak var value: NativeHistorySwiftUIEditorContainer?
-        init(_ value: NativeHistorySwiftUIEditorContainer) { self.value = value }
-    }
+    private let ownership = NativeHistoryPresentationOwnership()
 
     static func forEditor(_ editor: NativeHistoryAppKitTextView) -> NativeHistorySwiftUIEditorPresentation {
         if let existing = presentations.object(forKey: editor) { return existing }
@@ -55,38 +49,17 @@ import SwiftUI
         return presentation
     }
 
-    func attach(_ container: NativeHistorySwiftUIEditorContainer) {
-        waiting.removeAll { $0.value == nil }
-        guard let editor else {
-            container.showUnavailableEditor()
-            return
-        }
-        if current === container { return }
-        guard current == nil, editor.superview == nil else {
-            if !waiting.contains(where: { $0.value === container }) { waiting.append(WeakContainer(container)) }
-            return
-        }
-        current = container
-        container.mount(editor)
-    }
-
-    func detach(_ container: NativeHistorySwiftUIEditorContainer) {
-        waiting.removeAll { $0.value == nil || $0.value === container }
-        guard current === container else { return }
-        current = nil
-        container.removeEditor()
-        // SwiftUI may create/update the replacement before dismantling the old host.
-        // Promote only after the owner of the existing presentation releases it.
-        if let replacement = waiting.compactMap(\.value).first {
-            waiting.removeAll { $0.value === replacement }
-            attach(replacement)
-        }
-    }
+    func attach(_ container: NativeHistorySwiftUIEditorContainer) { ownership.attach(container) }
+    func detach(_ container: NativeHistorySwiftUIEditorContainer) { ownership.detach(container) }
 }
 
-@MainActor final class NativeHistorySwiftUIEditorContainer: NSView {
+@MainActor final class NativeHistorySwiftUIEditorContainer: NSView, NativeHistoryPresentationHost {
     private var presentation: NativeHistorySwiftUIEditorPresentation?
     private weak var mountedEditor: NativeHistoryAppKitTextView?
+    var canMountPresentedEditor: Bool {
+        guard let editor = presentation?.editor else { return false }
+        return editor.superview == nil
+    }
     private let diagnostic = NSTextField(
         wrappingLabelWithString: "This editor is already presented by another SwiftUI view.")
     private let scrollView = NSScrollView(frame: .zero)
@@ -125,7 +98,8 @@ import SwiftUI
         presentation.attach(self)
     }
 
-    fileprivate func mount(_ editor: NativeHistoryAppKitTextView) {
+    func mountPresentedEditor() {
+        guard let editor = presentation?.editor else { showUnavailableEditor(); return }
         mountedEditor = editor
         editor.isTemporarilyDetachedBySwiftUI = false
         diagnostic.isHidden = true
@@ -136,7 +110,7 @@ import SwiftUI
         scrollView.documentView = editor
     }
 
-    fileprivate func showUnavailableEditor() {
+    func showUnavailableEditor() {
         removeEditor()
         diagnostic.stringValue = "The owning document no longer has this editor."
         diagnostic.isHidden = false
@@ -146,10 +120,11 @@ import SwiftUI
         let previous = presentation
         presentation = nil
         previous?.detach(self)
-        removeEditor()
     }
 
-    fileprivate func removeEditor() {
+    func unmountPresentedEditor() { removeEditor() }
+
+    private func removeEditor() {
         mountedEditor?.isTemporarilyDetachedBySwiftUI = true
         if scrollView.documentView === mountedEditor { scrollView.documentView = nil }
         mountedEditor = nil

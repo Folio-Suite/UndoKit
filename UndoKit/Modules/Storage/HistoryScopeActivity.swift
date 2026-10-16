@@ -23,8 +23,8 @@ import Foundation
     func requireAdmission(exclusive: Bool = true, fromCallback: Bool = false) throws {
         try store.activity.requireMutationAdmission(in: store)
         guard !closed, !closing, self.exclusive == nil,
-              (!exclusive || !isActive),
-              (fromCallback || !HistoryStore.deliveringStores.contains(ObjectIdentifier(store))) else {
+              !exclusive || !isActive,
+              fromCallback || !HistoryStore.deliveringStores.contains(ObjectIdentifier(store)) else {
             throw HistoryFailure(.busy, stage: .admission, disposition: .usable)
         }
     }

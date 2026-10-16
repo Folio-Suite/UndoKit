@@ -64,17 +64,15 @@ extension HistoryTransactionCoordinator {
             if hadOffAction { row.currentBaselineSequence = sequence }
             baselineID = id
         }
-        row.recordingEnabled = enabled
         if enabled {
             try releaseSessionReferences(save: false)
-            if hadOffAction { row.undoFloorSequence = row.nextSequence }
-            row.offStartSequence = Int64(0)
-        } else {
-            row.offStartSequence = row.nextSequence
         }
+        positionPolicy.changeRecordingBoundary(
+            enabled: enabled, hadOffAction: hadOffAction,
+            nextSequence: row.nextSequence, scopeRow: row)
         row.committedVersion += 1
         try history.saveRetention()
-        if enabled { sessionGroups.removeAll() }
+        positionPolicy.commitRecordingBoundary(enabled: enabled)
         updateSnapshot()
         return baselineID
     }

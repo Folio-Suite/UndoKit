@@ -102,7 +102,7 @@ import Foundation
         }
     }
 
-    func eligibleGroup(for kind: HistoryDeliveryKind) throws -> HistoryGroupRecord? {
+    func positionGroups() throws -> (groups: [HistoryGroupRecord], invalidated: Bool) {
         let request = HistoryGroupRecord.fetchRequest()
         let floor = try scopeRecord().undoFloorSequence
         let groupFilter = "\(#keyPath(HistoryGroupRecord.scopeKey)) == %@ AND " +
@@ -116,10 +116,9 @@ import Foundation
         request.fetchLimit = limits.maxUndoGroups
         let groups = try context.fetch(request)
         // An invalidated group blocks traversal until the host can prove a
-        // narrower independent dependency scope. This first slice has no such proof.
-        guard !groups.contains(where: { $0.state == "invalid" }) else { return nil }
-        if kind == .undo { return groups.first(where: { $0.state == "applied" }) }
-        return groups.reversed().first(where: { $0.state == "undone" })
+        // narrower independent dependency scope. Position policy combines this
+        // barrier with transient session effects.
+        return (groups, groups.contains(where: { $0.state == "invalid" }))
     }
 
     func ordinaryGroups(state: String) throws -> [HistoryGroupRecord] {

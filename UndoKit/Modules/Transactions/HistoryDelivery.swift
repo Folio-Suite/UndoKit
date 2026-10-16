@@ -50,7 +50,7 @@ extension HistoryTransactionCoordinator {
     }
 
     private func executeSessionInverse(
-        _ group: SessionGroup,
+        _ group: HistoryPositionPolicy.SessionGroup,
         kind: HistoryDeliveryKind
     ) async -> HistoryResult {
         let effects: [HistoryEffect] = kind == .undo ? Array(group.effects.reversed()) : group.effects
@@ -109,7 +109,7 @@ extension HistoryTransactionCoordinator {
             }
             let scopeRow = try history.scopeRecord()
             if !scopeRow.recordingEnabled
-                && (kind == .command || sessionGroups.first(where: { $0.id == targetGroup }) == nil) {
+                && (kind == .command || positionPolicy.sessionGroups.first(where: { $0.id == targetGroup }) == nil) {
                 // Reserve the largest bounded inverse pair before delivery: a
                 // host effect may be larger than its submitted opaque intent.
                 let budget = min(

@@ -158,7 +158,9 @@ enum HistoryNativeOperation { case settle, undo, redo }
         let result = await engine.transaction.reconcile { result in
             // Closure is monotonic. Keep the authoritative receipt, but do not
             // begin a presentation refresh on a retiring session.
-            guard !self.closed, !self.closeRequested, self.engine === engine else { return }
+            guard !self.closed, !self.closeRequested, self.engine === engine,
+                !engine.transaction.closing, !engine.store.closing, !engine.store.closed
+            else { return }
             switch result {
             case nil, .accepted:
                 await engine.transaction.withHostCallback {

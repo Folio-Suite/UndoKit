@@ -3,142 +3,82 @@ SPDX-FileCopyrightText: 2026 the Folio Project
 SPDX-License-Identifier: MIT
 -->
 
-# Portable native editing session foundation
+# Shared History Session and native editing
 
-`NativeHistorySession<Lease>` coordinates typed provisional values, durable Commands
-and complete document ownership. It is the foundation for the supported native
-bindings, not qualification of stock text-control grouping or responder behavior.
-The existing [native-routing contract](native-routing-contract.md) remains the
-behavioral requirement for those bindings. This slice does not supersede it or
-the accepted domain-ownership ADRs.
+The ordinary interface is `HistorySessions` → `HistorySession` → typed
+`HistoryCommands` and presentation `HistoryAttachment`s. The accepted ownership
+and failure rules are in [ADR 0007](adr/0007-shared-native-history-coordination.md)
+and the [session design](session-interface-design.md).
 
-## App and host interface
+## Ownership
 
-Keep one app-owned `NativeHistorySessions<Lease>` collection. Construct the domain
-lease without I/O, and open through the collection:
+One application-owned collection retains one session per working History Scope.
+Multiple windows attach to that owner. A host lease owns domain resources; UndoKit
+owns history stores, writer arbitration, admission, field journals and recovery.
+The collection retains acquisition and failed-closure owners. Detaching a view
+never transfers or releases domain/history ownership.
 
-```swift
-let sessions = NativeHistorySessions<NotesDocumentLease>()
-let session = await sessions.open(
-    documentURL: documentURL,
-    mode: .existing,
-    codec: HistoryCodec<Note>.json(),
-    draftURL: documentURL.appendingPathComponent("Draft.json")
-) {
-    NotesDocumentLease(directory: documentURL)
-}
-```
+A field declaration binds stable field and mapping identities, its current codec,
+an authoritative value and opaque revision, and the typed Commands that implement
+a proposed change. Equal values are not interchangeable revisions. Captured intent
+is bound to the original base and History Generation; settlement cannot silently
+reread and rebase it.
 
-Select `.create` explicitly for a new document. All recovery and reopening use
-`.existing`; missing authoritative data is never replaced with an empty document.
-Opening returns an owning session even on failure. Parallel opening calls await
-the retained owner's acquisition. Canonical URL keys discard the incidental
-file-versus-directory trailing-slash flag, including when directory creation changes
-Foundation's appended URL. Inspect `status` rather than catching an error that
-would lose partially acquired ownership.
+There is one live native editing transaction per scope. Passive attachments receive
+authoritative refreshes without overwriting the active draft. Focus transfer settles
+the preceding transaction before another editor begins. Native live work is retired
+only for the matching transaction, after its accepted result and successful refresh.
 
-| Interface | Responsibility |
-| --- | --- |
-| `NativeHistorySessions` | Own sessions by canonical document URL; return retained owners before invoking a factory; expose copied status entries; close all sessions for termination |
-| `NativeHistoryLease` | Acquire host resources and history; read authoritative domain values and opaque revisions; prepare Commands against the supplied exact base; completely close history before releasing host ownership |
-| `NativeHistorySession` | Persist captured draft values, admit one composite operation, reconcile exact prepared intent, publish status and retain blocked recovery |
-| `NativeHistoryConnection` | Weak presentation attachment; capture/present values; disconnect and release callbacks; own no document resource |
+## Admission
 
-The lease exposes `history`, `open`, `close`, `readDraft`, and `makeCommand`.
-`readDraft` returns a value and an opaque domain revision. Equal values alone do
-not establish the same revision. `makeCommand` prepares intent without I/O or
-rebasing; nil means the host declares no semantic change. In that case the session
-removes provisional evidence, restores the authoritative base to presentation,
-and returns `.rejected` without delivering a Command.
+Typed requests reserve their FIFO position before asynchronous encoding. Native
+settlement participates in that same queue as a prerequisite, not through another
+submission chain. A rejected or uncertain prerequisite stops the dependent request;
+it cannot fall through to an older inverse. Independent proved rejections do not
+invalidate later independent Commands.
 
-[NotesDocumentLease](../Examples/DurableNotes/Sources/DurableNotesCore/NotesDocumentLease.swift)
-illustrates this division. Its Note.json replacement contains effects and
-host-authoritative receipts together. `applicationCount` supplies the revision
-because Forward, Undo and Redo each change it, even when note values coincide.
-The lease retains its physical store before scope opening, then closes engine,
-store and domain lock in that order. Every partial acquisition survives until
-complete closure succeeds.
+Native editing and native Undo/Redo are blocked while durable work is waiting or
+executing. Existing marked composition can finish. No adapter forcibly commits
+marked text or strands it behind a barrier that only settlement can release.
+Closure wakes composition waiters after preserving the field journal.
 
-## Operations and recovery
+Cancellation removes unprepared waiting work. Uncertainty returns queued followers
+as explicitly unexecuted with recovery required. They never resume automatically.
+The active operation retains its exact prepared identity and authoritative evidence.
+Acceptance and presentation readiness are separate: refresh failure can block the
+session after a receipt has already been accepted.
 
-The session exposes `draft`, `undoManager`, `status`, one status callback, and
-`submit`, `commit`, `undo`, `redo`, `retryDraft`, `discardDraft`, and `close`.
-Ordinary editing code does not retain queues, invocation identities or engine
-observers. Never bypass the session by concurrently submitting to its engine.
-The raw engine's advanced FIFO interface remains unchanged.
+## Native routing
 
-`connect(owner:captureDraft:draftDidChange:statusDidChange:)` retains its presentation
-owner weakly and passes that owner into callbacks. Do not capture that owner
-strongly inside a callback. Only one live connection is permitted. Capture and
-`updateDraft(_:isComposing:)` retain values rather than views. Commit and native
-Undo capture synchronously; native Undo closes admission before starting its Task.
-Further semantic submissions return busy instead of queuing arbitrary closures.
+Supply the attachment's UndoManager through the application's normal document,
+window or responder provider. AppKit forwards only exact recognized editor and
+text-storage registrations to a dedicated live manager. UIKit retains its native
+original-manager route. Both use the same field transaction policy.
 
-Undo of a provisional value is one composite operation: capture, prepare, persist
-exact Command, await authoritative acceptance and finalization, refresh the domain
-value, then reverse the newly accepted group. Rejection, uncertainty, conflicts or
-failed refresh stop that same Undo; none may fall through to an older group.
-A transaction can return `.accepted` while a subsequent presentation read fails:
-the receipt still proves authoritative acceptance, but `status` stays blocked.
-Do not resume editing from the transaction result alone.
+Local scratch controls remain isolated, including when their own stack is empty.
+Unknown registrations retain their callback graphs and block integration. Acceptance,
+detachment and recognized live-stack cleanup cannot clear them. Explicit native
+reconciliation requires the host to identify the authored work and reconcile its
+values first.
 
-The private typed journal binds scope, working identity, generation, codec
-identity/configuration/version, base value/revision, proposed value/capture revision,
-composition and any exact prepared Command. It is written before delivery. An
-uncertain retry preserves all Command identities and bytes. Only a proved
-rejection followed by a new explicit attempt receives a new identity. Equal text
-is never acceptance evidence. Reopening a journal requires explicit retry or
-discard; mismatch or unreadable evidence is preserved and cannot be discarded
-through an incompatible session.
+## Recovery and closure
 
-Writes are atomic. On iOS/iPadOS they additionally use `completeFileProtection`,
-preserving the existing UIKit journal protection. Protection-related write failures
-retain captured values and the lease and block complete closure. macOS uses the
-platform's ordinary file permissions. Device-lock behavior needs native validation.
+Current-format journals include scope, working identity, generation, field/mapping
+identity, codec/version, base value/revision, captured value and exact prepared
+Command. Unsupported formats fail explicitly; this greenfield interface provides no
+legacy whole-document draft reader or migration.
 
-Close captures connected content, including marked text, drains admitted work,
-preserves unsettled evidence, then awaits complete lease closure. Opening and
-closure are serialized. Disconnect also captures a ready connected value before
-releasing callbacks; during admitted work it preserves the already captured intent.
-Failed persistence or closure stays discoverable in the collection. Explicit retry
-can completely retire a failed persistence context and reopen existing history with
-unchanged scope, generation and working identity. A fresh attachment epoch rejects
-older availability callbacks. A retired session cannot reopen or remove its replacement.
-The collection removes an entry only after complete closure and disconnection.
+Reopened drafts require an explicit retry/discard decision. Retry consults the exact
+prepared identity. Discard cannot erase possible host effects. Failed acquisition,
+journal safeguarding or closure leaves an inspectable retained owner.
 
-## Native binding boundary
+Close safeguards fields, stops new admission, completes waiting requests as
+unexecuted, drains active work to its durable recovery boundary, closes framework
+resources, then releases the domain lease. Closing during opening cannot restore
+readiness when the delayed acquisition completes. A closed session's handles and
+attachments cannot act on a replacement owner.
 
-This foundation's manager routes semantic Undo/Redo without executing superclass
-native callbacks. Every superclass registration is currently unexplained: it
-suspends semantic admission and Undo/Redo, blocks complete close, and retains the
-registration objects through disconnection or unrelated acceptance. It does not
-infer classification merely from a typed draft change. The advanced
-`reconcileNativeRegistrations() async throws` action may release those callbacks only
-after the host explicitly identifies their authored work and reconciles the values.
-It works from blocked or suspended states and while a draft decision is pending.
-It reacquires an already closed lease before capturing connected content, persists
-that content before clearing, and executes no Command. It preserves exact prepared
-intent and pending restore/discard choices; a conflicting captured value cannot
-replace unsettled intent. New registrations arriving during awaited reacquisition
-require another explicit reconciliation. Close drains this recovery work and
-rechecks registrations before and after complete lease closure, retaining the owner
-and callback objects if closure cannot certify their preservation.
-
-The supported [UIKit binding](uikit-history-binding.md) supplies live original-manager
-routing and coarse editing-transaction boundaries under ADR 0006. The supported
-[AppKit binding](appkit-history-binding.md) supplies standard text-view responder
-actions, known native registration routing and the accepted AppKit extension of
-that distinction. Bindings must classify the
-stock controls' editing registrations, preserve unrelated native registrations,
-project accepted host action names, and settle native typing coalescing and group
-boundaries before capture. They must preserve marked-text composition and local
-text-control priority, install and remove responders/delegates safely, and prove
-actual native command routing, typing groups and deallocation. The portable
-`commit` boundary is not proof of native typing-group settlement. A replacement
-text-editing system or custom text mutations are outside this design.
-
-The existing `NativeHistoryRouter` remains available for advanced integrations.
-The AppKit sample now uses the shared session and complete `NotesDocumentLease`;
-its legacy `NotesSession` remains available for focused host examples and tests.
-Swift public-session tests prove durable coordination and ownership, not installed
-AppKit/UIKit acceptance, device-lock protection, or keyboard-shortcut behavior.
+See [AppKit](appkit-history-binding.md), [UIKit](uikit-history-binding.md), and
+[SwiftUI](swiftui-appkit-history-binding.md) for presentation mechanics. Runtime
+checks qualify the tested candidate only; they do not establish physical IME,
+floor-OS or Intel runtime behavior.

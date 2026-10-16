@@ -1,81 +1,80 @@
-# First Undo Group and native editing
+# First Undo Group, reopen and recover
 
 <!--
 SPDX-FileCopyrightText: 2026 the Folio Project
 SPDX-License-Identifier: MIT
 -->
 
-Keep authoritative effects in the host and await finalized completion.
+Register an operation once, submit typed values and attach native presentations.
 
-## Establish a stable scope
+## Establish ownership
 
-Use ``HistoryStore`` when a document owns multiple independent History Scopes,
-or ``HistoryEngine`` for a one-store/one-scope convenience. Persist stable host
-working/scope identities. Open known history with `.existing`; `.create` is only
-for genuinely new history. A view reconstruction does not create another writer.
+Give a document a stable History Scope and working identity. Own a
+``HistorySessions`` collection at application lifetime. Supply a
+``HistorySessionConfiguration`` with history placement and a ``HistoryHostLease``
+that acquires only domain resources. UndoKit retains ownership before acquisition
+begins and closes its history resources before releasing the lease.
 
-Implement ``HistoryHost`` for opaque payloads, or register typed handlers using
-``HistoryOperationRegistration``. The host filters known no-ops, assigns a stable
-Command identity and canonical intent fingerprint, then supplies every member of
-a semantic group. Typed handlers and codecs are registered from application code
-again after reopen; callbacks are not serialized into history.
+Register a ``HistoryOperation`` with the actual handler, current Command/effect
+codecs and canonical fingerprint construction. Ordinary setup requires no state
+codec or whole-document snapshot. Call `session.commands(for: operation)` once
+and pass that typed handle to editing code.
 
-The independent compiled consumer example submits two members setting `alpha`
-and `alpha-beta`. Its host atomically persists the full state and token-bound
-accepted effects/receipt before reporting acceptance. Undo restores the empty
-baseline; Redo restores `alpha-beta`. Three accepted deliveries produce three
-receipts and six applied members. The reopened host verifies content and receipts
-independently of the engine's availability flags.
-
-The host must apply the complete ordered delivery atomically, or establish that
-none took effect. A possible effect followed by uncertainty is unresolved;
-absence from a transient receipt map is not proof of rejection.
-
-## Observe completion
+## Submit values
 
 ```swift
-import UndoKit
-
 @MainActor
-func submitChange(
-    _ command: HistoryCommand,
-    using history: any HistoryTransactions
-) async -> HistoryResult {
-    await history.submit(command)
+func rename(_ command: Rename, using edits: HistoryCommands<Rename>) async
+    -> HistorySubmissionResult {
+    await edits.submit(command)
 }
 ```
 
-An accepted result follows authoritative domain acceptance and history
-finalization. Queue admission and native Undo registration are not durable
-receipts. Rejection establishes no effect; a failure's stage and disposition
-control whether editing or inverses can continue. Do not change identity to
-bypass a possibly delivered Command.
+Here `Rename` is the application's transferable semantic Command. For several
+members that must succeed atomically, use `submitGroup`. The host receives the
+whole ordered group and commits effects plus authoritative receipts atomically.
+Separate callbacks cannot establish an atomic mixed-family group.
 
-## Use genuine native editing
+An accepted result includes the finalized history receipt. An unexecuted result
+proves that this request did not reach delivery. An unresolved result preserves
+its original identity for recovery; do not invent another identity and retry the
+effect. Waiting followers stop explicitly and do not resume after reconciliation.
 
-``NativeHistorySession`` retains document editing/recovery coordination behind
-an app-owned complete domain lease. Native AppKit/UIKit bindings keep real text
-control microhistory in the platform manager. Explicit editing boundaries create
-durable Undo Groups; UndoKit does not serialize native typing registrations.
+## Attach native editing
 
-Typing followed by native Undo to baseline and Redo should produce no durable
-delivery. Explicit Commit produces one group. Durable Undo/Redo then each produce
-one authoritative host receipt. Local scratch history keeps responder priority
-and never falls through to another document group. Marked composition must reach
-a supported settlement boundary before durable delivery.
+Call `session.attach(owner:statusDidChange:)` for each window. Return the
+attachment's `undoManager` from the normal document/window/responder provider.
+A ``HistoryField`` supplies stable field/mapping identities, its value codec,
+an authoritative value plus revision, and a mapping to the typed handle.
+UndoKit handles capture, journaling, settlement and refresh across presentations.
 
-For SwiftUI, keep editor, binding and session in a stable document/scene owner.
-Present the framework-owned native-backed editor and use `nativeHistory(binding)`
-for the explicit `nativeHistoryUndoManager` environment; the SDK's built-in
-undoManager environment is read-only. Rebuilding a value view must not replace the
-native manager or duplicate the document writer. Refresh command eligibility from
-facade checkpoints and native focus changes, rather than durable status alone.
+Live native Undo/Redo before settlement does not create durable deliveries.
+An editing boundary settles one transaction. Subsequent durable Undo/Redo creates
+new accepted records. Marked composition may finish while the admission barrier
+blocks new editing. A local scratch editor keeps its own history and never falls
+through to an unrelated document group.
+
+Detaching a window releases presentation callbacks, not the shared session's
+writer or recovery evidence. Explicitly close the session at the domain ownership
+boundary. Unknown native registrations remain preserved and block integration
+until the host explicitly reconciles them.
+
+## Reopen
+
+Use `.existing` for registered history. Opening consults authoritative host
+receipts before allowing new delivery. Recovered field drafts require an explicit
+retry/discard decision. Exact prepared intent survives uncertainty; equal field
+values do not establish equal authoritative revisions.
+
+The Durable Notes examples exercise AppKit, UIKit and SwiftUI against the same
+domain host. The independent consumer verifies a two-member group, Undo, Redo and
+reopen: three accepted deliveries, six applied members and three host receipts.
+See the repository's getting-started guide for the runners and evidence limits.
 
 ## Topics
 
-- ``HistoryTransactions``
-- ``HistoryHost``
-- ``HistoryCommand``
-- ``HistoryResult``
-- ``NativeHistorySession``
+- ``HistorySessions``
+- ``HistoryOperation``
+- ``HistoryCommands``
+- ``HistoryAttachment``
 - <doc:RecoveryAndStorage>

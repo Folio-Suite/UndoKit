@@ -19,11 +19,17 @@ writer nor blocked recovery. Use `.create` only for new history and `.existing`
 for known history. Missing, corrupt or incompatible existing files are not an
 invitation to create replacement history.
 
-Choose a `HistoryHost` for opaque encoded payloads, or typed
-`HistoryOperationRegistration` handlers with stable operation/schema/codec IDs.
-Register handlers again from application code when reopening; executable callbacks
-are never persisted. Keep host-owned non-Sendable model values on the handler's
-actor. Native presentation and transaction/session calls are MainActor isolated.
+Create a `HistoryOperation` once, binding its actual handler, current Command and
+effect codecs, and canonical intent construction. Open a `HistorySession` through
+`HistorySessions`, then obtain `session.commands(for: operation)`. Host leases
+acquire domain resources only; the framework owns history storage. Ordinary
+submission needs no checkpoint codec or whole-document state.
+
+Several windows attach to the same working History Scope. Return each attachment's
+UndoManager from the app's normal document/window/responder provider. For complex
+integrations, focused `session.advanced` capabilities use the same owner. A standalone
+`HistoryStore`/`HistoryEngine` integration remains available for opaque transactions
+and explicit ownership. It must not compete with an existing session.
 
 ## Submit one group
 
@@ -36,20 +42,22 @@ the empty baseline; Redo restores `alpha-beta`. After all three accepted deliver
 the host has three receipts and six applied members. Reopen verifies this host
 state independently of Undo availability.
 
-A host must filter known no-ops before submitting and assign a stable Command ID
-and canonical intent fingerprint. A Command is a request; an Accepted Outcome
+A host filters known no-ops and defines canonical intent once in its operation
+declaration. The framework assigns and retains the prepared Command identity. A Command is a request; an Accepted Outcome
 establishes its effect. The host applies every group member atomically or proves
 that none took effect. A failure after a possible effect is unresolved, not a
 rejection. Reuse the exact Command/token identity when reconciling uncertainty.
 
-Await finalized `HistoryResult`, rather than treating enqueueing or a native Undo
+Await finalized `HistorySubmissionResult`, rather than treating enqueueing or a native Undo
 registration as a durable receipt. `.accepted` follows both the host's effect and
-history finalization. `.rejected` establishes no effect. A failure carries cause,
-stage and disposition; inspect them before admitting further edits or inverses.
+history finalization. `.rejected` establishes no effect. Unexecuted requests are distinguished from unresolved delivered work. Queued
+followers stop on uncertainty and never replay automatically after reconciliation.
+Observe session status as well: a refresh can fail after acceptance.
 
 ## Keep live typing native
 
-Use the supported [AppKit binding](appkit-history-binding.md) or
+Attach field declarations with stable identities, authoritative value/revision
+reads and typed Command mappings. Use the supported [AppKit binding](appkit-history-binding.md) or
 [UIKit binding](uikit-history-binding.md). Native text controls retain their real
 live Undo/Redo microhistory. Explicit editing transactions become persistent
 Undo Groups; native registrations are not serialized as durable history.
@@ -97,6 +105,6 @@ source/configuration/runtime manifest and independent Note.json/receipt readback
   Holds distinguish state protection from detailed-history protection. Run bounded
   maintenance; do not delete host resources still required by retained history.
 - [Compatibility and storage](history-compatibility.md): unsupported formats are
-  preserved/refused; migration is explicit and host-authorized when supported.
+  preserved/refused; this greenfield refactor provides no old-format reader or migration.
 - [Native session lifetime](native-editing-session-contract.md): presentation
   cleanup does not cancel delivered work or discard unresolved recovery evidence.

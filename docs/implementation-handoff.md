@@ -5,6 +5,12 @@ SPDX-License-Identifier: MIT
 
 # Accepted implementation handoff
 
+For the 2026-10-15 interface consolidation, follow the
+[shared History Session design](session-interface-design.md) and
+[ADR 0007](adr/0007-shared-native-history-coordination.md). The original handoff
+below remains the provenance for durable acceptance and host ownership; its
+ordinary entry points and initial implementation sequence are historical.
+
 The maintainer accepted the #51 handoff after accepting the bounded proofs
 #47–#50. Begin implementation under the existing durable acceptance, retention,
 typed interface, native routing and store lifecycle contracts. The proofs

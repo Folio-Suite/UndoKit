@@ -5,262 +5,196 @@ import Foundation
 import UndoKit
 import XCTest
 
-private final class MetadataValue {
+private struct MetadataIntent: Codable, Sendable {
     let number: Int
-    init(_ number: Int) { self.number = number }
+    let origin: UUID?
 }
-
-private func metadataCodec(_ identifier: String = "metadata.integer") -> HistoryCodec<MetadataValue> {
-    HistoryCodec(identifier: identifier, configuration: Data("decimal".utf8),
-                 encode: { Data(String($0.number).utf8) },
-                 decode: { data in
-                     guard let text = String(bytes: data, encoding: .utf8),
-                           let number = Int(text) else {
-                         throw CocoaError(.coderReadCorrupt)
-                     }
-                     return MetadataValue(number)
-                 })
-}
-
 private actor MetadataHandler: HistoryOperationHandler {
-    typealias Command = MetadataValue
-    typealias Effect = MetadataValue
-    typealias State = MetadataValue
-
-    private let reference: HistoryObjectReference
-    private var outcomes: [UUID: HistoryTypedOutcome<MetadataValue>] = [:]
-    private var observedOrigin: UUID?
+    typealias Command = MetadataIntent
+    typealias Effect = Int
+    let reference: HistoryObjectReference
+    var outcomes: [HistoryToken: HistoryTypedOutcome<Int>] = [:]
+    var observedOrigin: UUID?
+    var reverse = false
+    var loseReply = false
     private var applications = 0
-    private var reverseEffects = false
-
     init(reference: HistoryObjectReference) { self.reference = reference }
-
-    func submitValue(_ number: Int, origin: UUID?, presentation: HistoryPayload?,
-                     registration: HistoryOperationRegistration<MetadataHandler>,
-                     to engine: any HistoryTransactions) async -> HistoryResult {
-        await submit(HistoryTypedCommand(fingerprint: Data("number \(number)".utf8),
-                                         value: MetadataValue(number), restorationOrigin: origin,
-                                         presentation: presentation), using: registration, to: engine)
-    }
-
-    func members(using registration: HistoryOperationRegistration<MetadataHandler>) throws -> [HistoryMember] {
-        [
-            HistoryMember(payload: try encodeState(MetadataValue(1), using: registration)),
-            HistoryMember(payload: try encodeState(MetadataValue(2), using: registration)),
-        ]
-    }
-
-    func useReversedEffects() { reverseEffects = true }
-
-    func apply(_ commands: [(UUID, MetadataValue)],
-               context: HistoryOperationContext) async -> HistoryTypedOutcome<MetadataValue> {
+    func loseNextReply() { loseReply = true }
+    func reverseEvidence() { reverse = true }
+    func apply(
+        _ commands: [(UUID, MetadataIntent)], context: HistoryOperationContext
+    ) async -> HistoryTypedOutcome<Int> {
         applications += 1
         observedOrigin = context.restorationOrigin
         let effects = commands.map {
-            HistoryTypedEffect(memberID: $0.0, undo: MetadataValue(0),
-                               redo: MetadataValue($0.1.number), resources: [reference])
+            HistoryTypedEffect(memberID: $0.0, undo: 0, redo: $0.1.number, resources: [reference])
         }
-        let result = HistoryTypedOutcome<MetadataValue>.accepted(reverseEffects ? effects.reversed() : effects)
-        outcomes[context.token.command] = result
+        let result = HistoryTypedOutcome.accepted(reverse ? effects.reversed() : effects)
+        outcomes[context.token] = result
+        if loseReply {
+            loseReply = false
+            return .unresolved
+        }
         return result
     }
-
-    func undo(_ effects: [(UUID, MetadataValue)],
-              context: HistoryOperationContext) async -> HistoryTypedOutcome<MetadataValue> {
-        .accepted(effects.map { HistoryTypedEffect(memberID: $0.0, undo: MetadataValue(0), redo: $0.1) })
+    func undo(_ effects: [(UUID, Int)], context: HistoryOperationContext) async -> HistoryTypedOutcome<Int> {
+        .accepted(effects.map { HistoryTypedEffect(memberID: $0.0, undo: 0, redo: $0.1, resources: [reference]) })
     }
-
-    func redo(_ effects: [(UUID, MetadataValue)],
-              context: HistoryOperationContext) async -> HistoryTypedOutcome<MetadataValue> {
-        .accepted(effects.map { HistoryTypedEffect(memberID: $0.0, undo: MetadataValue(0), redo: $0.1) })
+    func redo(_ effects: [(UUID, Int)], context: HistoryOperationContext) async -> HistoryTypedOutcome<Int> {
+        await undo(effects, context: context)
     }
-
-    func outcome(for token: HistoryToken) async -> HistoryTypedOutcome<MetadataValue> {
-        outcomes[token.command] ?? .unresolved
-    }
-
-    var lastOrigin: UUID? { observedOrigin }
-    var applicationCount: Int { applications }
+    func outcome(for token: HistoryToken) async -> HistoryTypedOutcome<Int> { outcomes[token] ?? .unresolved }
+    func origin() -> UUID? { observedOrigin }
+    func applicationCount() -> Int { applications }
 }
-
-@MainActor private final class MainActorMetadataHandler: MainActorHistoryOperationHandler {
-    typealias Command = MetadataValue
-    typealias Effect = MetadataValue
-    typealias State = MetadataValue
-
-    private let reference: HistoryObjectReference
-    private var outcomes: [UUID: HistoryTypedOutcome<MetadataValue>] = [:]
+@MainActor private final class MainMetadataHandler: MainActorHistoryOperationHandler {
+    typealias Command = MetadataIntent
+    typealias Effect = Int
     private(set) var observedOrigin: UUID?
-
-    init(reference: HistoryObjectReference) { self.reference = reference }
-
-    func apply(_ commands: [(UUID, MetadataValue)],
-               context: HistoryOperationContext) async -> HistoryTypedOutcome<MetadataValue> {
+    func apply(
+        _ commands: [(UUID, MetadataIntent)], context: HistoryOperationContext
+    ) async -> HistoryTypedOutcome<Int> {
         observedOrigin = context.restorationOrigin
-        let result = HistoryTypedOutcome<MetadataValue>.accepted(commands.map {
-            HistoryTypedEffect(memberID: $0.0, undo: MetadataValue(0),
-                               redo: MetadataValue($0.1.number), resources: [reference])
-        })
-        outcomes[context.token.command] = result
-        return result
+        return .accepted(commands.map { HistoryTypedEffect(memberID: $0.0, undo: 0, redo: $0.1.number) })
     }
-
-    func undo(_ effects: [(UUID, MetadataValue)],
-              context: HistoryOperationContext) async -> HistoryTypedOutcome<MetadataValue> {
-        .accepted(effects.map { HistoryTypedEffect(memberID: $0.0, undo: MetadataValue(0), redo: $0.1) })
+    func undo(_ effects: [(UUID, Int)], context: HistoryOperationContext) async -> HistoryTypedOutcome<Int> {
+        .accepted(effects.map { HistoryTypedEffect(memberID: $0.0, undo: 0, redo: $0.1) })
     }
-
-    func redo(_ effects: [(UUID, MetadataValue)],
-              context: HistoryOperationContext) async -> HistoryTypedOutcome<MetadataValue> {
-        .accepted(effects.map { HistoryTypedEffect(memberID: $0.0, undo: MetadataValue(0), redo: $0.1) })
+    func redo(_ effects: [(UUID, Int)], context: HistoryOperationContext) async -> HistoryTypedOutcome<Int> {
+        await undo(effects, context: context)
     }
-
-    func outcome(for token: HistoryToken) async -> HistoryTypedOutcome<MetadataValue> {
-        outcomes[token.command] ?? .unresolved
-    }
+    func outcome(for token: HistoryToken) async -> HistoryTypedOutcome<Int> { .unresolved }
 }
-
 @MainActor final class HistoryTypedMetadataTests: XCTestCase {
-    func testTypedMetadataSurvivesDeliveryLookupAndReopen() async throws {
+    private func operation(_ handler: MetadataHandler) throws -> HistoryOperation<MetadataIntent> {
+        try HistoryOperation(
+            operation: "metadata.counter", commandCodec: HistoryCodec<MetadataIntent>.json(),
+            effectCodec: HistoryCodec<Int>.json(), handler: handler, fingerprint: { try JSONEncoder().encode($0) },
+            metadata: {
+                HistoryOperationMetadata(
+                    restorationOrigin: $0.first?.origin,
+                    presentation: HistoryPayload(family: "display.label", data: Data("Set value".utf8)))
+            })
+    }
+    func testTypedMetadataAndResourcesSurviveLookupAndReopen() async throws {
         let directory = try testDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
-        let url = directory.appendingPathComponent("History.sqlite")
-        let scope = UUID()
-        let workingID = UUID()
-        let storeID = UUID()
-        let origin = UUID()
-        let reference = HistoryObjectReference(storeID: storeID, objectKey: "asset", versionKey: "v2")
-        let presentation = HistoryPayload(family: "display.label", data: Data("Set two".utf8))
+        let reference = HistoryObjectReference(storeID: UUID(), objectKey: "asset", versionKey: "v2")
         let handler = MetadataHandler(reference: reference)
-        let codec = metadataCodec()
-        let registration = try HistoryOperationRegistration(
-            operation: "metadata-counter", commandCodec: codec, effectCodec: codec,
-            stateCodec: codec, handler: handler
+        let operation = try operation(handler)
+        let owners = HistorySessions()
+        let configuration = HistorySessionConfiguration(
+            historyURL: directory.appendingPathComponent("History.sqlite"),
+            scope: UUID(), workingIdentity: UUID(), mode: .create)
+        let session = await owners.open(
+            configuration: configuration, lease: TypedTestLease(), operations: [operation.erased])
+        let commands = try session.commands(for: operation)
+        let origin = UUID()
+        await handler.loseNextReply()
+        guard case .unresolved = await commands.submit(MetadataIntent(number: 2, origin: origin)) else {
+            XCTFail("Lost reply did not preserve uncertainty")
+            return
+        }
+        guard case .accepted(let receipt) = await session.reconcile() else {
+            XCTFail("Authoritative lookup failed")
+            return
+        }
+        let seen = await handler.origin()
+        XCTAssertEqual(seen, origin)
+        XCTAssertEqual(try session.advanced.historyPage(limit: 10).first?.restorationOrigin, origin)
+        XCTAssertEqual(try session.advanced.presentation(forGroup: receipt.groupID)?.data, Data("Set value".utf8))
+        XCTAssertEqual(
+            try session.advanced.requiredObjects(in: reference.storeID, limit: 10).objects.map(\.reference), [reference]
         )
-        let host = HistoryRegisteredHost(registration)
-        let engine = try await HistoryEngine.open(at: url, scope: scope, workingIdentity: workingID,
-                                                   mode: .create, host: host)
-        guard case .accepted(let receipt) = await handler.submitValue(2, origin: origin,
-            presentation: presentation, registration: registration, to: engine) else {
-            XCTFail("Typed command with metadata was not accepted")
-            return
-        }
-        let observedOrigin = await handler.lastOrigin
-        XCTAssertEqual(observedOrigin, origin)
-        XCTAssertEqual(try engine.historyPage(limit: 10).first?.restorationOrigin, origin)
-        XCTAssertEqual(try engine.presentation(forGroup: receipt.groupID), presentation)
-        guard case .accepted(let lookedUp) = await host.outcome(for: receipt.token) else {
-            XCTFail("Typed outcome lookup lost accepted effect evidence")
-            return
-        }
-        XCTAssertEqual(lookedUp.map(\.resources), [[reference]])
-        try await engine.close()
-
-        let reopened = try await HistoryEngine.open(at: url, scope: scope, workingIdentity: workingID,
-                                                     mode: .existing, host: host)
-        XCTAssertEqual(try reopened.historyPage(limit: 10).first?.restorationOrigin, origin)
-        XCTAssertEqual(try reopened.presentation(forGroup: receipt.groupID), presentation)
-        try await reopened.close()
-
-        let reader = try await HistoryStore.open(at: url, workingIdentity: workingID,
-                                                  mode: .existing, access: .readOnly)
-        XCTAssertEqual(try reader.requiredObjects(in: storeID, limit: 10).objects.map(\.reference), [reference])
-        try await reader.close()
+        await session.close()
+        let reopened = await owners.open(
+            configuration: HistorySessionConfiguration(
+                historyURL: configuration.historyURL,
+                scope: configuration.scope, workingIdentity: configuration.workingIdentity, mode: .existing),
+            lease: TypedTestLease(), operations: [operation.erased])
+        XCTAssertEqual(try reopened.advanced.historyPage(limit: 10).first?.restorationOrigin, origin)
+        XCTAssertEqual(try reopened.advanced.presentation(forGroup: receipt.groupID)?.data, Data("Set value".utf8))
+        XCTAssertEqual(
+            try reopened.advanced.requiredObjects(in: reference.storeID, limit: 10).objects.map(\.reference),
+            [reference])
+        let count = await handler.applicationCount()
+        XCTAssertEqual(count, 1)
+        await reopened.close()
     }
-
-    func testRegistrationDerivesCodecConfigurationAndRejectsInvalidSchemas() throws {
+    func testDeclarationsRejectInvalidCurrentSchemas() throws {
         let handler = MetadataHandler(reference: HistoryObjectReference(storeID: UUID(), objectKey: "asset"))
-        let codec = metadataCodec()
-        let registration = try HistoryOperationRegistration(
-            operation: "metadata-counter", commandVersion: 2, effectVersion: 3, stateVersion: 4,
-            commandCodec: codec, effectCodec: codec, stateCodec: codec, handler: handler
-        )
-        XCTAssertEqual(registration.identity.operation, "metadata-counter")
-        XCTAssertEqual(registration.identity.commandCodec, codec.identifier)
-        XCTAssertEqual(registration.identity.effectCodecConfiguration, codec.configuration)
-        XCTAssertEqual(registration.identity.stateVersion, 4)
-
-        func assertInvalid(operation: String = "metadata-counter",
-                           commandVersion: Int = 1, effectVersion: Int = 1, stateVersion: Int = 1,
-                           command: HistoryCodec<MetadataValue> = metadataCodec(),
-                           effect: HistoryCodec<MetadataValue> = metadataCodec(),
-                           state: HistoryCodec<MetadataValue> = metadataCodec(),
-                           oldCommands: [Int: HistoryCodec<MetadataValue>] = [:],
-                           oldEffects: [Int: HistoryCodec<MetadataValue>] = [:],
-                           oldStates: [Int: HistoryCodec<MetadataValue>] = [:]) {
-            XCTAssertThrowsError(try HistoryOperationRegistration(
-                operation: operation, commandVersion: commandVersion, effectVersion: effectVersion,
-                stateVersion: stateVersion, commandCodec: command, effectCodec: effect,
-                stateCodec: state, oldCommandCodecs: oldCommands, oldEffectCodecs: oldEffects,
-                oldStateCodecs: oldStates, handler: handler
-            )) { error in
-                guard let failure = error as? HistoryFailure else { return XCTFail("Wrong error: \(error)") }
-                XCTAssertEqual(failure.cause, .invalidInput)
-                XCTAssertEqual(failure.stage, .admission)
+        func invalid(
+            operation: String = "metadata", commandVersion: Int = 1, effectVersion: Int = 1,
+            command: HistoryCodec<MetadataIntent> = .json(), effect: HistoryCodec<Int> = .json()
+        ) {
+            XCTAssertThrowsError(
+                try HistoryOperation(
+                    operation: operation, commandVersion: commandVersion,
+                    effectVersion: effectVersion, commandCodec: command, effectCodec: effect, handler: handler,
+                    fingerprint: { try JSONEncoder().encode($0) })
+            ) { error in
+                XCTAssertEqual((error as? HistoryFailure)?.cause, .invalidInput)
+                XCTAssertEqual((error as? HistoryFailure)?.stage, .admission)
             }
         }
-        assertInvalid(operation: "")
-        assertInvalid(command: metadataCodec(""))
-        assertInvalid(effect: metadataCodec(""))
-        assertInvalid(state: metadataCodec(""))
-        assertInvalid(commandVersion: 0)
-        assertInvalid(effectVersion: -1)
-        assertInvalid(stateVersion: 0)
-        assertInvalid(commandVersion: 2, oldCommands: [0: codec])
-        assertInvalid(effectVersion: 2, oldEffects: [2: codec])
-        assertInvalid(stateVersion: 2, oldStates: [3: codec])
-        assertInvalid(commandVersion: 2, oldCommands: [1: metadataCodec("")])
+        invalid(operation: "")
+        invalid(commandVersion: 0)
+        invalid(effectVersion: -1)
+        invalid(command: .json(identifier: ""))
+        invalid(effect: .json(identifier: ""))
     }
-
-    func testMainActorMetadataFlowsThroughSubmissionAndLookup() async throws {
+    func testMainActorMetadataFlowsThroughTypedOperation() async throws {
         let directory = try testDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
+        let handler = MainMetadataHandler()
+        let owners = HistorySessions()
         let origin = UUID()
-        let reference = HistoryObjectReference(storeID: UUID(), objectKey: "main-actor-asset")
-        let presentation = HistoryPayload(family: "display.label", data: Data("Set three".utf8))
-        let handler = MainActorMetadataHandler(reference: reference)
-        let codec = metadataCodec()
-        let registration = try HistoryOperationRegistration(
-            operation: "main-counter", commandCodec: codec, effectCodec: codec,
-            stateCodec: codec, handler: handler
-        )
-        let host = MainActorHistoryRegisteredHost(registration)
-        let engine = try await HistoryEngine.open(at: directory.appendingPathComponent("History.sqlite"),
-                                                   scope: UUID(), workingIdentity: UUID(), mode: .create,
-                                                   host: host)
-        let command = HistoryTypedCommand(fingerprint: Data("number 3".utf8), value: MetadataValue(3),
-                                          restorationOrigin: origin, presentation: presentation)
-        guard case .accepted(let receipt) = await handler.submit(command, using: registration, to: engine) else {
-            XCTFail("Main-actor typed command with metadata was not accepted")
+        let operation = try HistoryOperation(
+            operation: "main.metadata", commandCodec: HistoryCodec<MetadataIntent>.json(),
+            effectCodec: HistoryCodec<Int>.json(), handler: handler, fingerprint: { try JSONEncoder().encode($0) },
+            metadata: {
+                HistoryOperationMetadata(
+                    restorationOrigin: $0.first?.origin,
+                    presentation: HistoryPayload(family: "label", data: Data("Main value".utf8)))
+            })
+        let session = await owners.open(
+            configuration: HistorySessionConfiguration(
+                historyURL: directory.appendingPathComponent("History.sqlite"),
+                scope: UUID(), workingIdentity: UUID(), mode: .create), lease: TypedTestLease(),
+            operations: [operation.erased])
+        let commands = try session.commands(for: operation)
+        guard case .accepted(let receipt) = await commands.submit(MetadataIntent(number: 3, origin: origin)) else {
+            XCTFail("Main actor metadata refused")
             return
         }
         XCTAssertEqual(handler.observedOrigin, origin)
-        XCTAssertEqual(try engine.historyPage(limit: 10).first?.restorationOrigin, origin)
-        XCTAssertEqual(try engine.presentation(forGroup: receipt.groupID), presentation)
-        guard case .accepted(let lookedUp) = await host.outcome(for: receipt.token) else {
-            XCTFail("Main-actor outcome lookup lost accepted effect evidence")
+        XCTAssertEqual(try session.advanced.presentation(forGroup: receipt.groupID)?.data, Data("Main value".utf8))
+        await session.close()
+    }
+    func testAcceptedEffectsMustMatchAtomicMemberOrder() async throws {
+        let directory = try testDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let handler = MetadataHandler(reference: HistoryObjectReference(storeID: UUID(), objectKey: "asset"))
+        await handler.reverseEvidence()
+        let operation = try operation(handler)
+        let owners = HistorySessions()
+        let session = await owners.open(
+            configuration: HistorySessionConfiguration(
+                historyURL: directory.appendingPathComponent("History.sqlite"),
+                scope: UUID(), workingIdentity: UUID(), mode: .create), lease: TypedTestLease(),
+            operations: [operation.erased])
+        let commands = try session.commands(for: operation)
+        guard
+            case .unresolved = await commands.submitGroup([
+                MetadataIntent(number: 1, origin: nil), MetadataIntent(number: 2, origin: nil),
+            ])
+        else {
+            XCTFail("Reordered accepted effects established acceptance")
             return
         }
-        XCTAssertEqual(lookedUp.map(\.resources), [[reference]])
-        try await engine.close()
-    }
-
-    func testAcceptedEffectsMustMatchMemberOrder() async throws {
-        let reference = HistoryObjectReference(storeID: UUID(), objectKey: "asset")
-        let handler = MetadataHandler(reference: reference)
-        let codec = metadataCodec()
-        let registration = try HistoryOperationRegistration(
-            operation: "metadata-counter", commandCodec: codec, effectCodec: codec,
-            stateCodec: codec, handler: handler
-        )
-        let members = try await handler.members(using: registration)
-        await handler.useReversedEffects()
-        let token = HistoryToken(scope: UUID(), generation: UUID(), sequence: 1, command: UUID())
-        let delivery = HistoryDelivery(token: token, kind: .command, members: members,
-                                       restorationOrigin: UUID())
-        let result = await HistoryRegisteredHost(registration).deliver(delivery)
-        XCTAssertEqual(result, .unresolved)
-        let applicationCount = await handler.applicationCount
-        XCTAssertEqual(applicationCount, 1)
+        let count = await handler.applicationCount()
+        XCTAssertEqual(count, 1)
+        XCTAssertTrue(try session.advanced.historyPage(limit: 10).isEmpty)
+        await session.close()
     }
 }

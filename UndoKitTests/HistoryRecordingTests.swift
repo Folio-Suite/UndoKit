@@ -5,7 +5,7 @@ import Foundation
 import UndoKit
 import XCTest
 
-@MainActor private final class RecordingCounterHost: HistoryHost {
+@MainActor final class RecordingCounterHost: HistoryHost {
     var value = 0
     var deliveries = 0
     var requiredResource: HistoryObjectReference?
@@ -17,14 +17,18 @@ import XCTest
             return .rejected
         }
         guard delivery.members.count == 1,
-              let text = String(data: delivery.members[0].payload.data, encoding: .utf8),
-              let delta = Int(text) else { return .rejected }
+            let text = String(data: delivery.members[0].payload.data, encoding: .utf8),
+            let delta = Int(text)
+        else { return .rejected }
         value += delta
         let member = delivery.members[0]
-        return .accepted([HistoryEffect(memberID: member.id,
-            undo: HistoryPayload(family: "counter", data: Data(String(-delta).utf8)),
-            redo: member.payload,
-            resources: requiredResource.map { [$0] } ?? []), ])
+        return .accepted([
+            HistoryEffect(
+                memberID: member.id,
+                undo: HistoryPayload(family: "counter", data: Data(String(-delta).utf8)),
+                redo: member.payload,
+                resources: requiredResource.map { [$0] } ?? []),
+        ])
     }
     func outcome(for token: HistoryToken) async -> HistoryHostOutcome { .unresolved }
 }
@@ -45,143 +49,37 @@ import XCTest
         guard let delivery, delivery.token == token, let member = delivery.members.first else {
             return .unresolved
         }
-        return .accepted([HistoryEffect(memberID: member.id,
-            undo: HistoryPayload(family: "counter", data: Data("-1".utf8)),
-            redo: member.payload, resources: [resource]), ])
+        return .accepted([
+            HistoryEffect(
+                memberID: member.id,
+                undo: HistoryPayload(family: "counter", data: Data("-1".utf8)),
+                redo: member.payload, resources: [resource]),
+        ])
     }
 }
 
 @MainActor final class HistoryRecordingTests: XCTestCase {
-    func testRejectedOffUndoBlocksOlderGroupsWithoutReleasingRequiredObjects() async throws {
-        let directory = try testDirectory()
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let host = RecordingCounterHost()
-        let resource = HistoryObjectReference(storeID: UUID(), objectKey: "off-effect")
-        host.requiredResource = resource
-        let store = try await HistoryStore.open(at: directory.appendingPathComponent("History.sqlite"),
-            workingIdentity: UUID(), mode: .create)
-        let engine = try await store.openScope(UUID(), mode: .create, host: host)
-        try engine.setRecording(.off)
-        for delta in [1, 2] {
-            let result = await engine.submit(HistoryCommand(fingerprint: Data(String(delta).utf8),
-                payload: HistoryPayload(family: "counter", data: Data(String(delta).utf8))))
-            guard case .accepted = result else { return XCTFail("Off edit was not accepted") }
-        }
-        host.rejectNext = true
-        let rejected = await engine.undo()
-        XCTAssertEqual(rejected, .rejected)
-        XCTAssertFalse(engine.snapshot.canUndo)
-        XCTAssertFalse(engine.snapshot.canRedo)
-        let deliveries = host.deliveries
-        let repeated = await engine.undo()
-        XCTAssertEqual(repeated, .rejected)
-        XCTAssertEqual(host.deliveries, deliveries)
-        XCTAssertEqual(host.value, 3)
-        XCTAssertTrue(try engine.historyPage(limit: 10).isEmpty)
-        XCTAssertEqual(try store.requiredObjects(in: resource.storeID, limit: 10)
-            .objects.map(\.reference), [resource])
-        try await store.close()
-    }
-
-    func testRejectedOffRedoKeepsBarrierAcrossNewCommandsAndUndoDepthEviction() async throws {
-        for startsRetained in [false, true] {
-            let directory = try testDirectory()
-            defer { try? FileManager.default.removeItem(at: directory) }
-            let host = RecordingCounterHost()
-            let engine = try await HistoryEngine.open(at: directory.appendingPathComponent("History.sqlite"),
-                scope: UUID(), workingIdentity: UUID(), mode: .create, host: host,
-                limits: HistoryLimits(maxPayloadBytes: 128, maxUndoGroups: 4))
-            if !startsRetained { try engine.setRecording(.off) }
-            for delta in [1, 2] {
-                let result = await engine.submit(recordingCommand(delta))
-                guard case .accepted = result else { return XCTFail("Initial edit was not accepted") }
-            }
-            if startsRetained { try engine.setRecording(.off) }
-            guard case .accepted = await engine.undo() else { return XCTFail("Undo was not accepted") }
-            host.rejectNext = true
-            let rejected = await engine.redo()
-            XCTAssertEqual(rejected, .rejected)
-            XCTAssertFalse(engine.snapshot.canUndo)
-            XCTAssertFalse(engine.snapshot.canRedo)
-            let deliveries = host.deliveries
-            let repeated = await engine.redo()
-            let olderUndo = await engine.undo()
-            XCTAssertEqual(repeated, .rejected)
-            XCTAssertEqual(olderUndo, .rejected)
-            XCTAssertEqual(host.deliveries, deliveries)
-            XCTAssertEqual(host.value, 1)
-
-            for _ in 0..<5 {
-                let result = await engine.submit(recordingCommand(1))
-                guard case .accepted = result else { return XCTFail("Independent edit was not accepted") }
-            }
-            XCTAssertEqual(host.value, 6)
-            XCTAssertFalse(engine.snapshot.canUndo)
-            XCTAssertFalse(engine.snapshot.canRedo)
-            let afterNewCommands = host.deliveries
-            let blockedUndo = await engine.undo()
-            let blockedRedo = await engine.redo()
-            XCTAssertEqual(blockedUndo, .rejected)
-            XCTAssertEqual(blockedRedo, .rejected)
-            XCTAssertEqual(host.deliveries, afterNewCommands)
-            XCTAssertEqual(try engine.historyPage(limit: 10).count, startsRetained ? 2 : 0)
-            try await engine.close()
-        }
-    }
-
-    func testRejectedRetainedUndoPreservesHistoryAndBarrierOnReopen() async throws {
-        let directory = try testDirectory()
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let url = directory.appendingPathComponent("History.sqlite")
-        let scope = UUID(), workingID = UUID()
-        let host = RecordingCounterHost()
-        let engine = try await HistoryEngine.open(at: url, scope: scope,
-            workingIdentity: workingID, mode: .create, host: host)
-        for delta in [1, 2] {
-            let result = await engine.submit(recordingCommand(delta))
-            guard case .accepted = result else { return XCTFail("Retained edit was not accepted") }
-        }
-        host.rejectNext = true
-        let rejected = await engine.undo()
-        XCTAssertEqual(rejected, .rejected)
-        XCTAssertFalse(engine.snapshot.canUndo)
-        XCTAssertFalse(engine.snapshot.canRedo)
-        try await engine.close()
-        let reopened = try await HistoryEngine.open(at: url, scope: scope,
-            workingIdentity: workingID, mode: .existing, host: host)
-        let deliveries = host.deliveries
-        let repeated = await reopened.undo()
-        XCTAssertEqual(repeated, .rejected)
-        XCTAssertEqual(host.deliveries, deliveries)
-        XCTAssertEqual(host.value, 3)
-        XCTAssertFalse(reopened.snapshot.canUndo)
-        XCTAssertFalse(reopened.snapshot.canRedo)
-        XCTAssertEqual(try reopened.historyPage(limit: 10).count, 2)
-        try await reopened.close()
-    }
-
-    private func recordingCommand(_ delta: Int) -> HistoryCommand {
-        HistoryCommand(fingerprint: Data(UUID().uuidString.utf8),
-            payload: HistoryPayload(family: "counter", data: Data(String(delta).utf8)))
-    }
-
     func testRecordingOffKeepsSessionUndoAndRetainedCheckpointsWithoutGapActions() async throws {
         let directory = try testDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let url = directory.appendingPathComponent("History.sqlite")
-        let scope = UUID(), workingID = UUID()
+        let scope = UUID()
+        let workingID = UUID()
         let host = RecordingCounterHost()
-        let engine = try await HistoryEngine.open(at: url, scope: scope,
+        let engine = try await HistoryEngine.open(
+            at: url, scope: scope,
             workingIdentity: workingID, mode: .create, host: host)
         func command(_ delta: Int) -> HistoryCommand {
-            HistoryCommand(fingerprint: Data(UUID().uuidString.utf8),
+            HistoryCommand(
+                fingerprint: Data(UUID().uuidString.utf8),
                 payload: HistoryPayload(family: "counter", data: Data(String(delta).utf8)))
         }
         guard case .accepted = await engine.submit(command(1)) else {
             XCTFail("initial edit")
             return
         }
-        _ = try engine.createCheckpoint(name: "Before gap",
+        _ = try engine.createCheckpoint(
+            name: "Before gap",
             state: HistoryPayload(family: "counter", data: Data("1".utf8)))
         try engine.setRecording(.off)
         guard case .accepted = await engine.submit(command(2)) else {
@@ -200,7 +98,8 @@ import XCTest
         XCTAssertEqual(try engine.checkpoints(limit: 10).count, 1)
         try await engine.close()
 
-        let reopened = try await HistoryEngine.open(at: url, scope: scope,
+        let reopened = try await HistoryEngine.open(
+            at: url, scope: scope,
             workingIdentity: workingID, mode: .existing, host: host)
         XCTAssertFalse(reopened.snapshot.canUndo)
         XCTAssertEqual(try reopened.historyPage(limit: 10).count, 1)
@@ -211,14 +110,18 @@ import XCTest
     func testOffSessionProtectsRequiredObjectsUntilSessionCloses() async throws {
         let directory = try testDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
-        let scope = UUID(), workingID = UUID(), storeID = UUID()
+        let scope = UUID()
+        let workingID = UUID()
+        let storeID = UUID()
         let host = RecordingCounterHost()
         host.requiredResource = HistoryObjectReference(storeID: storeID, objectKey: "version-1")
-        let store = try await HistoryStore.open(at: directory.appendingPathComponent("History.sqlite"),
+        let store = try await HistoryStore.open(
+            at: directory.appendingPathComponent("History.sqlite"),
             workingIdentity: workingID, mode: .create)
         let engine = try await store.openScope(scope, mode: .create, host: host)
         try engine.setRecording(.off)
-        let command = HistoryCommand(fingerprint: Data("resource".utf8),
+        let command = HistoryCommand(
+            fingerprint: Data("resource".utf8),
             payload: HistoryPayload(family: "counter", data: Data("1".utf8)))
         guard case .accepted = await engine.submit(command) else {
             XCTFail("Off edit")
@@ -235,10 +138,12 @@ import XCTest
         let directory = try testDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let host = RecordingCounterHost()
-        let engine = try await HistoryEngine.open(at: directory.appendingPathComponent("History.sqlite"),
+        let engine = try await HistoryEngine.open(
+            at: directory.appendingPathComponent("History.sqlite"),
             scope: UUID(), workingIdentity: UUID(), mode: .create, host: host)
         func command(_ delta: Int) -> HistoryCommand {
-            HistoryCommand(fingerprint: Data(UUID().uuidString.utf8),
+            HistoryCommand(
+                fingerprint: Data(UUID().uuidString.utf8),
                 payload: HistoryPayload(family: "counter", data: Data(String(delta).utf8)))
         }
         guard case .accepted(let before) = await engine.submit(command(1)) else {
@@ -251,9 +156,12 @@ import XCTest
             return
         }
         XCTAssertNil(try engine.readIdentity().latestGroupID)
-        XCTAssertThrowsError(try engine.beginRecoveryPlan(to: .group(before.groupID),
-            using: .acceptedEffects))
-        let baseline = try engine.setRecording(.on,
+        XCTAssertThrowsError(
+            try engine.beginRecoveryPlan(
+                to: .group(before.groupID),
+                using: .acceptedEffects))
+        let baseline = try engine.setRecording(
+            .on,
             baseline: HistoryPayload(family: "counter", data: Data("3".utf8)))
         XCTAssertNotNil(baseline)
         XCTAssertEqual(try engine.checkpoint(id: baseline!)?.state.data, Data("3".utf8))
@@ -265,8 +173,10 @@ import XCTest
         XCTAssertNotNil(try engine.readIdentity().latestGroupID)
         XCTAssertEqual(host.value, 7)
         XCTAssertEqual(try engine.historyPage(limit: 10).count, 2)
-        XCTAssertThrowsError(try engine.beginRecoveryPlan(to: .group(before.groupID),
-            using: .acceptedEffects))
+        XCTAssertThrowsError(
+            try engine.beginRecoveryPlan(
+                to: .group(before.groupID),
+                using: .acceptedEffects))
         try await engine.close()
     }
 
@@ -274,9 +184,11 @@ import XCTest
         let directory = try testDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let host = RecordingCounterHost()
-        let engine = try await HistoryEngine.open(at: directory.appendingPathComponent("History.sqlite"),
+        let engine = try await HistoryEngine.open(
+            at: directory.appendingPathComponent("History.sqlite"),
             scope: UUID(), workingIdentity: UUID(), mode: .create, host: host)
-        let command = HistoryCommand(fingerprint: Data("first".utf8),
+        let command = HistoryCommand(
+            fingerprint: Data("first".utf8),
             payload: HistoryPayload(family: "counter", data: Data("5".utf8)))
         guard case .accepted = await engine.submit(command) else {
             XCTFail("first")
@@ -305,12 +217,11 @@ extension HistoryRecordingTests {
     func testClearHistoryStartsNewGenerationWithoutRemovingAnotherScope() async throws {
         let directory = try testDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
-        let store = try await HistoryStore.open(at: directory.appendingPathComponent("History.sqlite"),
-            workingIdentity: UUID(), mode: .create)
-        let host = RecordingCounterHost()
+        let (store, host) = try await makeRecordingStore(at: directory)
         let first = try await store.openScope(UUID(), mode: .create, host: host)
         let second = try await store.openScope(UUID(), mode: .create, host: host)
-        let command = HistoryCommand(fingerprint: Data("one".utf8),
+        let command = HistoryCommand(
+            fingerprint: Data("one".utf8),
             payload: HistoryPayload(family: "counter", data: Data("1".utf8)))
         guard case .accepted = await first.submit(command) else {
             XCTFail("first")
@@ -334,7 +245,8 @@ extension HistoryRecordingTests {
             return
         }
         XCTAssertEqual(stale.cause, .identityConflict)
-        let fresh = HistoryCommand(fingerprint: Data("fresh".utf8),
+        let fresh = HistoryCommand(
+            fingerprint: Data("fresh".utf8),
             payload: HistoryPayload(family: "counter", data: Data("2".utf8)))
         guard case .failure(let unbound) = await first.submit(fresh) else {
             XCTFail("Unbound command crossed generation reset")
@@ -342,7 +254,8 @@ extension HistoryRecordingTests {
         }
         XCTAssertEqual(unbound.cause, .identityConflict)
         XCTAssertEqual(host.deliveries, delivered)
-        let attached = HistoryCommand(fingerprint: fresh.fingerprint,
+        let attached = HistoryCommand(
+            fingerprint: fresh.fingerprint,
             payload: fresh.members[0].payload, expectedGeneration: newGeneration)
         guard case .accepted = await first.submit(attached) else {
             XCTFail("Current generation command refused")
@@ -359,18 +272,23 @@ extension HistoryRecordingTests {
         defer { try? FileManager.default.removeItem(at: directory) }
         let url = directory.appendingPathComponent("History.sqlite")
         let quarantine = directory.appendingPathComponent("Quarantine.sqlite")
-        let scope = UUID(), workingID = UUID()
+        let scope = UUID()
+        let workingID = UUID()
         let host = UnresolvedRecordingHost()
-        let engine = try await HistoryEngine.open(at: url, scope: scope,
+        let engine = try await HistoryEngine.open(
+            at: url, scope: scope,
             workingIdentity: workingID, mode: .create, host: host)
-        let command = HistoryCommand(fingerprint: Data("unresolved".utf8),
+        let command = HistoryCommand(
+            fingerprint: Data("unresolved".utf8),
             payload: HistoryPayload(family: "counter", data: Data("1".utf8)))
         guard case .failure = await engine.submit(command) else {
             XCTFail("unresolved")
             return
         }
-        XCTAssertThrowsError(try engine.clearHistory(adopting:
-            HistoryPayload(family: "counter", data: Data("1".utf8))))
+        XCTAssertThrowsError(
+            try engine.clearHistory(
+                adopting:
+                    HistoryPayload(family: "counter", data: Data("1".utf8))))
         let oldGeneration = engine.snapshot.generation
         let newGeneration = try engine.resetUnresolvedHistory(
             adopting: HistoryPayload(family: "counter", data: Data("1".utf8)),
@@ -378,7 +296,8 @@ extension HistoryRecordingTests {
         XCTAssertNotEqual(newGeneration, oldGeneration)
         XCTAssertFalse(engine.snapshot.isSuspended)
         XCTAssertFalse(engine.snapshot.canUndo)
-        let retained = try await HistoryStore.open(at: quarantine, workingIdentity: workingID,
+        let retained = try await HistoryStore.open(
+            at: quarantine, workingIdentity: workingID,
             mode: .existing, access: .readOnly)
         XCTAssertEqual(try retained.inspectScope(scope).generation, oldGeneration)
         XCTAssertEqual(try retained.inspectScope(scope).pendingRecoveryCount, 1)
@@ -390,16 +309,19 @@ extension HistoryRecordingTests {
         let directory = try testDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let host = RecordingCounterHost()
-        let engine = try await HistoryEngine.open(at: directory.appendingPathComponent("History.sqlite"),
+        let engine = try await HistoryEngine.open(
+            at: directory.appendingPathComponent("History.sqlite"),
             scope: UUID(), workingIdentity: UUID(), mode: .create, host: host)
-        let command = HistoryCommand(fingerprint: Data("first".utf8),
+        let command = HistoryCommand(
+            fingerprint: Data("first".utf8),
             payload: HistoryPayload(family: "counter", data: Data("1".utf8)))
         guard case .accepted = await engine.submit(command) else {
             XCTFail("first")
             return
         }
         try engine.setRecording(.off)
-        _ = try engine.setRecording(.on,
+        _ = try engine.setRecording(
+            .on,
             baseline: HistoryPayload(family: "counter", data: Data("1".utf8)))
         XCTAssertTrue(engine.snapshot.canUndo)
         guard case .accepted = await engine.undo() else {
@@ -414,12 +336,15 @@ extension HistoryRecordingTests {
         let directory = try testDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let url = directory.appendingPathComponent("History.sqlite")
-        let scope = UUID(), workingID = UUID()
+        let scope = UUID()
+        let workingID = UUID()
         let host = AcceptedOnRecoveryHost()
-        let engine = try await HistoryEngine.open(at: url, scope: scope,
+        let engine = try await HistoryEngine.open(
+            at: url, scope: scope,
             workingIdentity: workingID, mode: .create, host: host)
         try engine.setRecording(.off)
-        let command = HistoryCommand(fingerprint: Data("pending".utf8),
+        let command = HistoryCommand(
+            fingerprint: Data("pending".utf8),
             payload: HistoryPayload(family: "counter", data: Data("1".utf8)))
         guard case .failure = await engine.submit(command) else {
             XCTFail("pending")
@@ -435,4 +360,14 @@ extension HistoryRecordingTests {
         try await reopened.close()
         try await store.close()
     }
+    private func makeRecordingStore(
+        at directory: URL
+    ) async throws -> (HistoryStore, RecordingCounterHost) {
+        let store = try await HistoryStore.open(
+            at: directory.appendingPathComponent("History.sqlite"),
+            workingIdentity: UUID(), mode: .create)
+        let host = RecordingCounterHost()
+        return (store, host)
+    }
+
 }

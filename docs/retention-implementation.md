@@ -5,8 +5,8 @@ SPDX-License-Identifier: MIT
 
 # Retention implementation and measured case
 
-The public capabilities are in `Interface/HistoryReading.swift` and
-`Interface/HistoryRetentionManaging.swift`; their values are in
+The public capabilities are in `Interface/Advanced/RetainedHistory/HistoryReading.swift` and
+`Interface/Advanced/RetainedHistory/HistoryRetentionManaging.swift`; their values are in
 `HistoryReconstruction.swift` and `HistoryRetention.swift`. Plan protection,
 checkpoint access, holds and consolidation live in `Modules/RetainedHistory/`.
 `HistoryRetentionResources.swift` exposes physical-store resource maintenance,

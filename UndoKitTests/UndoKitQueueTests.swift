@@ -6,6 +6,37 @@ import UndoKit
 import XCTest
 
 extension UndoKitTests {
+    func testUncertainHeadReturnsFollowersUnexecutedAndNeverReplaysThem() async throws {
+        let directory = try testDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let host = try CounterHost(url: directory.appendingPathComponent("host.json"))
+        let engine = try await HistoryEngine.open(
+            at: directory.appendingPathComponent("History.sqlite"), scope: UUID(),
+            workingIdentity: UUID(), mode: .create, host: host)
+        host.pauseBeforeSave = true
+        host.loseReplyAfterSave = true
+        let first = Task { await engine.submit(HistoryCommand(fingerprint: Data([1]), payload: payload(1))) }
+        while host.deliveries == 0 { await Task.yield() }
+        let follower = Task { await engine.submit(HistoryCommand(fingerprint: Data([2]), payload: payload(2))) }
+        await Task.yield()
+        host.resumeDelivery()
+        guard case .failure(let activeFailure) = await first.value,
+            case .failure(let waitingFailure) = await follower.value
+        else {
+            XCTFail("Uncertainty must stop the queue")
+            return
+        }
+        XCTAssertNotEqual(activeFailure.stage, .admission)
+        XCTAssertEqual(waitingFailure.stage, .admission, "Queued work was never delivered")
+        XCTAssertEqual(waitingFailure.disposition, .suspended)
+        guard case .accepted = await engine.reconcile() else { XCTFail("Receipt must reconcile")
+return }
+        XCTAssertEqual(host.deliveries, 1)
+        XCTAssertEqual(host.value, 1)
+        XCTAssertEqual(try engine.historyPage(limit: 10).count, 1)
+        try await engine.close()
+    }
+
     func testDuplicateIdentityDoesNotRedeliverAndChangedIntentConflicts() async throws {
         let directory = try testDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }

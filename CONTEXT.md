@@ -16,6 +16,13 @@ individual editing contexts and application launches; multiple editing contexts
 may participate in the same scope.
 _Avoid_: Window, process, editing context
 
+**History Session**:
+A live owner of coordinated editing and recovery within one History Scope.
+Multiple editing contexts may participate in the same session; the scope identity
+survives the session and can be reopened later. Ending a presentation does not by
+itself end the session.
+_Avoid_: History Scope, window, presentation connection
+
 **Command**:
 An identified, host-submitted request to perform a semantic operation; the host
 owns the determination that a change is needed. Retrying an unresolved request

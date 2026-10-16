@@ -36,18 +36,60 @@ import XCTest
 }
 
 @MainActor final class HistoryOpeningActivityTests: XCTestCase {
+    func testCloseWaitsForExplicitReconciliationAndPreservesItsAcceptedReceipt() async throws {
+        let directory = try testDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let host = try CounterHost(url: directory.appendingPathComponent("Host.json"))
+        let recovery = OpeningRecoveryHost(host)
+        let engine = try await HistoryEngine.open(
+            at: directory.appendingPathComponent("History.sqlite"),
+            scope: UUID(), workingIdentity: UUID(), mode: .create, host: recovery)
+        host.loseReplyAfterSave = true
+        guard case .failure = await engine.submit(HistoryCommand(fingerprint: Data([9]), payload: payload(9))) else {
+            XCTFail("Lost reply must require recovery")
+            return
+        }
+        let reconciling = Task { await engine.reconcile() }
+        await recovery.waitForLookup()
+        var closeStarted = false
+        var closeFinished = false
+        let closing = Task {
+            closeStarted = true
+            try await engine.close()
+            closeFinished = true
+        }
+        while !closeStarted { await Task.yield() }
+        XCTAssertFalse(closeFinished)
+        recovery.resumeLookup()
+        guard case .accepted = await reconciling.value else {
+            XCTFail("Original receipt must reconcile")
+            return
+        }
+        try await closing.value
+        XCTAssertTrue(closeFinished)
+        XCTAssertFalse(engine.snapshot.canUndo)
+        XCTAssertEqual(host.deliveries, 1)
+        XCTAssertEqual(host.value, 9)
+    }
+
     func testCloseDuringOpeningPreservesRecoveryAndWriterOwnership() async throws {
         let directory = try testDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let url = directory.appendingPathComponent("History.sqlite")
-        let scope = UUID(), working = UUID()
+        let scope = UUID()
+        let working = UUID()
         let host = try CounterHost(url: directory.appendingPathComponent("Host.json"))
-        let original = try await HistoryEngine.open(at: url, scope: scope,
+        let original = try await HistoryEngine.open(
+            at: url, scope: scope,
             workingIdentity: working, mode: .create, host: host)
         host.loseReplyAfterSave = true
-        guard case .failure = await original.submit(HistoryCommand(
-            fingerprint: Data("set seven".utf8), payload: payload(7))) else {
-            return XCTFail("The lost reply must leave recovery work")
+        guard
+            case .failure = await original.submit(
+                HistoryCommand(
+                    fingerprint: Data("set seven".utf8), payload: payload(7)))
+        else {
+            XCTFail("The lost reply must leave recovery work")
+            return
         }
         try await original.close()
 
@@ -64,19 +106,14 @@ import XCTest
         }
         while !closeStarted { await Task.yield() }
         XCTAssertFalse(closeFinished, "Close must wait for opening's authoritative outcome lookup")
-        do {
-            let competitor = try await HistoryStore.open(at: url, workingIdentity: working, mode: .existing)
-            try await competitor.close()
-            XCTFail("Opening recovery lost exclusive writer ownership")
-        } catch let failure as HistoryFailure {
-            XCTAssertEqual(failure.cause, .busy)
-        }
+        try await assertWriterIsExclusivelyOwned(at: url, workingIdentity: working)
         recovery.resumeLookup()
         try await closing.value
         let closedEngine = try await opening.value
         XCTAssertFalse(closedEngine.snapshot.canUndo, "A completed open cannot revive the closed scope")
 
-        let reopened = try await HistoryEngine.open(at: url, scope: scope,
+        let reopened = try await HistoryEngine.open(
+            at: url, scope: scope,
             workingIdentity: working, mode: .existing, host: host)
         XCTAssertTrue(reopened.snapshot.canUndo)
         XCTAssertEqual(try reopened.historyPage(limit: 10).count, 1)
@@ -84,4 +121,14 @@ import XCTest
         XCTAssertEqual(host.deliveries, 1, "Recovery must not apply the accepted effect again")
         try await reopened.close()
     }
+    private func assertWriterIsExclusivelyOwned(at url: URL, workingIdentity: UUID) async throws {
+        do {
+            let competitor = try await HistoryStore.open(at: url, workingIdentity: workingIdentity, mode: .existing)
+            try await competitor.close()
+            XCTFail("Opening recovery lost exclusive writer ownership")
+        } catch let failure as HistoryFailure {
+            XCTAssertEqual(failure.cause, .busy)
+        }
+    }
+
 }

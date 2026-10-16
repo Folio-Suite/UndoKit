@@ -17,6 +17,8 @@ public enum HistoryFailureCause: String, Sendable {
     case hostProtocol
     /// The authoritative effect cannot yet be established.
     case unresolved
+    /// A preceding native editing transaction was rejected; this dependent request was not delivered.
+    case prerequisiteRejected
     /// Work, closure, maintenance or prohibited reentry prevents admission now.
     case busy
     /// A schema, codec, encoded envelope or stored model cannot be interpreted safely.
@@ -68,8 +70,10 @@ public struct HistoryFailure: Error, Equatable, Sendable {
     /// Creates a failure description. It does not alter scope state or reconcile domain effects.
     /// A host reports pre-effect failure only when no semantic effect is authoritative;
     /// possible effects require outcome lookup rather than classification as rejection.
-    public init(_ cause: HistoryFailureCause, stage: HistoryFailureStage,
-                disposition: HistoryScopeDisposition, underlyingDescription: String? = nil) {
+    public init(
+        _ cause: HistoryFailureCause, stage: HistoryFailureStage,
+        disposition: HistoryScopeDisposition, underlyingDescription: String? = nil
+    ) {
         self.cause = cause
         self.stage = stage
         self.disposition = disposition

@@ -8,10 +8,8 @@ enum HistoryRegistrationValidation {
         guard !operation.isEmpty else { throw invalidRegistration() }
     }
 
-    static func validate<Value>(_ codec: HistoryCodec<Value>, version: Int,
-                                older: [Int: HistoryCodec<Value>]) throws {
-        guard version > 0, !codec.identifier.isEmpty,
-              older.allSatisfy({ $0.key > 0 && $0.key < version && !$0.value.identifier.isEmpty }) else {
+    static func validate<Value>(_ codec: HistoryCodec<Value>, version: Int) throws {
+        guard version > 0, !codec.identifier.isEmpty else {
             throw invalidRegistration()
         }
     }

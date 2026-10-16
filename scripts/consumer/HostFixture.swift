@@ -28,7 +28,9 @@ private struct HostState: Codable {
 }
 
 /// Independent host with durable domain state and authoritative token receipts.
-private actor DurableHost: HistoryHost {
+private actor DurableHost: HistoryOperationHandler {
+    typealias Command = String
+    typealias Effect = String
     private let url: URL
     private var state: HostState
 
@@ -41,23 +43,29 @@ private actor DurableHost: HistoryHost {
         }
     }
 
-    func deliver(_ delivery: HistoryDelivery) async -> HistoryHostOutcome {
-        let key = Self.key(delivery.token)
+    func apply(_ commands: [(UUID, String)], context: HistoryOperationContext) async -> HistoryTypedOutcome<String> {
+        await execute(commands, token: context.token)
+    }
+    func undo(_ effects: [(UUID, String)], context: HistoryOperationContext) async -> HistoryTypedOutcome<String> {
+        await execute(effects, token: context.token)
+    }
+    func redo(_ effects: [(UUID, String)], context: HistoryOperationContext) async -> HistoryTypedOutcome<String> {
+        await execute(effects, token: context.token)
+    }
+    private func execute(_ changes: [(UUID, String)], token: HistoryToken) async -> HistoryTypedOutcome<String> {
+        let key = Self.key(token)
         if let prior = state.outcomes[key] { return Self.outcome(prior) }
 
         var next = state
         var effects: [StoredEffect] = []
-        for member in delivery.members {
-            guard let target = String(data: member.payload.data, encoding: .utf8) else {
-                return .failure(HistoryFailure(.hostProtocol, stage: .delivery, disposition: .usable))
-            }
+        for (memberID, target) in changes {
             let previous = next.value
             next.value = target
-            effects.append(StoredEffect(memberID: member.id.uuidString,
+            effects.append(StoredEffect(memberID: memberID.uuidString,
                                         undo: Data(previous.utf8), redo: Data(target.utf8)))
         }
         next.appliedDeliveries += 1
-        next.appliedMembers += delivery.members.count
+        next.appliedMembers += changes.count
         let receipt = StoredOutcome(effects: effects)
         next.outcomes[key] = receipt
         do {
@@ -72,7 +80,7 @@ private actor DurableHost: HistoryHost {
         }
     }
 
-    func outcome(for token: HistoryToken) async -> HistoryHostOutcome {
+    func outcome(for token: HistoryToken) async -> HistoryTypedOutcome<String> {
         guard let receipt = state.outcomes[Self.key(token)] else { return .rejected }
         return Self.outcome(receipt)
     }
@@ -83,13 +91,21 @@ private actor DurableHost: HistoryHost {
         "\(token.scope.uuidString):\(token.generation.uuidString):\(token.sequence):\(token.command.uuidString)"
     }
 
-    private static func outcome(_ stored: StoredOutcome) -> HistoryHostOutcome {
+    private static func outcome(_ stored: StoredOutcome) -> HistoryTypedOutcome<String> {
         .accepted(stored.effects.map {
-            HistoryEffect(memberID: UUID(uuidString: $0.memberID)!,
-                          undo: HistoryPayload(family: "consumer-state", data: $0.undo),
-                          redo: HistoryPayload(family: "consumer-state", data: $0.redo))
+            HistoryTypedEffect(memberID: UUID(uuidString: $0.memberID)!,
+                          undo: String(decoding: $0.undo, as: UTF8.self),
+                          redo: String(decoding: $0.redo, as: UTF8.self))
         })
     }
+}
+
+@MainActor private final class ConsumerHostLease: HistoryHostLease {
+    let url: URL
+    var host: DurableHost?
+    init(url: URL) { self.url = url }
+    func open(_ mode: HistoryOpenMode) async throws { host = try DurableHost(url: url) }
+    func close() async throws { host = nil }
 }
 
 private struct ConsumerReport: Codable {
@@ -137,48 +153,57 @@ private func runConsumerFixture(route: String) async throws -> ConsumerReport {
     #endif
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
     let storeURL = root.appendingPathComponent("History.sqlite")
-    let host = try DurableHost(url: root.appendingPathComponent("HostState.json"))
     let workingIdentity = UUID(uuidString: "31000000-0000-4000-8000-000000000001")!
     let scope = UUID(uuidString: "31000000-0000-4000-8000-000000000002")!
-    var engine = try await HistoryEngine.open(at: storeURL, scope: scope,
-                                              workingIdentity: workingIdentity, mode: .create, host: host)
-
-    let memberA = UUID(uuidString: "31000000-0000-4000-8000-000000000011")!
-    let memberB = UUID(uuidString: "31000000-0000-4000-8000-000000000012")!
-    let command = HistoryCommand(
-        id: UUID(uuidString: "31000000-0000-4000-8000-000000000010")!,
-        fingerprint: Data("two-member-command-v1".utf8),
-        members: [
-            HistoryMember(id: memberA, payload: HistoryPayload(family: "consumer-state", data: Data("alpha".utf8))),
-            HistoryMember(id: memberB, payload: HistoryPayload(family: "consumer-state", data: Data("alpha-beta".utf8)))
-        ])
-    guard case .accepted = await engine.submit(command) else {
+    let owners = HistorySessions()
+    let lease = ConsumerHostLease(url: root.appendingPathComponent("HostState.json"))
+    var operation: HistoryOperation<String>!
+    var session = await owners.open(documentURL: root, mode: .create, lease: lease) {
+        operation = try HistoryOperation(operation: "consumer-state", commandCodec: .json(), effectCodec: .json(),
+            handler: lease.host!, fingerprint: { values in
+                let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
+                return try encoder.encode(values)
+            })
+        return HistorySessionSetup(configuration: HistorySessionConfiguration(historyURL: storeURL,
+            scope: scope, workingIdentity: workingIdentity, mode: .create), operations: [operation.erased])
+    }
+    guard session.status.phase == .ready else { throw FixtureError.assertion("Session did not open") }
+    let commands = try session.commands(for: operation)
+    guard case .accepted = await commands.submitGroup(["alpha", "alpha-beta"]) else {
         throw FixtureError.assertion("grouped host Command was not accepted")
     }
-    guard case .accepted = await engine.undo(expectedGeneration: engine.snapshot.generation) else {
+    guard case .accepted = await session.undo() else {
         throw FixtureError.assertion("Undo was not accepted")
     }
-    guard await host.snapshot().value.isEmpty else {
+    guard await lease.host!.snapshot().value.isEmpty else {
         throw FixtureError.assertion("Undo did not restore the original host value")
     }
-    guard case .accepted = await engine.redo(expectedGeneration: engine.snapshot.generation) else {
+    guard case .accepted = await session.redo() else {
         throw FixtureError.assertion("Redo was not accepted")
     }
-    try await engine.close()
+    await session.close()
+    guard session.status.phase == .closed else { throw FixtureError.assertion("Session did not close") }
 
-    let reopenedHost = try DurableHost(url: root.appendingPathComponent("HostState.json"))
-    engine = try await HistoryEngine.open(at: storeURL, scope: scope,
-                                          workingIdentity: workingIdentity, mode: .existing, host: reopenedHost)
+    let reopenedLease = ConsumerHostLease(url: root.appendingPathComponent("HostState.json"))
+    session = await owners.open(documentURL: root, mode: .existing, lease: reopenedLease) {
+        let reopenedOperation = try HistoryOperation(operation: "consumer-state", commandCodec: HistoryCodec<String>.json(),
+            effectCodec: .json(), handler: reopenedLease.host!, fingerprint: { try JSONEncoder().encode($0) })
+        return HistorySessionSetup(configuration: HistorySessionConfiguration(historyURL: storeURL,
+            scope: scope, workingIdentity: workingIdentity, mode: .existing), operations: [reopenedOperation.erased])
+    }
+    guard session.status.phase == .ready, let reopenedHost = reopenedLease.host else {
+        throw FixtureError.assertion("Existing session did not reopen")
+    }
     let snapshot = await reopenedHost.snapshot()
-    let available = engine.snapshot
-    let entries = try engine.historyPage(limit: 20)
+    let available = session.snapshot
+    let entries = try session.advanced.historyPage(limit: 20)
     guard snapshot.value == "alpha-beta", snapshot.appliedDeliveries == 3,
           snapshot.appliedMembers == 6, snapshot.outcomes.count == 3,
           available.canUndo, !available.canRedo,
           entries.contains(where: { $0.memberCount == 2 }) else {
         throw FixtureError.assertion("reopen state, receipts, delivery count, or grouped history did not match")
     }
-    try await engine.close()
+    await session.close()
     return ConsumerReport(route: route, platform: consumerPlatform, hostValue: snapshot.value,
                           groupMemberCount: 2, receiptCount: snapshot.outcomes.count,
                           appliedDeliveries: snapshot.appliedDeliveries,

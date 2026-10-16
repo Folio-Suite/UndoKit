@@ -7,9 +7,9 @@ SPDX-License-Identifier: MIT
 
 Use `NativeHistorySwiftUIEditor(textView:)` to present a supported
 `NativeHistoryAppKitTextView` inside SwiftUI. Create the editor, one
-`NativeHistorySession` connection and its `NativeHistoryAppKitBinding` in a stable
+`HistorySession` attachment and its `NativeHistoryAppKitBinding` in a stable
 presentation owner, rather than in `body` or `makeNSView`. Retain the complete
-lease through an application-owned `NativeHistorySessions` collection. The
+lease through an application-owned `HistorySessions` collection. The
 [AppKit binding contract](appkit-history-binding.md) remains authoritative for
 settlement, recovery, marked text and unknown registrations.
 

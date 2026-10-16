@@ -9,18 +9,22 @@ extension HistoryTransactionCoordinator {
         switch transaction.stage ?? "" {
         case "accepted":
             do {
-                return .accepted(HistoryReceipt(token: try history.token(for: transaction),
-                                                groupID: try transaction.uuid(transaction.groupID)))
+                return .accepted(
+                    HistoryReceipt(
+                        token: try history.token(for: transaction),
+                        groupID: try transaction.uuid(transaction.groupID)))
             } catch { return .failure(HistoryFailure(.storage, stage: .reconciliation, disposition: .suspended)) }
         case "rejected":
             return .rejected
         case "cancelled":
             if let causeName = transaction.failureCause,
-               let stageName = transaction.failureStage,
-               let cause = HistoryFailureCause(rawValue: causeName),
-               let stage = HistoryFailureStage(rawValue: stageName) {
-                return .failure(HistoryFailure(cause, stage: stage, disposition: .usable,
-                                               underlyingDescription: transaction.failureDescription))
+                let stageName = transaction.failureStage,
+                let cause = HistoryFailureCause(rawValue: causeName),
+                let stage = HistoryFailureStage(rawValue: stageName) {
+                return .failure(
+                    HistoryFailure(
+                        cause, stage: stage, disposition: .usable,
+                        underlyingDescription: transaction.failureDescription))
             }
             return .failure(HistoryFailure(.busy, stage: .reconciliation, disposition: .usable))
         case "prepared":
@@ -68,13 +72,14 @@ extension HistoryTransactionCoordinator {
     func reconcileOnOpen() async {
         do {
             let request = HistoryTransactionRecord.fetchRequest()
-            request.predicate = NSPredicate(format: "\(#keyPath(HistoryTransactionRecord.scopeKey)) == %@ AND " +
-                "\(#keyPath(HistoryTransactionRecord.stage)) != %@ AND " +
-                "\(#keyPath(HistoryTransactionRecord.stage)) != %@ AND " +
-                "\(#keyPath(HistoryTransactionRecord.stage)) != %@",
-                                            scope.uuidString, "accepted", "rejected", "cancelled")
+            request.predicate = NSPredicate(
+                format: "\(#keyPath(HistoryTransactionRecord.scopeKey)) == %@ AND "
+                    + "\(#keyPath(HistoryTransactionRecord.stage)) != %@ AND "
+                    + "\(#keyPath(HistoryTransactionRecord.stage)) != %@ AND "
+                    + "\(#keyPath(HistoryTransactionRecord.stage)) != %@",
+                scope.uuidString, "accepted", "rejected", "cancelled")
             request.sortDescriptors = [
-                NSSortDescriptor(key: #keyPath(HistoryTransactionRecord.sequence), ascending: true),
+                NSSortDescriptor(key: #keyPath(HistoryTransactionRecord.sequence), ascending: true)
             ]
             for row in try context.fetch(request) { _ = await reconcile(row) }
             let remaining = try context.fetch(request)
@@ -88,22 +93,30 @@ extension HistoryTransactionCoordinator {
         if store.writeFailed {
             return .failure(HistoryFailure(.storage, stage: .reconciliation, disposition: .suspended))
         }
-        guard !isExecuting, !closed, !closing, !reconciling, !store.closing,
-              !store.closed, !store.maintenance else {
-            return .failure(HistoryFailure(.busy, stage: .reconciliation,
-                                           disposition: closing ? .suspended : .usable))
+        guard !isActive, !closed, !closing, !reconciling, !store.closing,
+            !store.closed, !store.maintenance
+        else {
+            return .failure(
+                HistoryFailure(
+                    .busy, stage: .reconciliation,
+                    disposition: closing ? .suspended : .usable))
         }
         reconciling = true
-        defer { reconciling = false }
+        defer {
+            reconciling = false
+            updateSnapshot()
+            resumeClosureIfIdle()
+        }
         do {
             let request = HistoryTransactionRecord.fetchRequest()
-            request.predicate = NSPredicate(format: "\(#keyPath(HistoryTransactionRecord.scopeKey)) == %@ AND " +
-                "\(#keyPath(HistoryTransactionRecord.stage)) != %@ AND " +
-                "\(#keyPath(HistoryTransactionRecord.stage)) != %@ AND " +
-                "\(#keyPath(HistoryTransactionRecord.stage)) != %@",
-                                            scope.uuidString, "accepted", "rejected", "cancelled")
+            request.predicate = NSPredicate(
+                format: "\(#keyPath(HistoryTransactionRecord.scopeKey)) == %@ AND "
+                    + "\(#keyPath(HistoryTransactionRecord.stage)) != %@ AND "
+                    + "\(#keyPath(HistoryTransactionRecord.stage)) != %@ AND "
+                    + "\(#keyPath(HistoryTransactionRecord.stage)) != %@",
+                scope.uuidString, "accepted", "rejected", "cancelled")
             request.sortDescriptors = [
-                NSSortDescriptor(key: #keyPath(HistoryTransactionRecord.sequence), ascending: true),
+                NSSortDescriptor(key: #keyPath(HistoryTransactionRecord.sequence), ascending: true)
             ]
             guard let row = try context.fetch(request).first else {
                 unsuspend()

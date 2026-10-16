@@ -4,287 +4,283 @@
 #if canImport(AppKit)
 import AppKit
 
-/// AppKit presentation attachment. The session collection remains the recovery owner.
-@MainActor public final class NativeHistoryAppKitBinding<Lease: NativeHistoryLease> {
-    let session: NativeHistorySession<Lease>
+/// AppKit mechanics for an attachment; shared-session policy lives in HistoryNativeCoordinator.
+@MainActor public final class NativeHistoryAppKitBinding: HistoryNativePlatformAdapter, AppKitEditingAdmission {
+    let session: HistorySession
+    let attachmentID: UUID
+    private weak var attachment: HistoryAttachment?
     var controls: [AppKitHistoryControl] = []
-    var localControls: [AppKitHistoryControl] = []
-    var connection: NativeHistoryConnection?
-    var capture: (() -> NativeDraftCapture<Lease.Draft>?)?
-    var present: ((Lease.Draft) -> Void)?
-    var presentStatus: ((NativeHistoryStatus) -> Void)?
+    private var localControls: [AppKitHistoryControl] = []
     var observers: [NSObjectProtocol] = []
-    var pending = false
+    let liveManager = UndoManager()
     var disconnected = false
     var rendering = false
-    var liveTransaction = false
-    var deferredBoundary = false
-    var participants: Set<ObjectIdentifier> = []
-    public private(set) var lastResult: HistoryResult?
-    public var isAvailable = true { didSet { publishAvailability() } }
-    let actionName: String
-    let liveManager = UndoManager()
-    var operation: Task<HistoryResult, Never>?
-    lazy var documentFacade = AppKitHistoryUndoManager(owner: self, registrationManager: liveManager, unknownManager: session.undoManager)
-    public var undoManager: UndoManager { documentFacade }
-    public var status: NativeHistoryStatus { session.status }
-    public var hasLiveTransaction: Bool { liveTransaction }
-
-    init<Owner: AnyObject>(session: NativeHistorySession<Lease>, owner: Owner,
-        editors: [NativeHistoryAppKitTextView], localEditors: [NativeHistoryAppKitTextView],
-        actionName: String, captureDraft: @escaping @MainActor (Owner) -> NativeDraftCapture<Lease.Draft>?,
-        draftDidChange: @escaping @MainActor (Owner, Lease.Draft) -> Void,
-        statusDidChange: (@MainActor (Owner, NativeHistoryStatus) -> Void)?) throws {
-        self.session = session; self.actionName = actionName
-        guard !editors.isEmpty, Set(editors.map(ObjectIdentifier.init)).count == editors.count,
-              Set(localEditors.map(ObjectIdentifier.init)).count == localEditors.count,
-              !localEditors.contains(where: { local in editors.contains(where: { $0 === local }) }),
-              (editors + localEditors).allSatisfy({ $0.historyFacade == nil }) else {
-            throw HistoryFailure(.invalidInput, stage: .admission, disposition: .usable)
+    var available = true
+    public var isAvailable: Bool {
+        get { available }
+        set {
+            available = newValue
+            publishAvailability()
         }
-        capture = { [weak owner] in owner.flatMap(captureDraft) }
-        present = { [weak owner] value in if let owner { draftDidChange(owner, value) } }
-        presentStatus = { [weak owner] value in if let owner { statusDidChange?(owner, value) } }
+    }
+    private lazy var documentFacade = AppKitHistoryUndoManager(
+        owner: self, registrationManager: liveManager, unknownManager: session.nativeCoordinator.undoManager)
+    public var undoManager: UndoManager { documentFacade }
+    public var status: HistorySessionStatus { session.status }
+    public var hasLiveTransaction: Bool { session.nativeCoordinator.hasLiveTransaction(attachment: attachmentID) }
+    public private(set) var lastResult: HistorySubmissionResult?
+    public var permitsEditing: Bool {
+        available && !disconnected && !session.status.isEditingBlocked
+    }
+    init(attachment: HistoryAttachment) {
+        self.attachment = attachment
+        session = attachment.session
+        attachmentID = attachment.id
         liveManager.levelsOfUndo = 0
-        connection = try session.connect(owner: self, captureDraft: { $0.capture?() },
-            draftDidChange: { $0.render($1) }, statusDidChange: { $0.statusChanged($1) })
-        for editor in editors {
-            let control = AppKitHistoryControl(editor: editor, registrationManager: liveManager)
-            let facade = AppKitHistoryUndoManager(owner: self, editor: editor, registrationManager: liveManager, unknownManager: session.undoManager)
-            control.facade = facade; editor.historyFacade = facade; editor.editingAdmission = self; controls.append(control)
+    }
+    func install(
+        editors: [(NativeHistoryAppKitTextView, HistoryField<String>)], localEditors: [NativeHistoryAppKitTextView]
+    ) async throws {
+        let all = editors.map(\.0) + localEditors
+        guard !editors.isEmpty, Set(all.map(ObjectIdentifier.init)).count == all.count,
+            all.allSatisfy({ $0.historyFacade == nil })
+        else { throw invalidInput() }
+        // Acquire fields before replacing any native control routing.
+        var values: [String] = []
+        for (_, field) in editors { values.append(try await session.nativeCoordinator.register(field)) }
+        guard let attachment else { throw HistoryFailure(.identityConflict, stage: .admission, disposition: .usable) }
+        try attachment.requireCurrent()
+        for (index, pair) in editors.enumerated() {
+            let (editor, field) = pair
+            let control = AppKitHistoryControl(editor: editor, field: field.id, manager: liveManager)
+            control.facade = AppKitHistoryUndoManager(
+                owner: self, editor: editor, registrationManager: liveManager,
+                unknownManager: session.nativeCoordinator.undoManager)
+            editor.historyFacade = control.facade
+            editor.editingAdmission = self
+            controls.append(control)
+            render(control: control, value: values[index])
         }
         for editor in localEditors {
             let manager = UndoManager()
-            let control = AppKitHistoryControl(editor: editor, registrationManager: manager, isLocal: true)
-            let facade = AppKitHistoryUndoManager(owner: self, editor: editor, registrationManager: manager)
-            control.facade = facade; editor.historyFacade = facade; localControls.append(control)
+            let control = AppKitHistoryControl(editor: editor, field: nil, manager: manager)
+            control.facade = AppKitHistoryUndoManager(owner: self, editor: editor, registrationManager: manager)
+            editor.historyFacade = control.facade
+            localControls.append(control)
         }
-        session.editing.settlementDidComplete = { [weak self] in self?.retireAcceptedLiveHistory() }
-        observeEditors(); publishAvailability()
-    }
-
-    public var permitsEditing: Bool {
-        isAvailable && !pending && !disconnected && session.editing.permitsKnownLiveEditing
-    }
-    var hasMarkedText: Bool { controls.contains { $0.editor?.hasMarkedText() == true } }
-
-    func captureLive() {
-        guard !rendering, !disconnected, let value = capture?(), session.editing.permitsKnownLiveEditing else { return }
-        do { try session.editing.captureKnownLiveDraft(value) } catch { publishAvailability() }
-    }
-    func render(_ value: Lease.Draft) {
-        guard !disconnected else { return }
-        rendering = true; present?(value); rendering = false
-    }
-    func statusChanged(_ value: NativeHistoryStatus) {
-        guard !disconnected else { return }
-        presentStatus?(value); publishAvailability()
-    }
-
-    /// An explicit boundary that persists the current AppKit editing transaction.
-    @discardableResult public func commit() async -> HistoryResult {
-        await perform { await $0.editing.commitKnownLiveDraft() }
-    }
-    /// Applies one host-declared semantic edit after settling the current text transaction.
-    @discardableResult public func applyDraft(_ proposed: Lease.Draft) async -> HistoryResult {
-        let present = present
-        return await perform { session in
-            let prior = await session.editing.commitKnownLiveDraft()
-            guard session.status.phase == .ready, !session.status.requiresDraftDecision else { return prior }
-            do { try session.updateDraft(proposed) }
-            catch { return .failure(error as? HistoryFailure ?? HistoryFailure(.storage, stage: .preparation, disposition: .suspended)) }
-            present?(proposed)
-            return await session.commit()
+        session.nativeCoordinator.register(self)
+        try attachment.requireCurrent()
+        for control in controls {
+            session.nativeCoordinator.restoreTransaction(
+                attachment: attachmentID, control: control.id, field: control.field!)
         }
+        observeEditors()
+        publishAvailability()
     }
-    @discardableResult public func undoDocument() async -> HistoryResult {
-        await perform { session in
-            await session.editing.undoKnownLiveDraft()
-        }
+    private var hasMarkedText: Bool { controls.contains { $0.editor?.hasMarkedText() == true } }
+    private func compositionRefusal() -> HistorySubmissionResult {
+        .unexecuted(HistoryFailure(.busy, stage: .admission, disposition: .usable))
     }
-    @discardableResult public func redoDocument() async -> HistoryResult {
-        await perform { session in
-            await session.editing.redoKnownLiveDraft()
-        }
-    }
-    @discardableResult public func retryDraft() async -> HistoryResult { await perform { await $0.retryDraft() } }
-    @discardableResult public func discardDraft() async -> HistoryResult {
-        let result = await perform { await $0.discardDraft() }
-        if session.status.phase == .ready, !session.status.requiresDraftDecision { retireAcceptedLiveHistory() }
+    public func commit() async -> HistorySubmissionResult {
+        guard available, !hasMarkedText else { return compositionRefusal() }
+        guard !disconnected else { return retired() }
+        let result = await session.settleEditing()
+        lastResult = result
         return result
     }
-    #if DEBUG
-    @discardableResult public func demonstrateFinalizationFailure() async -> HistoryResult {
-        await perform { await $0.demonstrateFinalizationFailure() }
+    public func undoDocument() async -> HistorySubmissionResult {
+        guard available, !hasMarkedText else { return compositionRefusal() }
+        guard !disconnected else { return retired() }
+        let result = await session.undo()
+        lastResult = result
+        return result
     }
-    #endif
-    public func waitForOperations() async { _ = await operation?.value }
-
-    /// Captures and journals current presentation before releasing any AppKit callbacks.
-    public func disconnect() {
+    public func redoDocument() async -> HistorySubmissionResult {
+        guard available, !hasMarkedText else { return compositionRefusal() }
+        guard !disconnected else { return retired() }
+        let result = await session.redo()
+        lastResult = result
+        return result
+    }
+    public func retryDraft() async -> HistorySubmissionResult {
+        guard !disconnected else { return retired() }
+        let result = await session.nativeCoordinator.retryDraft()
+        lastResult = result
+        return result
+    }
+    public func discardDraft() async -> HistorySubmissionResult {
+        guard !disconnected else { return retired() }
+        return await session.nativeCoordinator.discardDraft()
+    }
+    private func retired() -> HistorySubmissionResult {
+        .unexecuted(HistoryFailure(.identityConflict, stage: .admission, disposition: .usable))
+    }
+    public func waitForOperations() async { await session.waitForNativeOperations() }
+    public func disconnect() { attachment?.disconnect() }
+    public func close() async {
         guard !disconnected else { return }
-        captureLive(); disconnected = true
-        connection?.disconnect(); connection = nil
-        session.editing.settlementDidComplete = nil
-        observers.forEach(NotificationCenter.default.removeObserver); observers = []
+        await session.close()
+    }
+    @discardableResult public func requestCommit() -> Bool { settleEditing() }
+    @discardableResult public func settleEditing() -> Bool {
+        guard !disconnected else { return false }
+        return session.nativeCoordinator.requestSettlement(attachment: attachmentID)
+    }
+    func admitChange(in editor: NativeHistoryAppKitTextView) -> Bool {
+        guard !rendering, let control = controls.first(where: { $0.editor === editor }), let field = control.field
+        else { return !rendering }
+        return session.nativeCoordinator.beginChange(
+            attachment: attachmentID, control: control.id, field: field, composing: editor.hasMarkedText())
+    }
+    func capture(control: UUID) -> (value: String, composing: Bool)? {
+        guard let editor = controls.first(where: { $0.id == control })?.editor else { return nil }
+        return (editor.string, editor.hasMarkedText())
+    }
+    func render(field: String, value: String) {
+        for control in controls where control.field == field { render(control: control, value: value) }
+    }
+    private func render(control: AppKitHistoryControl, value: String) {
+        guard let editor = control.editor, editor.string != value else { return }
+        rendering = true
+        defer { rendering = false }
+        let selections = editor.selectedRanges.map(\.rangeValue)
+        editor.string = value
+        editor.selectedRanges = selections.map { selection in
+            let start = min(selection.location, value.utf16.count)
+            return NSValue(range: NSRange(location: start, length: min(selection.length, value.utf16.count - start)))
+        }
+    }
+    func liveManager(control: UUID) -> UndoManager? {
+        controls.contains(where: { $0.id == control }) ? liveManager : nil
+    }
+    func retire(transaction: UUID) {
+        controls.compactMap(\.editor).forEach { $0.breakUndoCoalescing() }
+        liveManager.removeAllActions()
+        publishAvailability()
+    }
+    func detach() {
+        guard !disconnected else { return }
+        disconnected = true
+        observers.forEach(NotificationCenter.default.removeObserver)
+        observers.removeAll()
         for control in controls + localControls {
             if let editor = control.editor, editor.historyFacade === control.facade {
-                editor.breakUndoCoalescing(); editor.historyFacade = nil; editor.editingAdmission = nil
+                editor.breakUndoCoalescing()
+                editor.historyFacade = nil
+                editor.editingAdmission = nil
             }
             control.facade?.owner = nil
         }
-        liveManager.removeAllActions()
-        controls = []; localControls = []; capture = nil; present = nil; presentStatus = nil
-    }
-    public func close() async {
-        captureLive(); isAvailable = false; await waitForOperations(); await session.close()
-    }
-
-    func undoManager(for editor: NativeHistoryAppKitTextView?) -> UndoManager? {
-        let selected = editor ?? (controls + localControls).compactMap(\.editor).first(where: { $0.window?.firstResponder === $0 })
-        if let local = localControls.first(where: { $0.editor === selected }) { return local.registrationManager }
-        guard permitsEditing, !hasMarkedText else { return nil }
-        if liveTransaction { return liveManager }
-        return session.undoManager
-    }
-    func canUndo(for editor: NativeHistoryAppKitTextView?) -> Bool { undoManager(for: editor)?.canUndo ?? false }
-    func canRedo(for editor: NativeHistoryAppKitTextView?) -> Bool { undoManager(for: editor)?.canRedo ?? false }
-    func name(for editor: NativeHistoryAppKitTextView?, undo: Bool) -> String {
-        guard let manager = undoManager(for: editor) else { return "" }
-        if manager === session.undoManager { return actionName }
-        return undo ? manager.undoActionName : manager.redoActionName
-    }
-    func invoke(for editor: NativeHistoryAppKitTextView?, undo: Bool) {
-        guard let manager = undoManager(for: editor), undo ? manager.canUndo : manager.canRedo else { return }
-        if manager === session.undoManager {
-            let task = start { undo ? await $0.undo() : await $0.redo() }
-            _ = task
-        } else {
-            undo ? manager.undo() : manager.redo()
-            captureLive(); publishAvailability()
-        }
-    }
-
-    @discardableResult func start(_ action: @escaping @MainActor (NativeHistorySession<Lease>) async -> HistoryResult) -> Task<HistoryResult, Never>? {
-        guard !pending, !disconnected, isAvailable, !hasMarkedText else { return nil }
-        captureLive(); pending = true; publishAvailability()
-        let session = session
-        let task = Task { @MainActor [weak self, session] in
-            let result = await action(session)
-            guard let self, !self.disconnected else { return result }
-            self.lastResult = result; self.pending = false; self.publishAvailability()
-            return result
-        }
-        operation = task; return task
-    }
-    func perform(_ action: @escaping @MainActor (NativeHistorySession<Lease>) async -> HistoryResult) async -> HistoryResult {
-        guard let task = start(action) else { return .failure(HistoryFailure(.busy, stage: .admission, disposition: .usable)) }
-        return await task.value
-    }
-    @discardableResult public func settleEditing() -> Bool {
-        guard !hasMarkedText else { deferredBoundary = true; publishAvailability(); return false }
-        deferredBoundary = false
-        guard liveTransaction else { return true }
-        guard let task = start({ await $0.editing.commitKnownLiveDraft() }) else { return false }
-        operation = task
-        return true
-    }
-    func retireAcceptedLiveHistory() {
-        guard !disconnected else { return }
-        controls.compactMap(\.editor).forEach { $0.breakUndoCoalescing() }
-        liveManager.removeAllActions(); liveTransaction = false; deferredBoundary = false; participants = []
-        publishAvailability()
+        controls.removeAll()
+        localControls.removeAll()
     }
     func publishAvailability() {
         guard !disconnected else { return }
-        presentStatus?(session.status)
         NotificationCenter.default.post(name: .NSUndoManagerCheckpoint, object: documentFacade)
         for control in controls + localControls {
-            guard let editor = control.editor, let facade = control.facade else { continue }
+            guard let facade = control.facade else { continue }
             let signature = "\(facade.canUndo)|\(facade.canRedo)|\(facade.undoActionName)|\(facade.redoActionName)"
-            guard signature != control.lastAvailability else { continue }
-            control.lastAvailability = signature
-            NotificationCenter.default.post(name: .NSUndoManagerCheckpoint, object: facade)
-            if control.isLocal { continue }
-            // Refresh the native Edit menu after asynchronous acceptance without changing focus.
-            NSApp.mainMenu?.update()
-            _ = editor
+            if signature != control.lastAvailability {
+                control.lastAvailability = signature
+                NotificationCenter.default.post(name: .NSUndoManagerCheckpoint, object: facade)
+                NSApp.mainMenu?.update()
+            }
         }
     }
-    func observeEditors() {
-        let names: [Notification.Name] = [NSText.didChangeNotification, NSText.didBeginEditingNotification,
-            NSText.didEndEditingNotification, .NSUndoManagerDidUndoChange, .NSUndoManagerDidRedoChange,
-            .NSUndoManagerDidCloseUndoGroup]
-        for name in names {
-            observers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] note in
-                let identity = note.object.map { ObjectIdentifier($0 as AnyObject) }
-                let name = note.name
-                MainActor.assumeIsolated {
-                    guard let self, !self.disconnected else { return }
-                    if identity == ObjectIdentifier(self.liveManager) {
-                        NotificationCenter.default.post(name: name, object: self.documentFacade)
-                        self.publishAvailability(); return
-                    }
-                    guard let editor = self.controls.compactMap(\.editor).first(where: { ObjectIdentifier($0) == identity }) else { return }
-                    if self.localControls.contains(where: { $0.editor === editor }) { return }
-                    switch name {
-                    case NSText.didChangeNotification:
-                        self.liveTransaction = true; self.participants.insert(ObjectIdentifier(editor)); self.captureLive()
-                    case NSText.didBeginEditingNotification:
-                        if self.liveTransaction, !self.participants.contains(ObjectIdentifier(editor)) { _ = self.settleEditing() }
-                    case NSText.didEndEditingNotification:
-                        if self.liveTransaction { _ = self.settleEditing() }
-                    default:
-                        NotificationCenter.default.post(name: name, object: self.documentFacade)
-                    }
-                    if self.deferredBoundary, !self.hasMarkedText { _ = self.settleEditing() }
-                    self.publishAvailability()
-                }
-            })
+    private func selectedManager(for editor: NativeHistoryAppKitTextView?) -> UndoManager? {
+        let selected =
+            editor ?? (controls + localControls).compactMap(\.editor).first { $0.window?.firstResponder === $0 }
+        if let local = localControls.first(where: { $0.editor === selected }) { return local.manager }
+        guard available, !disconnected else { return nil }
+        let control = controls.first { $0.editor === selected }
+        guard !controls.contains(where: { $0.editor?.hasMarkedText() == true }) else { return nil }
+        if let live = session.nativeCoordinator.liveManager(attachment: attachmentID, control: control?.id) {
+            guard let control,
+                session.nativeCoordinator.permitsEditing(
+                    attachment: attachmentID, control: control.id, composing: false)
+            else { return nil }
+            return live
+        }
+        return session.nativeCoordinator.undoManager
+    }
+    fileprivate func recognizes(_ target: Any) -> Bool {
+        controls.contains {
+            guard let editor = $0.editor else { return false }
+            return target as AnyObject === editor || target as AnyObject === editor.textStorage
         }
     }
-    isolated deinit { disconnect() }
+    fileprivate func canUndo(editor: NativeHistoryAppKitTextView?, undo: Bool) -> Bool {
+        guard let manager = selectedManager(for: editor) else { return false }
+        return undo ? manager.canUndo : manager.canRedo
+    }
+    fileprivate func name(editor: NativeHistoryAppKitTextView?, undo: Bool) -> String {
+        guard let manager = selectedManager(for: editor) else { return "" }
+        return undo ? manager.undoActionName : manager.redoActionName
+    }
+    fileprivate func invoke(editor: NativeHistoryAppKitTextView?, undo: Bool) {
+        guard let manager = selectedManager(for: editor), undo ? manager.canUndo : manager.canRedo else { return }
+        if undo { manager.undo() } else { manager.redo() }
+        if let control = controls.first(where: { $0.editor === editor }), let field = control.field,
+            let value = capture(control: control.id) {
+            session.nativeCoordinator.changed(
+                attachment: attachmentID, control: control.id, field: field, value: value.value,
+                composing: value.composing)
+        }
+        publishAvailability()
+    }
+    private func invalidInput() -> HistoryFailure {
+        HistoryFailure(.invalidInput, stage: .admission, disposition: .usable)
+    }
 }
 
 @MainActor final class AppKitHistoryControl {
+    let id = UUID()
     weak var editor: NativeHistoryAppKitTextView?
-    let registrationManager: UndoManager
-    let isLocal: Bool
+    let field: String?
+    let manager: UndoManager
     var facade: AppKitHistoryUndoManager?
     var lastAvailability = ""
-    init(editor: NativeHistoryAppKitTextView, registrationManager: UndoManager, isLocal: Bool = false) {
-        self.editor = editor; self.registrationManager = registrationManager; self.isLocal = isLocal
+    init(editor: NativeHistoryAppKitTextView, field: String?, manager: UndoManager) {
+        self.editor = editor
+        self.field = field
+        self.manager = manager
     }
 }
 
 @MainActor final class AppKitHistoryUndoManager: UndoManager {
-    weak var owner: NativeHistoryAppKitBindingMarker?
+    weak var owner: NativeHistoryAppKitBinding?
     weak var editor: NativeHistoryAppKitTextView?
     let registrationManager: UndoManager
     let unknownManager: UndoManager?
-    init(owner: any NativeHistoryAppKitBindingMarker, editor: NativeHistoryAppKitTextView? = nil,
-        registrationManager: UndoManager, unknownManager: UndoManager? = nil) {
-        self.owner = owner; self.editor = editor; self.registrationManager = registrationManager
-        self.unknownManager = unknownManager; super.init()
+    init(
+        owner: NativeHistoryAppKitBinding, editor: NativeHistoryAppKitTextView? = nil,
+        registrationManager: UndoManager, unknownManager: UndoManager? = nil
+    ) {
+        self.owner = owner
+        self.editor = editor
+        self.registrationManager = registrationManager
+        self.unknownManager = unknownManager
+        super.init()
     }
-    func destination(for target: Any) -> UndoManager {
-        // NSTextView's documented Undo support registers text-storage operations. Only
-        // these exact bound objects belong to the disposable live transaction.
-        if unknownManager == nil || owner?.appKitRecognizes(target: target) == true { return registrationManager }
+    private func destination(_ target: Any) -> UndoManager {
+        if unknownManager == nil || owner?.recognizes(target) == true { return registrationManager }
         return unknownManager!
     }
     override var groupsByEvent: Bool {
-        get { registrationManager.groupsByEvent } set { registrationManager.groupsByEvent = newValue }
+        get { registrationManager.groupsByEvent }
+        set { registrationManager.groupsByEvent = newValue }
     }
     override var groupingLevel: Int { registrationManager.groupingLevel }
     override var isUndoing: Bool { registrationManager.isUndoing }
     override var isRedoing: Bool { registrationManager.isRedoing }
     override var isUndoRegistrationEnabled: Bool { registrationManager.isUndoRegistrationEnabled }
     override var levelsOfUndo: Int {
-        get { registrationManager.levelsOfUndo } set { registrationManager.levelsOfUndo = newValue }
+        get { registrationManager.levelsOfUndo }
+        set { registrationManager.levelsOfUndo = newValue }
     }
     override var runLoopModes: [RunLoop.Mode] {
-        get { registrationManager.runLoopModes } set { registrationManager.runLoopModes = newValue }
+        get { registrationManager.runLoopModes }
+        set { registrationManager.runLoopModes = newValue }
     }
     override func beginUndoGrouping() { registrationManager.beginUndoGrouping() }
     override func endUndoGrouping() { registrationManager.endUndoGrouping() }
@@ -293,43 +289,20 @@ import AppKit
     override func setActionName(_ actionName: String) { registrationManager.setActionName(actionName) }
     override func removeAllActions() { registrationManager.removeAllActions() }
     override func removeAllActions(withTarget target: Any) { registrationManager.removeAllActions(withTarget: target) }
-    override func prepare(withInvocationTarget target: Any) -> Any { destination(for: target).prepare(withInvocationTarget: target) }
-    override var canUndo: Bool { owner?.appKitCanUndo(for: editor) ?? false }
-    override var canRedo: Bool { owner?.appKitCanRedo(for: editor) ?? false }
-    override var undoActionName: String { owner?.appKitName(for: editor, undo: true) ?? "" }
-    override var redoActionName: String { owner?.appKitName(for: editor, undo: false) ?? "" }
-    override func undo() { owner?.appKitInvoke(for: editor, undo: true) }
-    override func redo() { owner?.appKitInvoke(for: editor, undo: false) }
+    override func prepare(withInvocationTarget target: Any) -> Any {
+        destination(target).prepare(withInvocationTarget: target)
+    }
+    override var canUndo: Bool { owner?.canUndo(editor: editor, undo: true) ?? false }
+    override var canRedo: Bool { owner?.canUndo(editor: editor, undo: false) ?? false }
+    override var undoActionName: String { owner?.name(editor: editor, undo: true) ?? "" }
+    override var redoActionName: String { owner?.name(editor: editor, undo: false) ?? "" }
+    override func undo() { owner?.invoke(editor: editor, undo: true) }
+    override func redo() { owner?.invoke(editor: editor, undo: false) }
     override func __registerUndoWithTarget(_ target: Any, handler: @escaping @MainActor @Sendable (Any) -> Void) {
-        destination(for: target).__registerUndoWithTarget(target, handler: handler)
+        destination(target).__registerUndoWithTarget(target, handler: handler)
     }
     override func registerUndo(withTarget target: Any, selector: Selector, object anObject: Any?) {
-        destination(for: target).registerUndo(withTarget: target, selector: selector, object: anObject)
+        destination(target).registerUndo(withTarget: target, selector: selector, object: anObject)
     }
-}
-
-@MainActor protocol NativeHistoryAppKitBindingMarker: AnyObject {
-    func appKitRecognizes(target: Any) -> Bool
-    func appKitCanUndo(for editor: NativeHistoryAppKitTextView?) -> Bool
-    func appKitCanRedo(for editor: NativeHistoryAppKitTextView?) -> Bool
-    func appKitName(for editor: NativeHistoryAppKitTextView?, undo: Bool) -> String
-    func appKitInvoke(for editor: NativeHistoryAppKitTextView?, undo: Bool)
-}
-
-extension NativeHistoryAppKitBinding: NativeHistoryAppKitBindingMarker, AppKitEditingAdmission {
-    func admitChange(in editor: NativeHistoryAppKitTextView) -> Bool {
-        guard permitsEditing else { return false }
-        liveTransaction = true; participants.insert(ObjectIdentifier(editor)); return true
-    }
-    func appKitRecognizes(target: Any) -> Bool {
-        controls.contains { control in
-            guard let editor = control.editor else { return false }
-            return target as AnyObject === editor || target as AnyObject === editor.textStorage
-        }
-    }
-    func appKitCanUndo(for editor: NativeHistoryAppKitTextView?) -> Bool { canUndo(for: editor) }
-    func appKitCanRedo(for editor: NativeHistoryAppKitTextView?) -> Bool { canRedo(for: editor) }
-    func appKitName(for editor: NativeHistoryAppKitTextView?, undo: Bool) -> String { name(for: editor, undo: undo) }
-    func appKitInvoke(for editor: NativeHistoryAppKitTextView?, undo: Bool) { invoke(for: editor, undo: undo) }
 }
 #endif

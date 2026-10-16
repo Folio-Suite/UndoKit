@@ -16,6 +16,7 @@ extension HistoryTransactionCoordinator {
             }
             try validateGeneration(for: request, scopeRow: scopeRow)
             switch request {
+            case .settle: return .rejected
             case .command(let command):
                 return await execute(command: command, kind: .command, targetGroup: nil)
             case .undo: return try await executeAvailableInverse(kind: .undo)
@@ -39,24 +40,28 @@ extension HistoryTransactionCoordinator {
     private func validateGeneration(for request: Request, scopeRow: HistoryScopeRecord) throws {
         let boundGeneration: UUID?
         switch request {
+        case .settle: boundGeneration = nil
         case .command(let command): boundGeneration = command.expectedGeneration
         case .undo(let generation), .redo(let generation): boundGeneration = generation
         }
-        if try scopeRow.requiresGenerationBinding &&
-           boundGeneration != scopeRow.uuid(scopeRow.generationID) {
+        if try scopeRow.requiresGenerationBinding && boundGeneration != scopeRow.uuid(scopeRow.generationID) {
             throw HistoryFailure(.identityConflict, stage: .admission, disposition: .usable)
         }
     }
 
-    private func executeSessionInverse(_ group: SessionGroup,
-                                       kind: HistoryDeliveryKind) async -> HistoryResult {
+    private func executeSessionInverse(
+        _ group: SessionGroup,
+        kind: HistoryDeliveryKind
+    ) async -> HistoryResult {
         let effects: [HistoryEffect] = kind == .undo ? Array(group.effects.reversed()) : group.effects
         let commandID = UUID()
         let members = effects.map { effect in
-            HistoryMember(id: effect.memberID,
-                          payload: kind == .undo ? effect.undo : effect.redo)
+            HistoryMember(
+                id: effect.memberID,
+                payload: kind == .undo ? effect.undo : effect.redo)
         }
-        let command = HistoryCommand(id: commandID,
+        let command = HistoryCommand(
+            id: commandID,
             fingerprint: Data("\(kind.rawValue):\(group.id.uuidString):\(commandID.uuidString)".utf8),
             members: members)
         return await execute(command: command, kind: kind, targetGroup: group.id)
@@ -65,13 +70,15 @@ extension HistoryTransactionCoordinator {
     func executeInverse(target: HistoryGroupRecord, kind: HistoryDeliveryKind) async -> HistoryResult {
         do {
             let groupID = try target.uuid(target.key)
-            let actions = try history.fetch(HistoryActionRecord.self,
+            let actions = try history.fetch(
+                HistoryActionRecord.self,
                 predicate: NSPredicate(format: "\(#keyPath(HistoryActionRecord.group)) == %@", target),
                 sort: [NSSortDescriptor(key: #keyPath(HistoryActionRecord.ordinal), ascending: kind == .redo)])
             let members = try actions.map { action -> HistoryMember in
                 let role: HistoryScopeStorage.CompensationPayloadRole = kind == .undo ? .undo : .redo
-                return HistoryMember(id: try action.uuid(action.memberID),
-                                     payload: try history.payload(on: action, role: role))
+                return HistoryMember(
+                    id: try action.uuid(action.memberID),
+                    payload: try history.payload(on: action, role: role))
             }
             let commandID = UUID()
             let fingerprint = Data("\(kind.rawValue):\(groupID.uuidString):\(commandID.uuidString)".utf8)
@@ -82,8 +89,10 @@ extension HistoryTransactionCoordinator {
         }
     }
 
-    func execute(command: HistoryCommand, kind: HistoryDeliveryKind,
-                 targetGroup: UUID?) async -> HistoryResult {
+    func execute(
+        command: HistoryCommand, kind: HistoryDeliveryKind,
+        targetGroup: UUID?
+    ) async -> HistoryResult {
         let key = history.transactionKey(command.id)
         do {
             if let prior = try history.fetchOne(HistoryTransactionRecord.self, keyPath: \.key, key: key) {
@@ -99,12 +108,13 @@ extension HistoryTransactionCoordinator {
                 return .failure(failure)
             }
             let scopeRow = try history.scopeRecord()
-            if !scopeRow.recordingEnabled &&
-               (kind == .command || sessionGroups.first(where: { $0.id == targetGroup }) == nil) {
+            if !scopeRow.recordingEnabled
+                && (kind == .command || sessionGroups.first(where: { $0.id == targetGroup }) == nil) {
                 // Reserve the largest bounded inverse pair before delivery: a
                 // host effect may be larger than its submitted opaque intent.
-                let budget = min(limits.maxStoreBytes / 4,
-                                 Int64(limits.maxPayloadBytes) * Int64(limits.maxUndoGroups))
+                let budget = min(
+                    limits.maxStoreBytes / 4,
+                    Int64(limits.maxPayloadBytes) * Int64(limits.maxUndoGroups))
                 let reserve = Int64(limits.maxPayloadBytes) * 2
                 guard reserve <= budget - sessionEffectBytes else {
                     return .failure(HistoryFailure(.capacity, stage: .admission, disposition: .usable))
@@ -112,10 +122,12 @@ extension HistoryTransactionCoordinator {
             }
             let generation = try scopeRow.uuid(scopeRow.generationID)
             let sequence = scopeRow.nextSequence
-            let token = HistoryToken(scope: scope, generation: generation,
-                                     sequence: sequence, command: command.id)
-            let delivery = try prepare(command, kind: kind, targetGroup: targetGroup,
-                                       token: token, scopeRow: scopeRow)
+            let token = HistoryToken(
+                scope: scope, generation: generation,
+                sequence: sequence, command: command.id)
+            let delivery = try prepare(
+                command, kind: kind, targetGroup: targetGroup,
+                token: token, scopeRow: scopeRow)
             let activeStores = HistoryStore.deliveringStores.union([ObjectIdentifier(store)])
             let outcome = await HistoryStore.$deliveringStores.withValue(activeStores) {
                 await deliverToHost(delivery)
@@ -132,35 +144,46 @@ extension HistoryTransactionCoordinator {
         context.rollback()
         let durableStage = (try? history.fetchOne(HistoryTransactionRecord.self, keyPath: \.key, key: key))?.stage
         if store.writeFailed {
-            let stage: HistoryFailureStage = durableStage == nil || durableStage == "prepared"
+            let stage: HistoryFailureStage =
+                durableStage == nil || durableStage == "prepared"
                 ? .preparation : .finalization
-            return .failure(HistoryFailure(.storage, stage: stage, disposition: .suspended,
-                                           underlyingDescription: String(describing: error)))
+            return .failure(
+                HistoryFailure(
+                    .storage, stage: stage, disposition: .suspended,
+                    underlyingDescription: String(describing: error)))
         }
         if durableStage == "prepared" {
             do {
                 let prepared = try history.fetchOne(HistoryTransactionRecord.self, keyPath: \.key, key: key)
                 prepared?.stage = "cancelled"
                 try history.saveContext()
-                return .failure(HistoryFailure(.storage, stage: .preparation,
-                                               disposition: .usable,
-                                               underlyingDescription: String(describing: error)))
+                return .failure(
+                    HistoryFailure(
+                        .storage, stage: .preparation,
+                        disposition: .usable,
+                        underlyingDescription: String(describing: error)))
             } catch {
                 context.rollback()
                 suspend()
-                return .failure(HistoryFailure(.storage, stage: .preparation,
-                                               disposition: .suspended,
-                                               underlyingDescription: String(describing: error)))
+                return .failure(
+                    HistoryFailure(
+                        .storage, stage: .preparation,
+                        disposition: .suspended,
+                        underlyingDescription: String(describing: error)))
             }
         }
         if durableStage == "deliveryStarted" || durableStage == "acceptancePending" {
             suspend()
-            return .failure(HistoryFailure(.storage, stage: .finalization,
-                disposition: .suspended, underlyingDescription: String(describing: error)
-            ))
+            return .failure(
+                HistoryFailure(
+                    .storage, stage: .finalization,
+                    disposition: .suspended, underlyingDescription: String(describing: error)
+                ))
         }
-        return .failure(HistoryFailure(.storage, stage: .preparation,
-                                       disposition: .usable, underlyingDescription: String(describing: error)))
+        return .failure(
+            HistoryFailure(
+                .storage, stage: .preparation,
+                disposition: .usable, underlyingDescription: String(describing: error)))
     }
 
     private func deliverToHost(_ delivery: HistoryDelivery) async -> HistoryHostOutcome {
@@ -172,8 +195,9 @@ extension HistoryTransactionCoordinator {
 
     private func admissionFailure(for command: HistoryCommand) -> HistoryFailure? {
         guard command.members.count <= limits.maxMembers,
-              command.members.allSatisfy({ $0.payload.data.count <= limits.maxPayloadBytes }),
-              command.members.reduce(0, { $0 + $1.payload.data.count }) <= limits.maxPayloadBytes else {
+            command.members.allSatisfy({ $0.payload.data.count <= limits.maxPayloadBytes }),
+            command.members.reduce(0, { $0 + $1.payload.data.count }) <= limits.maxPayloadBytes
+        else {
             return HistoryFailure(.capacity, stage: .admission, disposition: .usable)
         }
         guard history.valid(command) else {
@@ -230,8 +254,9 @@ extension HistoryTransactionCoordinator {
         try history.saveContext()
         transaction.stage = "deliveryStarted"
         try history.saveContext()
-        return HistoryDelivery(token: token, kind: kind, members: command.members,
-                               restorationOrigin: command.restorationOrigin)
+        return HistoryDelivery(
+            token: token, kind: kind, members: command.members,
+            restorationOrigin: command.restorationOrigin)
     }
 
 }

@@ -5,13 +5,26 @@ SPDX-FileCopyrightText: 2026 the Folio Project
 SPDX-License-Identifier: MIT
 -->
 
-Durable application history behind a native UndoManager interface.
+Durable application history through typed Commands and the app's native UndoManager.
 
-## Start here
+## Start with one shared session
 
-This catalog describes its labelled source/version. Development output is not a
-qualified release; a build or simulator pass alone never establishes qualification.
-Consult the matching release provenance and evidence before relying on support claims.
+An application owns a ``HistorySessions`` collection. Each stable History Scope
+has one ``HistorySession``, shared by its windows and views. UndoKit opens and
+closes history storage, orders submissions, safeguards field drafts and coordinates
+recovery. A host lease owns only the application's domain resources.
+
+Declare a ``HistoryOperation`` once with its stable family, Command and effect
+codecs, canonical Intent Fingerprint and actual host handler. Obtain a typed
+``HistoryCommands`` handle from the session. Editing code submits values without
+building encoded payloads, assigning retry identities or supplying checkpoint
+snapshots. Use an atomic group when several members must succeed together.
+
+Attach a presentation with ``HistoryAttachment`` and supply its `undoManager`
+through the app's document, window or responder. Native field bindings map a
+value and its authoritative revision to the same typed Commands. AppKit and
+UIKit retain their native live typing behavior; UndoKit settles complete editing
+transactions into durable Undo Groups.
 
 - <doc:InstallingUndoKit>
 - <doc:FirstUndoGroup>
@@ -19,419 +32,112 @@ Consult the matching release provenance and evidence before relying on support c
 - <doc:RetainedHistoryAndResources>
 - <doc:PreviewCompatibilityAndSupport>
 
-## Ownership
+## Keep meaning in the host
 
-UndoKit orders opaque commands, persists transaction evidence and accepted action
-relationships, and projects finalized availability into native Undo. The host
-owns semantic meaning, validation, no-op filtering, atomic compensation, durable
-outcome receipts, resource preservation, and application policy. No Folio model
-is required. Swift clients import `UndoKit`.
+The host owns semantic validation, canonical intent, atomic domain effects and
+outcome receipts, resource preservation and policy. UndoKit owns the ordering and
+durable evidence of these opaque operations. An Accepted Outcome must agree with
+the host's persisted state. A possible effect with no authoritative outcome is
+unresolved, never a rejection.
 
-## Choose an entry point
+Handlers may belong to MainActor or a separate actor. Codecs execute on their
+registered handler's actor. Transferable Command values must represent stable
+intent; declarations can capture immutable values from mutable references before
+submission suspends. Actor-local advanced adaptation keeps non-Sendable domain
+values on their owner.
 
-Start with ``HistoryHost`` if the application already produces bounded opaque
-payloads and durable outcome receipts. Use ``HistoryOperationHandler`` or
-``MainActorHistoryOperationHandler`` with ``HistoryOperationRegistration`` when
-commands, accepted effects and checkpoint states should remain typed on the
-host's actor. These adapters retain their handlers; rebuild them from application
-code when reopening. No application model needs to inherit an UndoKit class.
+Do not await another request to the same scope inside a host callback. Such
+reentry is refused before it can wait behind itself.
 
-| Caller responsibility | Capability |
+## Await the result and observe readiness
+
+``HistorySubmissionResult`` distinguishes acceptance, rejection, unexecuted
+requests, proved usable delivery failures and unresolved work. Acceptance means
+both the host's effect and history finalization completed. It is separate from
+presentation readiness: an authoritative refresh may fail after acceptance.
+Observe ``HistorySessionStatus`` before allowing native editing.
+
+The bounded FIFO reserves a position before asynchronous encoding. Cancellation
+removes waiting requests. Once delivery may have begun, recovery preserves the
+exact prepared identity. Uncertainty completes queued followers as unexecuted;
+reconciliation never automatically replays them. Submit new intent explicitly
+after recovery and host validation.
+
+A presentation can detach without closing its shared session. Explicit session
+closure safeguards drafts, stops waiting work and waits for active recovery or
+delivery before releasing history resources and then the host lease. Failed
+closure retains the responsible owner in the application collection.
+
+## Advanced integration
+
+Applications that need opaque payloads and direct resource ownership can use
+``HistoryStore`` and ``HistoryEngine``. These form a lower-level integration path.
+Do not open a competing owner underneath an ordinary session. Focused session
+capabilities reach that session's existing owner and its admission fences.
+
+| Capability | Responsibility |
 | --- | --- |
-| Choose storage, register independent scopes, coordinate copies and close ownership | ``HistoryStore`` |
-| Open one scope with its own store as a convenience | ``HistoryEngine`` |
-| Submit ordinary changes or request whole-group Undo/Redo | ``HistoryTransactions`` |
-| Browse metadata, retrieve opaque states and protect reconstruction reads | ``HistoryReading`` |
-| Create checkpoints, hold state/detail and run retention policy | ``HistoryRetentionManaging`` |
-| Present finalized history through native controls and editing barriers | ``NativeHistoryRouter`` |
+| ``HistoryTransactions`` | Opaque Commands, complete-group Undo/Redo and outcome reconciliation |
+| ``HistoryReading`` | Metadata, checkpoints and protected reconstruction reads |
+| ``HistoryRetentionManaging`` | Checkpoints, Retention Holds and bounded consolidation |
+| ``HistoryStore`` | Physical registration, independent scopes, read-only inspection and coordinated copies |
+| ``HistoryEngine`` | Direct scope ownership, recording policy and generation changes |
 
-Session and capability calls are main-actor isolated. A ``HistoryHost`` may own a
-separate actor; only immutable encoded history values cross that boundary. A
-scope serializes deliveries explicitly, while the host establishes intended
-submission order before admission. Do not await another submission to the same
-scope from a host callback.
+Reading retained history does not move the live Undo position. A restoration is
+new host-validated intent with restoration provenance. Recovery Plans and
+Retention Holds protect the material needed for reconstruction; they do not
+implicitly restore domain state. Keep object cleanup behind retention fences.
 
-## Await finalized completion
+## Source navigation
 
-The following helper uses only the transaction capability. The host has already
-filtered known no-ops, assigned a stable identity and canonical-intent fingerprint,
-and encoded the Command before calling it:
+`Interface/Application/` contains ordinary sessions, handles, attachments and
+platform bindings. `Interface/Hosting/` contains shared handler and codec setup.
+`Interface/Advanced/` contains transactions, retained history and storage access.
+Shared identities, results and policy values remain at `Interface/`.
 
-```swift
-import UndoKit
+Implementation lives in `Modules/`: Transactions owns admission and durable
+lifecycle, HostAdaptation owns typed dispatch, NativeEditing owns field settlement
+and native routing, RetainedHistory owns reconstruction and retention, and Storage
+owns persistence and physical writer protection. There is one dynamic product
+and runtime identity.
 
-struct UnsupportedHistoryResult: Error {}
+## Support and persistence
 
-@MainActor
-func submitChange(
-    _ command: HistoryCommand,
-    to history: any HistoryTransactions
-) async throws -> HistoryReceipt? {
-    switch await history.submit(command) {
-    case .accepted(let receipt):
-        return receipt
-    case .rejected:
-        return nil
-    case .failure(let failure):
-        throw failure
-    @unknown default:
-        throw UnsupportedHistoryResult()
-    }
-}
-```
+Use `.create` only for new history and `.existing` for known history. Missing,
+corrupt or unsupported bytes are preserved and refused. Opening never silently
+replaces original history. An independent working copy needs a distinct working
+identity and coordinated domain data.
 
-An accepted result means the host's atomic effect and history finalization both
-completed. Rejection proves no semantic effect. A thrown ``HistoryFailure`` from
-this helper preserves its ``HistoryFailure/disposition``: the caller must inspect
-it before allowing further edits. In particular, failure after possible delivery
-requires authoritative reconciliation rather than a new identity and blind retry.
-A future, unfamiliar binary result stops this helper. Keep further admission
-blocked until the consumer understands the result; do not treat it as rejection.
-Queue admission alone is neither a durable receipt nor a guarantee that a waiting
-request survives a crash. Cancellation after delivery cannot retract its effect.
-
-## Read one state explicitly
-
-Metadata listing does not decode every state. This helper retrieves one selected
-checkpoint and interprets it on the caller's actor using the host's own decoder:
-
-```swift
-import Foundation
-import UndoKit
-
-@MainActor
-func readCheckpointState<State>(
-    id: UUID,
-    from history: any HistoryReading,
-    decode: (HistoryPayload) throws -> State
-) throws -> State? {
-    guard let checkpoint = try history.checkpoint(id: id) else { return nil }
-    return try decode(checkpoint.state)
-}
-```
-
-Retrieval verifies stored-byte integrity; the decoder and host still establish
-schema compatibility and semantic completeness. Reading does not restore live
-state. To restore, secure dependencies, reconstruct and validate the selected
-state in the host, then submit a new Command carrying its `restorationOrigin`.
-Use a ``HistoryRecoveryPlan`` for accepted-effect reconstruction across multiple
-records, and always release its temporary protection when done.
-
-## Public interface map
-
-- `Interface/HistoryStore.swift` — physical registration, placement, read-only inspection, copies, capacity and closure.
-- `Interface/HistoryTransactions.swift` — narrow ordinary transaction protocol for submission, Undo, Redo, reconciliation and availability.
-- `Interface/HistoryEngine.swift` — scope opening and concrete transaction operations.
-- `Interface/HistoryReading.swift` — historical metadata, checkpoint reads, reconstruction and coherent native names.
-- `Interface/HistoryRetentionManaging.swift` — checkpoint creation, durable holds and bounded consolidation.
-- `Interface/HistorySessionLifecycle.swift` — scope copy and closure.
-- `Interface/HistoryTypes.swift` — host contract, payloads, results, failures, snapshots and limits.
-- `Interface/HistoryTypedHosting.swift` — typed Commands/effects, callback context and actor handler contracts.
-- `Interface/HistoryCodecs.swift` — explicit payload codecs.
-- `Interface/HistoryRegistrations.swift` — typed operation registration and opaque bridges.
-- `Interface/HistoryHostRegistry.swift` — opaque operation-family router and atomic mixed-family callbacks.
-- `Interface/HistoryActorRegistrations.swift` — actor-isolated typed submission and dispatch.
-- `Interface/HistoryMainActorRegistrations.swift` — Cocoa main-actor typed submission and dispatch.
-- `Interface/HistoryReconstruction.swift` — plan, step, material and read identity types.
-- `Interface/HistoryRetention.swift` — holds, policy, consolidation results and object references.
-- `Interface/HistoryRetentionResources.swift` — cross-scope object reads and fenced cleanup.
-- `Interface/HistoryRecording.swift` — host-selected recording mode and open-session Undo.
-- `Interface/HistoryGeneration.swift` — settled clear and quarantined unresolved reset.
-- `Interface/NativeHistoryRouter.swift` — native UndoManager routing and editing barriers.
-- `Resources/History.xcdatamodeld` — the framework-owned persistence schema.
-- `Modules/HostAdaptation/` — codecs, registration validation and version
-  selection, typed delivery and outcome conversion, and opaque family routing.
-
-FIFO admission, delivery, finalization, reconciliation, session inverses and
-availability are coordinated in `Modules/Transactions/`; interrupted outcomes
-are handled in `HistoryReconciliation.swift`. Checkpoints, Recovery Plans, holds,
-consolidation and the private plan registry live in `Modules/RetainedHistory/`.
-Persistence helpers and scoped store activity live in `Modules/Storage/`. Typed
-host adaptation is implemented in `Modules/HostAdaptation/`; public interface
-files state contracts and forward into it. The native manager helper stays with
-the router because it implements the public router's AppKit behavior.
-
-## First supported operation
-
-``HistoryStore`` registers a physical Core Data database. A writable session owns
-its writer lock and may open several ``HistoryEngine`` scopes with separate hosts,
-ordering, availability and recovery state. A read-only session can inspect
-committed history and pending recovery evidence while the writer remains open.
-The `HistoryEngine.open` convenience owns one store and scope.
-
-An engine supports bounded command groups, durable Undo/Redo, explicit checkpoint
-snapshots, restoration provenance, and retained displaced continuations. A new
-edit after Undo retires ordinary Redo eligibility while retaining its records.
-Undo and Redo create accepted records instead of deleting the original edit.
-
-The host may call `HistoryEngine.setRecording(_:baseline:resources:)` at a settled
-boundary. Off keeps accepted edits undoable in the open session without recording
-ordinary Actions for a later session. The first accepted Off edit creates a gap:
-Undo and reconstruction cannot cross it to older Actions. Re-enabling records a
-coherent host baseline and returns its checkpoint ID. Earlier retained history
-and checkpoints remain readable. `HistoryEngine.recordingMode()` throws if its
-persisted mode cannot be read.
-
-`HistoryEngine.clearHistory(adopting:resources:)` requires all work to be settled.
-For an irrecoverable unresolved outcome, the host must independently establish
-current state and explicitly call
-`HistoryEngine.resetUnresolvedHistory(adopting:resources:quarantineAt:)`.
-The latter copies failed evidence to an absent quarantine URL before resetting.
-Both calls install a new generation and baseline, preserving other scopes and
-host resources. Bind subsequent commands and reversals to the new snapshot's
-generation; a delayed request from the retired generation is refused before host
-delivery.
-
-An opaque ``HistoryHost`` may be isolated to the main actor or another actor.
-Typed hosts use ``HistoryOperationRegistration`` with stable operation, schema,
-codec, configuration, and version identifiers. Construct the registration with
-the operation, command/effect/state versions, codecs, older-version codecs, and
-handler. Construction validates operation and codec identities and version
-configuration, and throws ``HistoryFailureCause/invalidInput`` when they are invalid.
-Register again from application code after opening; runtime closures and actors
-are never stored in the history.
-``HistoryCodec`` provides explicitly selected JSON, XML property-list, and
-binary property-list conveniences, plus custom codecs. Codec identity and
-configuration are embedded with encoded values, so same-version bytes cannot be
-silently interpreted using changed settings. A custom codec owns the meaning of
-its configuration bytes; built-in Foundation codecs use their documented
-defaults. Supply a host-defined canonical intent fingerprint rather than
-deriving it from an ordinary encoding.
-
-``HistoryOperationHandler`` keeps non-Sendable values on its actor;
-``MainActorHistoryOperationHandler`` supports Cocoa document models. Apply,
-undo, and redo callbacks receive ``HistoryOperationContext`` with the transaction
-token and optional restoration origin. Typed commands carry restoration origin
-and presentation metadata; effect resources travel with the typed effect. Each
-delivery contains the complete ordered group, and the handler must apply all
-members atomically or prove that none took effect. A mixed-family group needs
-paired atomic execution and outcome-lookup callbacks in ``HistoryHostRegistry``.
-A callback failure after possible effect is unresolved. Reentry into the same
-engine is rejected before it can wait behind the active request.
-
-``HistoryEngine/submit(_:)`` preserves queue admission order. Applications must
-establish their intended submission order. Completion follows history
-finalization. Storage failures after domain acceptance preserve that acceptance
-and suspend availability until reconciliation succeeds. Inspect the cause,
-stage, and disposition in ``HistoryFailure``; never retry by inventing a new
-identity for a possibly delivered command.
-
-Use `.create` only for a new store and `.existing` for a known store. An explicit
-independent copy supplies the source working identity and a new identity.
-Opening does not replace missing or unsupported history with an empty store.
-``HistoryStore/withCoordinatedCopy(to:capture:)`` stops admission across all
-scopes, waits for delivered work, and supplies a closed SQLite copy while the
-host captures matching domain data and dependencies. Unresolved transactions
-block an ordinary independent copy. Opening the copy with `.independentCopy`
-changes its working identity while preserving inherited history. A move retains
-the original identity. ``HistoryStore/close()`` stops all scope admission and
-releases ownership after delivered work reaches a recoverable boundary. Closing
-an individual engine leaves other scopes open. The host keeps
-its own data store and does not use UndoKit as its document write-ahead log.
-
-## Checkpoints and bounded reading
-
-``HistoryEngine`` implements ``HistoryReading`` for browsing and reconstruction,
-and ``HistoryRetentionManaging`` for checkpoint creation, holds and consolidation.
-Both capabilities share one retained-history owner per scope. Give browsers the
-reading capability and retention policy code the management capability.
-Reading may create temporary plan protection; it does not imply a read-only store.
-
-Checkpoint state is an opaque ``HistoryPayload`` supplied by the host. Secure
-its dependencies first. The host owns document saving and confirms that saving
-succeeded before announcing a saved checkpoint. Metadata pages do not decode
-all retained state. Retrieve the selected checkpoint explicitly, reconstruct and
-validate it in the host, then submit a new command with its identifier as
-`restorationOrigin`. Browsing and checkpoint retrieval never move Undo position.
-
-``HistoryLimits`` configures admission and ordinary Undo depth. Depth counts
-complete original groups, sharing the allowance with Redo. It does not promise
-that all retained history occupies only that many records. Consolidation never
-lowers ordinary depth. Payload integrity checks are separate
-from the host's canonical intent fingerprint.
-
-## Historical reconstruction
-
-Call `beginRecoveryPlan(from:to:using:)` with the host's explicit `.acceptedEffects`
-promise only when stored Undo/Redo evidence represents complete state transitions.
-Capture coherent host state before choosing `.current`; a checkpoint source
-supplies a stored baseline. A checkpoint target uses its own snapshot. Fetch bounded
-`recoveryPage` references and one `recoveryMaterial` member at a time. Apply reverse
-steps in reverse member order, or forward steps in forward member order, in an
-isolated host reconstruction. These reads never deliver commands or move live Undo.
-
-Release or cancel each plan when finished. A cancelled task's next read also
-releases its plan. Closing the scope invalidates all handles. Missing targets,
-stored gaps and unavailable member evidence produce failures. The plan's committed
-version identifies its fixed historical view even if later commands arrive.
-
-`HistoryCommand.presentation` carries at most 4 KiB of opaque host metadata.
-`presentation(forGroup:)` retrieves it without reconstruction.
-`nativeActionNames(resolve:)` returns host-decoded labels and the matching
-availability snapshot in one actor turn. `readIdentity()` exposes scope,
-generation and committed version for history presentation.
-
-## Retention and host-owned resources
-
-Call `holdState(_:)` to keep one host-authored checkpoint state. Call
-`holdDetail(from:through:)` to preserve complete accepted groups in an inclusive
-interval. Holds survive reopening and overlap independently; `releaseHold(_:)`
-releases only the named promise. `retentionHolds()` lists the current generation's
-durable holds. A checkpoint without a state hold may be removed by later policy.
-
-The host provides a coherent checkpoint before calling
-`consolidateHistory(through:policy:)`. The framework removes only accepted detail
-before that checkpoint which is not needed by ordinary Undo/Redo, holds, policy,
-or active recovery plans. One call removes at most `HistoryLimits.maxReadPage`
-groups and checkpoints; call again while `hasMore` is true. A target below the
-protected group count leaves `targetUnmet` true. Removed accepted transitions
-create explicit gaps, so a recovery plan crossing one fails. Checkpoint recovery
-remains available because its host-authored state is stored separately. Accepted
-command retries still return their original receipt after detailed payloads are
-retired; a changed fingerprint is rejected without delivery.
-
-`HistoryEffect.resources` and checkpoint creation accept bounded
-``HistoryObjectReference`` values. They identify objects and versions in a
-host-owned Retention Store; UndoKit never opens those objects. The host secures
-each dependency before it reports acceptance or creates the checkpoint.
-`HistoryStore.requiredObjects(in:after:limit:)` pages distinct required objects
-across every scope in the physical store. After pruning, `cleanupPending(for:)`
-reports durable cleanup work. Use `withRequiredObjects(in:cleanup:)` to fence all
-new admissions while the host pages the required set and removes its unneeded
-objects in its own atomic transaction. A callback failure leaves cleanup pending
-for retry. Read-only sessions can inspect requirements but cannot perform cleanup.
-
-## Native hosting
-
-Start with the supported AppKit/UIKit bindings and ``NativeHistorySession`` for
-standard native editing, draft settlement and recovery lifetime. SwiftUI presents
-those native editors through the framework adapter. See <doc:FirstUndoGroup>.
-The lower-level router below is for hosts that own their editing integration.
-
-``NativeHistoryRouter`` supplies an UndoManager to native controls. NSTextView
-retains its native grouping and coalescing. The host settles provisional input
-before a reversal, submits prior edits in order, applies the router's editing
-barrier, and completes the asynchronous invocation with finalized availability.
-Capture `pendingInvocationID` when a native Undo or Redo callback starts, or use
-`beginExternalOperation()` for a host maintenance action. Supply that ID to
-`finishInvocation(_:snapshot:undoName:redoName:)`; a late completion cannot finish
-a newer invocation. After opening or resetting, settle provisional edits and
-queued work, reconcile the engine, check `canAttach`, and explicitly
-`attach(snapshot:undoName:redoName:)` to the confirmed generation. A changed
-generation produces `reattachmentRequired` until attachment succeeds. Retired
-callbacks and stale availability versions cannot unblock editing.
-Marked composition must finish before settlement. Independent local text controls
-keep their own managers and must not fall through to unrelated document history.
-
-Do not assign the provisional manager to NSDocument: its automatic group-close
-change counting would run before host acceptance. The document host counts each
-authoritative result once and separately reports provisional input as edited.
-Rebuilding availability after opening neither invokes an old callback nor dirties
-the document. An unexplained native registration pauses routing until the host
-reconciles it. The bridge does not navigate or interpret affected-content data.
-
-## Current limits
-
-Host payloads and group sizes remain bounded. Guarded production measurements
-and their declared source/environment/budgets are distinct from historical
-prototype results; a passing small case does not qualify 100,000-group workloads.
-Timing and heavy cases are advisory, while correctness, controlled limit refusal
-and ordinary responsiveness remain required acceptance work.
-
-UndoKit versions and publishes independently of Folio or consuming applications.
-Source, native-project and complete dynamic XCFramework routes are implemented;
-actual signed/downloadable artifacts and supported environments require matching
-qualification evidence. All clients in one process rebuild/relink against one
-selected preview version. No drop-in binary ABI replacement or untested compiler
-compatibility is promised. Direct Objective-C remains outside the preview scope.
-
-Before the first qualified preview, API frost permits documented changes needed
-for qualification; there is no migration promise from tagged 0.1.0 or experimental
-stores. The qualified preview establishes the supported persisted-history
-baseline and its forward continuity obligations. Unsupported history is preserved
-and refused. See <doc:PreviewCompatibilityAndSupport> for patch/minor/major
-compatibility, explicit future migration and retained codec/resource obligations.
+This pre-release refactor has no compatibility wrappers or old draft-format
+migration. Current-format recovery and original-data preservation remain required.
+Consult the matching release evidence for platform qualification; source builds
+and simulator checks alone do not establish physical-device or floor-OS support.
 
 ## Topics
 
-### Sessions and ownership
+### Application integration
 
-- ``HistoryStore``
-- ``HistoryEngine``
-- ``HistoryOpenMode``
-- ``HistoryScopeOpenMode``
-- ``HistoryStoreAccess``
-- ``HistoryStoreFootprint``
-- ``HistoryScopeInspection``
-- ``HistoryRecordingMode``
-- ``HistoryLimits``
+- ``HistorySessions``
+- ``HistorySession``
+- ``HistoryCommands``
+- ``HistoryAttachment``
+- ``HistoryField``
+- ``HistorySessionStatus``
+- ``HistorySubmissionResult``
 
-### Commands, outcomes and recovery failures
+### Host setup
 
-- ``HistoryTransactions``
-- ``HistoryHost``
-- ``HistoryCommand``
-- ``HistoryMember``
-- ``HistoryPayload``
-- ``HistoryToken``
-- ``HistoryDelivery``
-- ``HistoryDeliveryKind``
-- ``HistoryEffect``
-- ``HistoryHostOutcome``
-- ``HistoryResult``
-- ``HistoryReceipt``
-- ``HistoryFailure``
-- ``HistoryFailureCause``
-- ``HistoryFailureStage``
-- ``HistoryScopeDisposition``
-
-### Typed host adaptation
-
-- ``HistoryTypedOperationHandler``
+- ``HistoryHostLease``
+- ``HistoryOperation``
 - ``HistoryOperationHandler``
 - ``MainActorHistoryOperationHandler``
-- ``HistoryOperationRegistration``
-- ``HistoryRegisteredHost``
-- ``MainActorHistoryRegisteredHost``
-- ``HistoryHostRegistry``
 - ``HistoryCodec``
-- ``HistorySchemaIdentity``
-- ``HistoryTypedCommand``
-- ``HistoryTypedOutcome``
-- ``HistoryTypedEffect``
-- ``HistoryOperationContext``
 
-### Browsing and reconstruction
+### Advanced capabilities
 
+- ``HistoryTransactions``
 - ``HistoryReading``
-- ``HistoryEntry``
-- ``HistoryEntryKind``
-- ``HistoryCheckpointInfo``
-- ``HistoryCheckpoint``
-- ``HistoryReadIdentity``
-- ``HistoryReconstructionEvidence``
-- ``HistoryRecoverySource``
-- ``HistoryRecoveryTarget``
-- ``HistoryRecoveryDirection``
-- ``HistoryRecoveryPlan``
-- ``HistoryRecoveryStep``
-- ``HistoryRecoveryPage``
-- ``HistoryRecoveryMaterial``
-
-### Retention and host resources
-
 - ``HistoryRetentionManaging``
-- ``HistoryRetentionHold``
-- ``HistoryRetentionHold/Kind``
-- ``HistoryRetentionPolicy``
-- ``HistoryConsolidationResult``
-- ``HistoryObjectReference``
-- ``HistoryRequiredObject``
-- ``HistoryRequiredObjectPage``
-
-### Native integration
-
-- ``NativeHistoryRouter``
-- ``NativeHistoryRoutingState``
-- ``HistorySnapshot``
-- ``HistoryNativeActionNames``
+- ``HistoryStore``
+- ``HistoryEngine``
+- ``HistoryFailure``

@@ -5,8 +5,8 @@ SPDX-License-Identifier: MIT
 
 # Historical reconstruction
 
-`Interface/HistoryReconstruction.swift` defines handles and lightweight records.
-`Interface/HistoryReading.swift` exposes bounded reads, coherent identity and
+`Interface/Advanced/RetainedHistory/HistoryReconstruction.swift` defines handles and lightweight records.
+`Interface/Advanced/RetainedHistory/HistoryReading.swift` exposes bounded reads, coherent identity and
 host-resolved native labels. Their implementation and temporary plan protection
 live together in `Modules/RetainedHistory/`.
 

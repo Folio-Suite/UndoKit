@@ -109,8 +109,8 @@ it does not identify payloads by the Swift collection type name. Payload limits
 still apply to encoded values. Codable traverses elements, so large full snapshots
 can incur allocation and synchronous encoding cost on the calling actor even
 when copying the in-memory collection is cheap. No performance claim follows
-from the small probe. [Registration contract](../../UndoKit/Interface/HistoryRegistrations.swift),
-[Codec contract](../../UndoKit/Interface/HistoryCodecs.swift),
+from the small probe. [Registration contract](../../UndoKit/Interface/Hosting/HistoryOperation.swift),
+[Codec contract](../../UndoKit/Interface/Hosting/HistoryCodecs.swift),
 [Payload limits](../../UndoKit/Interface/HistoryTypes.swift).
 
 ## Preliminary convenience recommendations

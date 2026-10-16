@@ -23,11 +23,17 @@ import XCTest
         let primary = try await HistoryEngine.open(at: directory.appendingPathComponent("Primary.sqlite"),
             scope: sharedScope, workingIdentity: UUID(), mode: .create, host: primaryHost)
         let result = await primary.submitWithInjectedFinalizationFailure(command)
-        guard case .failure(let failure) = result else { return XCTFail("Selected finalization did not fail") }
+        guard case .failure(let failure) = result else {
+            XCTFail("Selected finalization did not fail")
+            return
+        }
         XCTAssertEqual(failure.cause, .storage)
         XCTAssertEqual(failure.stage, .finalization)
         XCTAssertTrue(primary.snapshot.isSuspended)
-        guard case .accepted = primaryHost.peerResult else { return XCTFail("Unrelated Command inherited failure") }
+        guard case .accepted = primaryHost.peerResult else {
+            XCTFail("Unrelated Command inherited failure")
+            return
+        }
         XCTAssertFalse(peer.snapshot.isSuspended)
         XCTAssertTrue(peer.snapshot.canUndo)
         XCTAssertEqual(peerHost.value, "peer")
@@ -49,9 +55,15 @@ import XCTest
         let ordinaryResult = await ordinary.value
         let wasSuspended = engine.snapshot.isSuspended
         try await engine.close()
-        guard case .failure(let failure) = refusal else { return XCTFail("Busy injection was admitted") }
+        guard case .failure(let failure) = refusal else {
+            XCTFail("Busy injection was admitted")
+            return
+        }
         XCTAssertEqual(failure.cause, .busy)
-        guard case .accepted = ordinaryResult else { return XCTFail("Ordinary delivery was poisoned") }
+        guard case .accepted = ordinaryResult else {
+            XCTFail("Ordinary delivery was poisoned")
+            return
+        }
         XCTAssertEqual(host.value, "ordinary")
         XCTAssertFalse(wasSuspended)
     }
@@ -67,7 +79,8 @@ import XCTest
     private var started: CheckedContinuation<Void, Never>?
     var outcomes: [HistoryToken: HistoryHostOutcome] = [:]
     static func command(_ value: String, id: UUID = UUID()) -> HistoryCommand {
-        HistoryCommand(id: id, fingerprint: Data(value.utf8), payload: HistoryPayload(family: "debug-injection", data: Data(value.utf8)))
+        HistoryCommand(id: id, fingerprint: Data(value.utf8),
+                       payload: HistoryPayload(family: "debug-injection", data: Data(value.utf8)))
     }
     func waitUntilDeliveryStarted() async {
         if waiting != nil { return }
@@ -79,13 +92,14 @@ import XCTest
         if delay {
             await withCheckedContinuation { waiting = $0; started?.resume(); started = nil }
         }
+        guard let decoded = String(data: delivery.members[0].payload.data, encoding: .utf8) else { return .rejected }
         if let peer { peerResult = await peer.submit(Self.command("peer", id: peerCommandID)) }
         let previous = value
-        value = String(decoding: delivery.members[0].payload.data, as: UTF8.self)
+        value = decoded
         let outcome = HistoryHostOutcome.accepted([
             HistoryEffect(memberID: delivery.members[0].id,
                 undo: HistoryPayload(family: "debug-injection", data: Data(previous.utf8)),
-                redo: delivery.members[0].payload)
+                redo: delivery.members[0].payload),
         ])
         outcomes[delivery.token] = outcome
         return outcome

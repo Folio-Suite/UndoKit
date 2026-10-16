@@ -14,19 +14,50 @@ primary data.
 source is under API frost, with changes needed for qualification still possible.
 Do not treat `main`, a successful build, or a simulator run as a qualified release.
 
-## Start here
+## Try it in a small app
 
-1. Choose the [installation route](docs/installation.md): source Swift Package,
-   native Xcode project, or a complete dynamic XCFramework.
-2. Build [Durable Notes](Examples/DurableNotes/README.md), the small persisted
-   example with authoritative host receipts. Native AppKit/UIKit and SwiftUI
-   macOS/iPhone/iPad hosts share its domain.
-3. Follow the [first Undo Group and recovery walkthrough](docs/getting-started.md).
-4. Browse the in-repository [DocC catalog](UndoKit/UndoKit.docc/UndoKit.md) and
-   [history compatibility policy](docs/history-compatibility.md).
+[Durable Notes](Examples/DurableNotes/README.md) is a small persisted note editor
+with AppKit, UIKit and SwiftUI hosts. From this checkout, launch the Mac app:
 
-The independent versioned documentation site is being prepared. No hosted
-`0.2.0` release documentation or latest-release pointer is available yet.
+```sh
+ruby scripts/check-toolchain.rb
+ruby scripts/run-durable-notes.rb --launch
+```
+
+Choose **Apply grouped example**, Undo, then Redo. Type into the body and try native
+Undo/Redo before **Commit typing**. Close and reopen to see the committed note and
+history return. The example keeps its Note and authoritative receipts separately
+from UndoKit's history database.
+
+| Build with | Guide | Runnable app |
+| --- | --- | --- |
+| AppKit | [Window and text-view integration](UndoKit/UndoKit.docc/Integration/AppKitIntegration.md) | [Durable Notes](Examples/DurableNotes/README.md) |
+| UIKit | [View-controller and scene integration](UndoKit/UndoKit.docc/Integration/UIKitIntegration.md) | [iPhone/iPad app](Examples/DurableNotes/UIKit/README.md) |
+| SwiftUI | [Native-backed editors and stable owners](UndoKit/UndoKit.docc/Integration/SwiftUIIntegration.md) | [Mac](Examples/DurableNotes/SwiftUIApp/README.md) · [iPhone/iPad](Examples/DurableNotes/SwiftUI/README.md) |
+
+## Integrate your own document
+
+1. [Add the dynamic UndoKit product](docs/installation.md) to your app. The source
+   package is the simplest starting route; native-project and XCFramework routes
+   are also supported.
+2. [Open one shared session and submit a typed edit](UndoKit/UndoKit.docc/FirstUndoGroup.md).
+   Keep `HistorySessions` in your app owner; share a `HistorySession` across windows
+   displaying the same document. Give each presentation its own attachment.
+3. Bind your native editor and supply the attachment's UndoManager through the
+   platform's normal responder route. In SwiftUI, retain the native editor/binding
+   outside transient view values and present it with `NativeHistorySwiftUIEditor`.
+4. [Connect your model and receipts](UndoKit/UndoKit.docc/Integration/HostingYourModel.md).
+   Declare each operation once; call sites submit typed values. Your host commits
+   complete group effects and authoritative receipts atomically in its own store.
+
+UndoKit handles ordering, history persistence, native draft settlement and recovery.
+Your app retains its model and validates what an edit means. Closing a window
+releases its attachment; closing the document explicitly closes its shared session.
+
+Continue with the [DocC catalog](UndoKit/UndoKit.docc/UndoKit.md),
+[recovery guide](UndoKit/UndoKit.docc/RecoveryAndStorage.md) and
+[history compatibility policy](docs/history-compatibility.md). The source guides
+are available now; the versioned hosted documentation site is being prepared.
 
 ## Ownership
 

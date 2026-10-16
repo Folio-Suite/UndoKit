@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-FileCopyrightText: 2026 the Folio Project -->
+<!-- SPDX-License-Identifier: MIT -->
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="570" viewBox="0 0 480 570" role="img" aria-labelledby="title description">
+  <title id="title">One document session, several presentations</title>
+  <desc id="description">Two window attachments share one application-owned History Session. Typed commands reach the domain host, which commits data and receipts together. UndoKit keeps history and draft journals separately.</desc>
+  <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" fill="#45546b"/></marker></defs>
+  <rect width="480" height="570" rx="16" fill="#f5f7fb"/>
+  <g font-family="-apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle" fill="#18263b">
+    <text x="240" y="42" font-size="25" font-weight="600">One shared document session</text>
+    <g stroke="#b3bfce" fill="#fff" stroke-width="1.5">
+      <rect x="20" y="76" width="210" height="90" rx="10"/>
+      <rect x="250" y="76" width="210" height="90" rx="10"/>
+      <rect x="60" y="235" width="360" height="100" rx="10" fill="#e0edff" stroke="#668cc0"/>
+      <rect x="20" y="415" width="210" height="125" rx="10" fill="#e2f2e9" stroke="#77a58b"/>
+      <rect x="250" y="415" width="210" height="125" rx="10"/>
+    </g>
+    <g font-size="23" font-weight="600">
+      <text x="125" y="112">Window / view A</text><text x="355" y="112">Window / view B</text>
+      <text x="240" y="272">History Session</text>
+      <text x="125" y="450">Your domain host</text><text x="355" y="450">UndoKit storage</text>
+    </g>
+    <g font-size="20">
+      <text x="125" y="143">Owns an attachment</text><text x="355" y="143">Owns an attachment</text>
+      <text x="240" y="305">Retained by the application</text>
+      <text x="125" y="482">Data + receipts</text><text x="125" y="514">One atomic commit</text>
+      <text x="355" y="482">History + drafts</text><text x="355" y="514">Separate from data</text>
+    </g>
+    <g fill="none" stroke="#45546b" stroke-width="2" marker-end="url(#arrow)">
+      <path d="M125 166 V200 H210 V235"/><path d="M355 166 V200 H270 V235"/>
+      <path d="M210 335 V370 H125 V415"/><path d="M270 335 V370 H355 V415"/>
+    </g>
+    <text x="70" y="392" font-size="16">Typed intent</text>
+  </g>
+</svg>

@@ -21,7 +21,7 @@ Debug and Release checks cover different conditional-code paths.
 
 These source/project checks do not qualify a binary release. The later
 XCFramework, signing, installation and deployment-floor/current OS behavioral
-gates remain required. [ADR 0007](0007-os-behavioral-qualification.md) supersedes
+gates remain required. [ADR 0008](0008-os-behavioral-qualification.md) supersedes
 the original blanket Intel/physical execution requirements with architecture
 build acceptance and behavior-driven hardware checks. Unsupported Apple platforms
 are outside this contract.

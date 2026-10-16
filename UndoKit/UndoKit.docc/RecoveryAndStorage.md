@@ -7,6 +7,23 @@ SPDX-License-Identifier: MIT
 
 Preserve exact intent and authoritative evidence across uncertainty.
 
+## Show the next action
+
+Keep session status visible to the person editing the document. A disabled
+editor without an explanation is difficult to distinguish from a broken app.
+
+| What you observe | Next step |
+| --- | --- |
+| Busy delivery | Keep the owner; wait for the authoritative result. |
+| `requiresDraftDecision` | Offer `retryDraft()` and `discardDraft()` with an explanation of the retained draft. |
+| Suspended transaction | Await `session.reconcile()`; it consults the original host receipt. |
+| Storage unavailable | Restore access to the original document, then finish closure before reopening it. |
+| Close did not reach `.closed` | Keep the session/domain lease and report the blocking issue. |
+
+Use the session or binding's supported methods, rather than clearing native
+registrations, resetting a generation or opening another history store. A retry
+of a retained draft and a new Command are different operations.
+
 ## Acceptance is host-authoritative
 
 The host's domain state and outcome receipt must agree atomically. If a delivery

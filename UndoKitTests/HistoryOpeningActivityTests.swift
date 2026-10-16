@@ -133,7 +133,8 @@ import XCTest
             at: url, scope: scope, workingIdentity: working, mode: .create, host: host)
         host.loseReplyAfterSave = true
         guard case .failure = await original.submit(HistoryCommand(fingerprint: Data([7]), payload: payload(7))) else {
-            return XCTFail("Lost reply must require recovery")
+            XCTFail("Lost reply must require recovery")
+            return
         }
         try await original.close()
         let originalHost = try Data(contentsOf: hostURL)

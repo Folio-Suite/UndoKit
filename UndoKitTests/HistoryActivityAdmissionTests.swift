@@ -58,28 +58,23 @@ import XCTest
         XCTAssertFalse(captured)
         guard case .failure(let failure) = await idle.submit(
             HistoryCommand(fingerprint: Data([4]), payload: payload(4))) else {
-            return XCTFail("Store maintenance admitted a new Command")
+            XCTFail("Store maintenance admitted a new Command")
+            return
         }
         XCTAssertEqual(failure.cause, .busy)
         one.gate.resume()
-        guard case .accepted = await firstCommand.value, case .accepted = await queuedCommand.value else {
-            return XCTFail("Maintenance rejected already admitted Commands")
-        }
+        assertAccepted(await firstCommand.value, "Maintenance rejected an already admitted Command")
+        assertAccepted(await queuedCommand.value, "Maintenance rejected an already admitted queued Command")
         XCTAssertFalse(captured, "Another scope still owns an active host callback")
         two.gate.resume()
-        guard case .accepted = await secondCommand.value else { return XCTFail("Second scope failed") }
+        assertAccepted(await secondCommand.value, "Second scope failed")
         try await copy.value
         XCTAssertTrue(captured)
         XCTAssertEqual(one.host.value, 3)
         XCTAssertEqual(two.host.value, 2)
         XCTAssertEqual(one.host.deliveries, 2)
         XCTAssertEqual(two.host.deliveries, 1)
-        try await store.close()
-        let reader = try await HistoryStore.open(at: destination, workingIdentity: store.workingIdentity,
-            mode: .existing, access: .readOnly)
-        XCTAssertEqual(try reader.historyPage(scope: firstScope, limit: 10).count, 2)
-        XCTAssertEqual(try reader.historyPage(scope: secondScope, limit: 10).count, 1)
-        try await reader.close()
+        try await assertCommittedCopy(of: store, at: destination, scopeCounts: [firstScope: 2, secondScope: 1])
     }
 
     func testCancellingMaintenanceReleasesItsWaiterWhileHostRemainsActive() async throws {
@@ -106,13 +101,34 @@ import XCTest
             XCTFail("Cancelled maintenance succeeded")
         } catch let failure as HistoryFailure { XCTAssertEqual(failure.cause, .cancelled) }
         XCTAssertFalse(FileManager.default.fileExists(atPath: destination.path))
-        guard case .accepted = await other.submit(HistoryCommand(fingerprint: Data([2]), payload: payload(2))) else {
-            return XCTFail("Cancelled maintenance retained its store fence")
-        }
+        let otherResult = await other.submit(HistoryCommand(fingerprint: Data([2]), payload: payload(2)))
+        assertAccepted(otherResult, "Cancelled maintenance retained its store fence")
         host.gate.resume()
-        guard case .accepted = await command.value else { return XCTFail("Cancellation lost admitted host work") }
+        assertAccepted(await command.value, "Cancellation lost admitted host work")
         try await store.copy(to: directory.appendingPathComponent("Completed.sqlite"))
         XCTAssertEqual(host.host.deliveries, 1)
         try await store.close()
     }
+
+    private func assertAccepted(
+        _ result: HistoryResult, _ message: String, file: StaticString = #filePath, line: UInt = #line
+    ) {
+        guard case .accepted = result else {
+            XCTFail(message, file: file, line: line)
+            return
+        }
+    }
+
+    private func assertCommittedCopy(
+        of store: HistoryStore, at destination: URL, scopeCounts: [UUID: Int]
+    ) async throws {
+        try await store.close()
+        let reader = try await HistoryStore.open(at: destination, workingIdentity: store.workingIdentity,
+            mode: .existing, access: .readOnly)
+        for (scope, count) in scopeCounts {
+            XCTAssertEqual(try reader.historyPage(scope: scope, limit: 10).count, count)
+        }
+        try await reader.close()
+    }
+
 }

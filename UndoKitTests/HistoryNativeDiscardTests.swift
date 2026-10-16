@@ -42,16 +42,23 @@ import XCTest
         discard.cancel()
         let reconciliation = await fixture.session.reconcile()
         guard case .unexecuted(let reconciliationFailure)? = reconciliation else {
-            return XCTFail("Reconciliation during active discard was not explicitly unexecuted")
+            XCTFail("Reconciliation during active discard was not explicitly unexecuted")
+            return
         }
         XCTAssertEqual(reconciliationFailure.cause, .busy)
         let submit = await fixture.commands.submit("must not enter")
-        guard case .unexecuted(let failure) = submit else { return XCTFail("Cancelled active discard lost exclusion") }
+        guard case .unexecuted(let failure) = submit else {
+            XCTFail("Cancelled active discard lost exclusion")
+            return
+        }
         XCTAssertEqual(failure.cause, .busy)
         XCTAssertThrowsError(try engine.createCheckpoint(name: nil, state: payload(1)))
         fixture.host.failReads = true
         gate.resume()
-        guard case .unexecuted = await discard.value else { return XCTFail("Throwing field read succeeded") }
+        guard case .unexecuted = await discard.value else {
+            XCTFail("Throwing field read succeeded")
+            return
+        }
         XCTAssertEqual(try Data(contentsOf: fixture.root.appendingPathComponent("Domain.json")), original)
         fixture.host.failReads = false
         fixture.host.fieldReadGate = nil

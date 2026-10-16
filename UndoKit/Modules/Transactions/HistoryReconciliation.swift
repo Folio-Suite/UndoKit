@@ -55,13 +55,7 @@ extension HistoryTransactionCoordinator {
     private func reconcileDelivered(_ transaction: HistoryTransactionRecord) async -> HistoryResult {
         do {
             let token = try history.token(for: transaction)
-            let activeStores = HistoryStore.deliveringStores.union([ObjectIdentifier(store)])
-            let outcome = await HistoryStore.$deliveringStores.withValue(activeStores) {
-                let activeTransactions = HistoryHostCallbackContext.activeTransactions.union([ObjectIdentifier(self)])
-                return await HistoryHostCallbackContext.$activeTransactions.withValue(activeTransactions) {
-                    await host.outcome(for: token)
-                }
-            }
+            let outcome = await withHostCallback { await host.outcome(for: token) }
             return await finish(transactionKey: transaction.key ?? "", outcome: outcome)
         } catch {
             suspend()
@@ -89,24 +83,25 @@ extension HistoryTransactionCoordinator {
 
     /// Rechecks a suspended transaction against authoritative host evidence.
     /// This never redelivers an operation whose delivery may have started.
-    func reconcile() async -> HistoryResult? {
+    func reconcile(
+        completion: (@MainActor (HistoryResult?) async -> Void)? = nil
+    ) async -> HistoryResult? {
         if store.writeFailed {
             return .failure(HistoryFailure(.storage, stage: .reconciliation, disposition: .suspended))
         }
-        guard !isActive, !closed, !closing, !reconciling, !store.closing,
-            !store.closed, !store.maintenance
-        else {
-            return .failure(
-                HistoryFailure(
-                    .busy, stage: .reconciliation,
-                    disposition: closing ? .suspended : .usable))
+        do {
+            return try await withReconciliation {
+                let result = await reconcileIdle()
+                await completion?(result)
+                return result
+            }
+        } catch {
+            return .failure(HistoryFailure(
+                .busy, stage: .reconciliation, disposition: closing ? .suspended : .usable))
         }
-        reconciling = true
-        defer {
-            reconciling = false
-            updateSnapshot()
-            resumeClosureIfIdle()
-        }
+    }
+
+    private func reconcileIdle() async -> HistoryResult? {
         do {
             let request = HistoryTransactionRecord.fetchRequest()
             request.predicate = NSPredicate(

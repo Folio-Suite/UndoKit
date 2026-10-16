@@ -30,6 +30,9 @@ import XCTest
     var loseNextReply = false
     var rejectNext = false
     var failReads = false
+    var outcomeGate: NativeFieldReadGate?
+    var fieldReadGate: NativeFieldReadGate?
+    var fieldReadAction: (@MainActor () async -> Void)?
     var closed = false
     var failClose = false
     var delayClose = false
@@ -43,6 +46,11 @@ import XCTest
             if failReads { throw CocoaError(.fileReadNoPermission) }
             return HistoryFieldSnapshot(value: state.value, revision: Data(String(state.revision).utf8))
         }
+    }
+    func readField() async throws -> HistoryFieldSnapshot<String> {
+        if let fieldReadGate { await fieldReadGate.pause() }
+        await fieldReadAction?()
+        return try snapshot
     }
     init(directory: URL) { self.directory = directory }
     func open(_ mode: HistoryOpenMode) async throws {
@@ -97,6 +105,7 @@ import XCTest
         execute(effects, context: context)
     }
     func outcome(for token: HistoryToken) async -> HistoryTypedOutcome<String> {
+        if let outcomeGate { await outcomeGate.pause() }
         guard let receipt = state.receipts[key(token)] else { return .rejected }
         return outcome(receipt)
     }
@@ -206,7 +215,8 @@ import XCTest
         let commands = try session.commands(for: operation)
         let field = HistoryField<String>(
             id: "title", mappingID: "title.replace", codec: .json(), commands: commands,
-            read: { try host.snapshot }, makeCommands: { base, proposed in proposed == base.value ? [] : [proposed] })
+            read: { try await host.readField() },
+            makeCommands: { base, proposed in proposed == base.value ? [] : [proposed] })
         return Self(root: root, host: host, sessions: sessions, session: session, commands: commands, field: field)
     }
     func reopen() async throws -> Self {
@@ -218,7 +228,8 @@ import XCTest
         let commands = try reopened.commands(for: operation)
         let field = HistoryField<String>(
             id: "title", mappingID: "title.replace", codec: .json(), commands: commands,
-            read: { try host.snapshot }, makeCommands: { base, proposed in proposed == base.value ? [] : [proposed] })
+            read: { try await host.readField() },
+            makeCommands: { base, proposed in proposed == base.value ? [] : [proposed] })
         return Self(root: root, host: host, sessions: sessions, session: reopened, commands: commands, field: field)
     }
     func adapter(owner: AnyObject = NSObject()) async throws -> (HistoryAttachment, NativeFieldTestAdapter) {

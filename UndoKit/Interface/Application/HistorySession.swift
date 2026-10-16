@@ -156,6 +156,12 @@ enum HistoryNativeOperation { case settle, undo, redo }
         guard !opening, !closed, !closeRequested, let engine else { return .unexecuted(failure(.busy)) }
         guard !engine.transaction.isActive else { return .unexecuted(failure(.busy)) }
         let result = await engine.reconcile()
+        // Core reconciliation can resume a waiting close before this continuation runs.
+        // Keep its authoritative result, but never reopen presentation activity on a retiring owner.
+        guard !closed, !closeRequested, self.engine === engine,
+            !engine.transaction.closing, !engine.transaction.isActive,
+            !engine.store.closing, !engine.store.closed, !engine.store.maintenance
+        else { return result.map(HistorySubmissionResult.init) }
         let mayRefresh: Bool
         switch result {
         case nil, .accepted: mayRefresh = true

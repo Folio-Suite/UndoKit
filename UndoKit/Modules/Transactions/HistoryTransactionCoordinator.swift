@@ -49,6 +49,8 @@ extension HistoryAdmissionParticipant {
         var injectFinalizationFailure = false
         #endif
         var request: Request?
+        /// Prerequisite work is independent of a dependent request's preparation.
+        var executionStarted = false
         var terminal: HistoryResult?
         var waiters: [CheckedContinuation<HistoryResult, Never>] = []
         init(generation: UUID, prerequisite: UUID?) {
@@ -72,6 +74,7 @@ extension HistoryAdmissionParticipant {
     var limits: HistoryLimits { history.limits }
     var context: NSManagedObjectContext { history.context }
     private var queue: [Reservation] = []
+    private var activeReservation: Reservation?
     private var draining = false
     private var opening = false
     private(set) var closing = false
@@ -163,8 +166,11 @@ extension HistoryAdmissionParticipant {
     }
 
     func fail(_ reservation: Reservation, failure: HistoryFailure) {
-        guard let index = queue.firstIndex(where: { $0 === reservation }) else { return }
-        queue.remove(at: index)
+        if let index = queue.firstIndex(where: { $0 === reservation }) {
+            queue.remove(at: index)
+        } else {
+            guard activeReservation === reservation, !reservation.executionStarted else { return }
+        }
         reservation.finish(.failure(failure))
         updateSnapshot()
         startDrain()
@@ -202,6 +208,7 @@ extension HistoryAdmissionParticipant {
     private func drain() async {
         while let waiting = queue.first, let request = waiting.request {
             queue.removeFirst()
+            activeReservation = waiting
             let result = await executeReserved(request, reservation: waiting)
             // Publication refresh is part of this slot. It cannot change an accepted receipt.
             let callbacks = HistoryHostCallbackContext.activeTransactions.union([ObjectIdentifier(self)])
@@ -213,6 +220,7 @@ extension HistoryAdmissionParticipant {
                 }
             }
             waiting.finish(result)
+            activeReservation = nil
             updateSnapshot()
             if let failure = participant?.admissionFailure() {
                 finishWaiting(
@@ -248,6 +256,9 @@ extension HistoryAdmissionParticipant {
         protection.invalidateRecoveryPlans()
         guard !closing, !closed else { return }
         closing = true
+        if let activeReservation, !activeReservation.executionStarted {
+            activeReservation.finish(.failure(HistoryFailure(.busy, stage: .admission, disposition: .usable)))
+        }
         participant?.admissionClosing()
         finishWaiting(HistoryFailure(.busy, stage: .admission, disposition: .usable))
         updateSnapshot()

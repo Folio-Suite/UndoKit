@@ -120,6 +120,9 @@ extension HistoryNativeCoordinator {
             field: previous.field, adapter: previous.adapter)
     }
     func retryDraft() async -> HistorySubmissionResult {
+        guard let engine = session.engine, !engine.transaction.isActive else {
+            return .unexecuted(failure(.busy))
+        }
         guard !unknown, !closing, !session.snapshot.hasPending, fields.values.allSatisfy(\.compatible) else {
             return await session.settleEditing()
         }
@@ -144,13 +147,35 @@ extension HistoryNativeCoordinator {
         return await session.settleEditing()
     }
     func discardDraft() async -> HistorySubmissionResult {
-        do {
-            guard !unknown, !closing, unboundJournals.isEmpty,
-                fields.values.allSatisfy({ $0.compatible && ($0.prepared == nil || $0.rejected) })
-            else {
-                throw failure(.unresolved, suspended: true)
+        guard !unknown, !closing, unboundJournals.isEmpty,
+            fields.values.allSatisfy({ $0.compatible && ($0.prepared == nil || $0.rejected) })
+        else { return .unexecuted(failure(.unresolved, suspended: true)) }
+        guard session.status.phase == .ready || session.status.phase == .blocked,
+            let engine = session.engine
+        else { return .unexecuted(failure(.busy)) }
+        do { try engine.transaction.requireIdle() } catch {
+            return .unexecuted(HistorySession.describe(error, stage: .admission))
+        }
+        // Discard owns the same activity fence as authoritative reconciliation.
+        // Closure waits for this read; retry and new delivery cannot mutate its evidence.
+        engine.transaction.reconciling = true
+        session.refreshStatus()
+        defer {
+            engine.transaction.reconciling = false
+            engine.transaction.updateSnapshot()
+            engine.transaction.resumeClosureIfIdle()
+            session.refreshStatus()
+        }
+        let callbacks = HistoryHostCallbackContext.activeTransactions.union([ObjectIdentifier(engine.transaction)])
+        return await HistoryHostCallbackContext.$activeTransactions.withValue(callbacks) {
+            let stores = HistoryStore.deliveringStores.union([ObjectIdentifier(engine.store)])
+            return await HistoryStore.$deliveringStores.withValue(stores) {
+                await discardCurrentFields()
             }
-            guard session.status.phase == .ready || session.status.phase == .blocked else { throw failure(.busy) }
+        }
+    }
+    private func discardCurrentFields() async -> HistorySubmissionResult {
+        do {
             for state in fields.values where state.requiresDecision || state.proposed != state.base.value {
                 try await refresh(state)
             }

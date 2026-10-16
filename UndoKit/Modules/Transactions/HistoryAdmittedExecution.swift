@@ -21,6 +21,7 @@ extension HistoryTransactionCoordinator {
     }
 
     func executeAdmitted(_ request: Request, reservation: Reservation) async -> HistoryResult {
+        if let terminal = reservation.terminal { return terminal }
         if let failure = admissionParticipantFailure() { return failure }
         guard reservation.generation == snapshot.generation else {
             return .failure(HistoryFailure(.identityConflict, stage: .admission, disposition: .usable))
@@ -33,15 +34,33 @@ extension HistoryTransactionCoordinator {
             ) {
                 await HistoryHostCallbackContext.$activeTransactions.withValue(callbacks) {
                     await participant.settlePrerequisite(id) { command in
-                        await self.execute(.command(command))
+                        await self.executePrerequisite(command, for: request, reservation: reservation)
                     }
                 }
             }
+            // The caller may already have received an unexecuted cancellation.
+            // Preserve the independently settled native result for presentation refresh.
+            if let prerequisite, reservation.terminal != nil { return prerequisite }
             if let prerequisite, let stop = dependentResult(prerequisite, request: request) { return stop }
         }
+        if let terminal = reservation.terminal { return terminal }
         if case .settle = request { return prerequisite ?? .rejected }
         if let failure = admissionParticipantFailure() { return failure }
+        reservation.executionStarted = true
         return await execute(request)
+    }
+
+    private func executePrerequisite(
+        _ command: HistoryCommand, for request: Request, reservation: Reservation
+    ) async -> HistoryResult {
+        guard !closing, !store.closing else {
+            return .failure(HistoryFailure(.busy, stage: .admission, disposition: .usable))
+        }
+        if case .settle = request {
+            if let terminal = reservation.terminal { return terminal }
+            reservation.executionStarted = true
+        }
+        return await execute(.command(command))
     }
 
     private func dependentResult(_ prerequisite: HistoryResult, request: Request) -> HistoryResult? {

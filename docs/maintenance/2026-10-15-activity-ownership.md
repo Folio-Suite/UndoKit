@@ -60,7 +60,10 @@ scripts/test-package.sh --filter 'History(ActivityAdmission|OpeningActivity|Nati
 scripts/test-package.sh -c release --filter 'History(ActivityAdmission|OpeningActivity|NativeDiscard|StoreLifecycle|StoreMaintenance|ApplicationSession)Tests|UndoKitTests.UndoKitTests'
 ```
 
-Final focused results: Debug 52 tests and Release 50 tests, zero failures.
+Focused results: Debug 52 tests and Release 50 tests, zero failures. A final
+review then restored the synchronous transaction/store closing guards before
+reconciliation presentation refresh; the exact integrated-head suites validate
+that final guard restoration.
 The original checkpoint/discard regression was run red before the admission fix
 (two failed assertions), then green. `git diff --check` passed. The integrating
 change owns the full package suites and native consumer qualification; no native

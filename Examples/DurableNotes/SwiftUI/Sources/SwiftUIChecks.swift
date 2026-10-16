@@ -347,12 +347,10 @@ import UndoKit
             try require(lifetimeProbe.session?.status.phase == .blocked && lifetimeProbe.lease?.isOpen == true
                 && owner.registry.sessions.session(for: lifetimeProbe.documentURL) === lifetimeProbe.session,
                 "Blocked presentation release lost its exact retained session or lease: \(lifetimeProbe.diagnostic)")
-            let obstruction = lifetimeProbe.session!.configuration!.journalDirectory
-            try FileManager.default.removeItem(at: obstruction)
-            await lifetimeProbe.session?.close()
-            try require(owner.registry.sessions.session(for: lifetimeProbe.documentURL) == nil
-                && lifetimeProbe.lease?.isOpen == false,
-                "Repaired blocked recovery owner did not completely retire")
+            try await repairAndClose(lifetimeProbe, registry: owner.registry)
+            try await waitUntil("Repaired session or domain lease remained retained: \(lifetimeProbe.diagnostic)") {
+                lifetimeProbe.session == nil && lifetimeProbe.lease == nil
+            }
             observations.append("A real journal-path obstruction blocks closure while the application collection retains the exact session and lease independently of released SwiftUI presentation objects; repairing only that obstruction permits complete closure.")
             let recovered = SwiftUINotesOwner(id: lifetimeProbe.id, registry: owner.registry)
             await recovered.open()
@@ -418,6 +416,18 @@ import UndoKit
             return "owner=\(owner != nil), editor=\(editor != nil), binding=\(binding != nil), hosting=\(hostingController != nil), superview=\(superview), nativeContainer=\(nativeContainer != nil), hostView=\(hostingView != nil), window=\(window != nil), focused=\(editor?.isFirstResponder == true), attached=\(editor?.window != nil), session=\(session != nil), phase=\(String(describing: session?.status.phase)), lease=\(lease != nil)"
         }
         var isReleased: Bool { owner == nil && editor == nil && binding == nil && hostingController == nil }
+    }
+
+    private static func repairAndClose(_ probe: PresentationLifetimeProbe, registry: SwiftUINotesRegistry) async throws {
+        guard let retainedSession = probe.session, let retainedLease = probe.lease,
+              let configuration = retainedSession.configuration else {
+            throw Failure.check("Blocked recovery owner disappeared before repair: \(probe.diagnostic)")
+        }
+        try FileManager.default.removeItem(at: configuration.journalDirectory)
+        await retainedSession.close()
+        try require(retainedSession.status.phase == .closed && !retainedLease.isOpen
+            && registry.sessions.session(for: probe.documentURL) == nil,
+            "Repaired owner did not close its resources: phase=\(retainedSession.status.phase), domainOpen=\(retainedLease.isOpen), \(probe.diagnostic)")
     }
 
     private static func releaseTransientPresentation(registry: SwiftUINotesRegistry,

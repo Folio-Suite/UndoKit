@@ -6,7 +6,7 @@ import Foundation
 extension HistoryNativeCoordinator {
     func capturePrerequisite() throws -> UUID? {
         guard !unknown, issue == nil else { throw issue ?? failure(.hostProtocol, suspended: true) }
-        if fields.values.contains(where: { $0.requiresDecision && !$0.rejected }) {
+        if fields.values.contains(where: \.requiresExplicitDecision) {
             throw failure(.unresolved, suspended: true)
         }
         guard let transaction else { return nil }
@@ -44,6 +44,7 @@ extension HistoryNativeCoordinator {
         if state.rejected {
             state.prepared = nil
             state.rejected = false
+            state.liveRejectionEditable = false
             state.requiresDecision = false
             refreshAvailability()
         }
@@ -66,9 +67,13 @@ extension HistoryNativeCoordinator {
             } catch { block(error) }
         case .rejected:
             state.rejected = true
+            state.liveRejectionEditable =
+                self.transaction?.id == transaction.id
+                && adapters[transaction.attachment]?.value === transaction.adapter
             state.requiresDecision = true
             try persist(state)
         case .failure:
+            state.liveRejectionEditable = false
             state.requiresDecision = true
             try persist(state)
         }

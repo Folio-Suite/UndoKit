@@ -30,6 +30,9 @@ struct HistoryFieldJournal: Codable {
     var composing = false
     var prepared: HistoryCommand?
     var rejected = false
+    // A restored rejection has durable evidence but no current native callback history.
+    var liveRejectionEditable = false
+    var requiresExplicitDecision: Bool { requiresDecision && !liveRejectionEditable }
     var requiresDecision = false
     var compatible = true
 
@@ -118,6 +121,7 @@ struct HistoryFieldJournal: Codable {
         composing = journal.composing
         prepared = journal.prepared?.value
         rejected = journal.rejected
+        liveRejectionEditable = false
         requiresDecision = true
         compatible = true
     }

@@ -80,7 +80,7 @@ extension HistoryNativeCoordinator {
     }
     var canRetryLiveRejection: Bool {
         guard !unknown, issue == nil, unboundJournals.isEmpty, let transaction,
-            let state = fields[transaction.field], state.rejected, state.compatible
+            let state = fields[transaction.field], state.rejected, state.liveRejectionEditable, state.compatible
         else { return false }
         return !fields.values.contains { $0 !== state && $0.requiresDecision }
     }
@@ -91,7 +91,7 @@ extension HistoryNativeCoordinator {
     func admissionFailure() -> HistoryFailure? {
         if unknown { return failure(.hostProtocol, suspended: true) }
         if let issue { return issue }
-        if !unboundJournals.isEmpty || fields.values.contains(where: { $0.requiresDecision && !$0.rejected }) {
+        if !unboundJournals.isEmpty || fields.values.contains(where: \.requiresExplicitDecision) {
             return failure(.unresolved, suspended: true)
         }
         return nil
@@ -138,6 +138,7 @@ extension HistoryNativeCoordinator {
             field: transaction.field, adapter: transaction.adapter)
         state.composing = false
         state.requiresDecision = false
+        state.liveRejectionEditable = false
         if state.rejected {
             state.prepared = nil
             state.rejected = false

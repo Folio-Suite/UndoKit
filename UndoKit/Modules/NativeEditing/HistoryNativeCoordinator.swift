@@ -91,12 +91,12 @@ import Foundation
         else { return false }
         // A reservation must not strand existing marked input behind its own barrier.
         if let transaction, transaction.attachment == attachment, transaction.control == control,
-            fields[transaction.field]?.composing == true, composing {
+            fields[transaction.field]?.composing == true,
+            fields[transaction.field]?.requiresExplicitDecision == false, composing {
             return true
         }
         guard session.status.phase == .ready, issue == nil, unboundJournals.isEmpty,
-            !session.status.requiresDraftDecision
-                || fields.values.contains(where: { $0.rejected && $0.requiresDecision })
+            !session.status.requiresDraftDecision || canRetryLiveRejection
         else { return false }
         if let transaction, transaction.attachment != attachment || transaction.control != control { return false }
         return true
@@ -122,7 +122,7 @@ import Foundation
     func changed(attachment: UUID, control: UUID, field: String, value: String, composing: Bool) {
         guard let transaction, transaction.attachment == attachment, transaction.control == control,
             transaction.field == field,
-            let state = fields[field]
+            let state = fields[field], !state.requiresExplicitDecision
         else { return }
         state.proposed = value
         state.composing = composing
@@ -145,6 +145,7 @@ import Foundation
     @discardableResult func requestSettlement(attachment: UUID) -> Bool {
         guard let adapter = adapters[attachment]?.value, adapter.available else { return false }
         if let transaction {
+            guard fields[transaction.field]?.requiresExplicitDecision == false else { return false }
             // Native marked-range updates can follow the text-change notification.
             // Read the control synchronously at the requested boundary, before queue admission.
             do { try capture(transaction) } catch {
@@ -195,6 +196,7 @@ import Foundation
                 return
             }
             state?.requiresDecision = true
+            state?.liveRejectionEditable = false
             do { if let state { try persist(state) } } catch { block(error) }
             // The session retains captured values even when journaling is blocked.
             // Unexplained callbacks remain in its separate facade, never this known live stack.
@@ -231,6 +233,7 @@ import Foundation
         state.proposed = authoritative.value
         state.prepared = nil
         state.rejected = false
+        state.liveRejectionEditable = false
         state.composing = false
         state.requiresDecision = false
         adapters.values.compactMap(\.value).forEach {

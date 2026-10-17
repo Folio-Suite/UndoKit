@@ -51,7 +51,7 @@ class DocumentationSiteTest < Minitest::Test
 
   def create_producer
     File.write(@producer, JSON.generate({ schemaVersion: 1, sourceCommit: SHA, sourceDirty: false,
-      toolchain: { xcode: "Xcode 27.1\nBuild version 27A9275", swift: 'Apple Swift version 6.4 (swiftlang-6.4.0.34.1, clang-2100.3.34.1)', clang: 'Apple clang version 21.0.0 (clang-2100.3.34.1)' }, command: ['xcodebuild', 'docbuild'],
+      toolchain: { xcode: "Xcode 27.1\nBuild version 27A9275", swift: 'Apple Swift version 6.4 (swiftlang-6.4.0.34.1 clang-2100.3.34.1)', clang: 'Apple clang version 21.0.0 (clang-2100.3.34.2)' }, command: ['xcodebuild', 'docbuild'],
       archiveTreeSHA256: tree_hash(@archive) }))
   end
 
@@ -93,7 +93,7 @@ class DocumentationSiteTest < Minitest::Test
     assert_equal '/UndoKit/versions/0.2.0/', manifest.fetch('basePath')
     assert_equal "Xcode 27.1\nBuild version 27A9275", manifest.dig('toolchain', 'xcode')
     assert_includes manifest.dig('toolchain', 'swift'), 'swiftlang-6.4.0.34.1'
-    assert_includes manifest.dig('toolchain', 'clang'), 'clang-2100.3.34.1'
+    assert_includes manifest.dig('toolchain', 'clang'), 'clang-2100.3.34.2'
     assert_equal 64, manifest.fetch('archiveTreeSHA256').length
     assert_equal 64, manifest.fetch('siteTreeSHA256').length
     assert_equal 'archive', manifest.fetch('archivePath')

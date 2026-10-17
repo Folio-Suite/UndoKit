@@ -207,8 +207,8 @@ module UndoKitDocumentation
     if options[:channel] == 'release'
       fail!('release documentation requires Xcode 27.1 build 27A9275') unless producer.dig('toolchain', 'xcode').match?(/\AXcode 27\.1\nBuild version 27A9275\z/)
       swift = producer.dig('toolchain', 'swift')
-      fail!('release documentation requires Apple Swift 6.4 / swiftlang-6.4.0.34.1') unless swift.start_with?('Apple Swift version 6.4 ') && swift.include?('swiftlang-6.4.0.34.1')
-      fail!('release documentation must record the selected Xcode clang identity') unless producer.dig('toolchain', 'clang').start_with?('Apple clang version 21.0.0 ')
+      fail!('release documentation requires Apple Swift 6.4 / swiftlang-6.4.0.34.1') unless swift.start_with?('Apple Swift version 6.4 (swiftlang-6.4.0.34.1 clang-2100.3.34.1)')
+      fail!('release documentation must record the selected Xcode clang identity') unless producer.dig('toolchain', 'clang').start_with?('Apple clang version 21.0.0 (clang-2100.3.34.2)')
     end
     fail!('version must be a three-part numeric version') unless options[:version].match?(/\A\d+\.\d+\.\d+\z/)
     fail!('channel must be release or development') unless %w[release development].include?(options[:channel])
@@ -350,8 +350,8 @@ module UndoKitDocumentation
     fail!('candidate base path is invalid') unless manifest.fetch('basePath') == "/UndoKit/versions/#{version}/"
     toolchain = manifest.fetch('toolchain')
     fail!('release Xcode identity is not qualified') unless toolchain.fetch('xcode').match?(/\AXcode 27\.1\nBuild version 27A9275\z/)
-    fail!('release Swift identity is not qualified') unless toolchain.fetch('swift').start_with?('Apple Swift version 6.4 ') && toolchain.fetch('swift').include?('swiftlang-6.4.0.34.1')
-    fail!('release clang identity is missing') unless toolchain.fetch('clang').start_with?('Apple clang version 21.0.0 ')
+    fail!('release Swift identity is not qualified') unless toolchain.fetch('swift').start_with?('Apple Swift version 6.4 (swiftlang-6.4.0.34.1 clang-2100.3.34.1)')
+    fail!('release clang identity is missing') unless toolchain.fetch('clang').start_with?('Apple clang version 21.0.0 (clang-2100.3.34.2)')
     approved_documentation!(manifest, provenance_path, options)
     release_json, release_status = Open3.capture2('gh', 'release', 'view', version, '--repo', 'Folio-Suite/UndoKit', '--json', 'tagName,isDraft,isPrerelease')
     fail!("GitHub release #{version} is unavailable") unless release_status.success?

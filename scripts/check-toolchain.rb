@@ -6,7 +6,7 @@ require 'open3'
 
 {
   %w[xcodebuild -version] => /\AXcode 27\.1\nBuild version 27A9275\s*\z/,
-  %w[xcrun swift --version] => /Apple Swift version 6\.4(?:\s|\()/
+  %w[xcrun swift --version] => /Apple Swift version 6\.4 \(swiftlang-6\.4\.0\.34\.1 clang-2100\.3\.34\.1\)/
 }.each do |command, expected|
   output, status = Open3.capture2e(*command)
   puts output

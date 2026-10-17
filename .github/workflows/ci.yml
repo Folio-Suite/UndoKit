@@ -36,6 +36,8 @@ jobs:
         run: ruby scripts/maintenance/check-fixtures.rb
       - name: Verify simulator scale runner with controlled tools
         run: ruby scripts/test-scale-simulator.rb
+      - name: Verify UIKit scene runner with controlled tools
+        run: ruby scripts/test-uikit-runner.rb
 
   swift-package:
     runs-on: xcode-27

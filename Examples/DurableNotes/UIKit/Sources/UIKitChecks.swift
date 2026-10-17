@@ -19,6 +19,7 @@ import MachO
         let observations: [String]
         let events: [String: [String]]
         let limitations: [String]
+        let transitionIDs: [String]
     }
     enum CheckFailure: Error { case observation(String) }
     static func require(_ condition: Bool, _ message: String) throws {
@@ -48,20 +49,182 @@ import MachO
         lhs.note == rhs.note && lhs.applicationCount == rhs.applicationCount && lhs.receiptCount == rhs.receiptCount
     }
     static func pause() async throws { try await Task.sleep(for: .milliseconds(120)) }
-    static func activate(_ owner: NotesSceneOwner) async throws {
-        guard let sceneSession = UIApplication.shared.openSessions.first(where: { $0.persistentIdentifier == owner.id }) else {
-            throw CheckFailure.observation("Persistent scene session lost")
+    // Only the external installed-check runner authorizes platform transitions.
+    struct TransitionRequest: Codable, Equatable {
+        let version: Int
+        let fixture: String
+        let id: String
+        let sequence: Int
+        let action: String
+        let sceneID: String
+        let priorSceneIDs: [String]
+        let priorBackgroundClosures: Int
+        let priorBackgroundEvents: Int
+    }
+    struct TransitionAuthorization: Codable {
+        let request: TransitionRequest
+        let command: String
+        let sceneID: String?
+    }
+    struct TransitionStatus: Codable {
+        let request: TransitionRequest
+        let phase: String
+        let observation: Int
+        let applicationState: String
+        let sceneID: String
+        let foregroundActive: Bool
+        let presentationReady: Bool
+        let currentOwner: Bool
+        let sessionPhase: String
+        let bindingPhase: String
+        let backgroundClosures: Int
+        let backgroundEvents: Int
+        let error: String?
+    }
+    @MainActor private final class PendingTransition {
+        let request: TransitionRequest
+        let app: NotesUIKitApp
+        let directory: URL
+        var dispatched = false
+        var foregroundDispatched = false
+        var selectedSceneID: String
+        var observation = 0
+        var error: String?
+        init(request: TransitionRequest, app: NotesUIKitApp, directory: URL) {
+            self.request = request; self.app = app; self.directory = directory
+            selectedSceneID = request.sceneID
         }
-        UIApplication.shared.requestSceneSessionActivation(sceneSession, userActivity: nil, options: nil)
-        try await waitUntil("Existing scene failed to reactivate") {
-            owner.scene?.activationState == .foregroundActive
-                && owner.controller.map { presentationReady(owner, controller: $0) } == true
+    }
+    private static var pendingTransition: PendingTransition?
+    private static var transitionSequence = 0
+    private static var completedTransitionIDs: [String] = []
+
+    static func publishTransitionStatus(app: NotesUIKitApp) {
+        guard let pending = pendingTransition, pending.app === app else { return }
+        do { _ = try transitionStatus(pending) }
+        catch { pending.error = "Transition status write failed: \(error)" }
+    }
+    private static func transitionStatus(_ pending: PendingTransition, completed: Bool = false) throws -> TransitionStatus {
+        let request = pending.request
+        if request.action == "create", pending.selectedSceneID.isEmpty {
+            let candidates = pending.app.owners.values.filter { !request.priorSceneIDs.contains($0.id) }
+            if candidates.count == 1 { pending.selectedSceneID = candidates[0].id }
+            if candidates.count > 1 { pending.error = "More than one new scene appeared" }
+        }
+        let owner = pending.app.owners[pending.selectedSceneID]
+        let current = owner.map { candidate in
+            candidate.scene?.session.persistentIdentifier == candidate.id
+                && pending.app.owners[candidate.id] === candidate
+        } == true
+        let active = owner?.scene?.activationState == .foregroundActive
+        let ready = owner.flatMap { item in item.controller.map { presentationReady(item, controller: $0) } } == true
+        let closures = owner?.events.filter { $0 == "Outcome drained and store closed: background" }.count ?? 0
+        let backgrounds = owner?.events.filter { $0 == "UIKit scene entered background" }.count ?? 0
+        let returned = request.action != "background" || pending.foregroundDispatched
+            && closures > request.priorBackgroundClosures && backgrounds > request.priorBackgroundEvents
+        let appState: String
+        switch UIApplication.shared.applicationState {
+        case .active: appState = "active"
+        case .inactive: appState = "inactive"
+        case .background: appState = "background"
+        @unknown default: appState = "unknown"
+        }
+        let phase = pending.error != nil ? "error" : completed ? "completed"
+            : pending.dispatched && current && active && ready && returned && appState == "active" ? "ready"
+            : pending.dispatched ? "dispatched" : "waiting"
+        pending.observation += 1
+        let status = TransitionStatus(request: request, phase: phase, observation: pending.observation,
+            applicationState: appState, sceneID: pending.selectedSceneID, foregroundActive: active,
+            presentationReady: ready, currentOwner: current, sessionPhase: String(describing: owner?.session?.status.phase),
+            bindingPhase: String(describing: owner?.controller?.binding?.status.phase), backgroundClosures: closures, backgroundEvents: backgrounds,
+            error: pending.error)
+        try JSONEncoder().encode(status).write(to: pending.directory.appendingPathComponent("Status.json"), options: .atomic)
+        return status
+    }
+    private static func authorization(_ name: String, pending: PendingTransition, command: String) throws -> TransitionAuthorization? {
+        let path = pending.directory.appendingPathComponent(name)
+        guard FileManager.default.fileExists(atPath: path.path) else { return nil }
+        let authorization = try JSONDecoder().decode(TransitionAuthorization.self, from: Data(contentsOf: path))
+        try require(authorization.request == pending.request && authorization.command == command,
+                    "Uncorrelated external transition authorization")
+        return authorization
+    }
+    private static func dispatchTransition(_ pending: PendingTransition) throws {
+        let request = pending.request
+        pending.dispatched = true
+        switch request.action {
+        case "start", "background": break
+        case "create":
+            try require(UIApplication.shared.supportsMultipleScenes, "Multiple scenes unavailable")
+            let activity = NSUserActivity(activityType: "app.foliosuite.UndoKit.DurableNotes.new")
+            UIApplication.shared.requestSceneSessionActivation(nil, userActivity: activity, options: nil) { error in
+                Task { @MainActor in pending.error = "Scene creation rejected: \(error)" }
+            }
+        case "activate": try activateRequestedScene(pending)
+        default: throw CheckFailure.observation("Unknown external transition")
+        }
+    }
+    private static func activateRequestedScene(_ pending: PendingTransition) throws {
+        let id = pending.request.sceneID
+        guard let owner = pending.app.owners[id],
+              let sceneSession = UIApplication.shared.openSessions.first(where: { $0.persistentIdentifier == id }) else {
+            throw CheckFailure.observation("Requested persistent scene session lost")
+        }
+        // An already active scene needs no queued restoration request.
+        if owner.scene?.activationState != .foregroundActive {
+            UIApplication.shared.requestSceneSessionActivation(sceneSession, userActivity: nil, options: nil) { error in
+                Task { @MainActor in pending.error = "Scene activation rejected: \(error)" }
+            }
+        }
+    }
+    @discardableResult static func externalTransition(_ action: String, sceneID: String, app: NotesUIKitApp) async throws -> NotesSceneOwner {
+        try require(app.isCheckMode && pendingTransition == nil, "Overlapping or interactive check transition")
+        transitionSequence += 1
+        let request = TransitionRequest(version: 1, fixture: app.root.lastPathComponent, id: UUID().uuidString,
+            sequence: transitionSequence, action: action, sceneID: sceneID,
+            priorSceneIDs: app.owners.keys.sorted(), priorBackgroundClosures: app.owners[sceneID]?.events.filter {
+                $0 == "Outcome drained and store closed: background"
+            }.count ?? 0, priorBackgroundEvents: app.owners[sceneID]?.events.filter {
+                $0 == "UIKit scene entered background"
+            }.count ?? 0)
+        let directory = app.root.appendingPathComponent("Transitions").appendingPathComponent(request.id)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let pending = PendingTransition(request: request, app: app, directory: directory)
+        pendingTransition = pending
+        defer { pendingTransition = nil }
+        try JSONEncoder().encode(request).write(to: directory.appendingPathComponent("Request.json"), options: .atomic)
+        let deadline = Date().addingTimeInterval(30)
+        while true {
+            try require(Date() < deadline, "External \(action) transition timed out")
+            let dispatchAuthorization = try authorization("Dispatch.json", pending: pending, command: "dispatch")
+            if !pending.dispatched, dispatchAuthorization != nil, UIApplication.shared.applicationState == .active {
+                try dispatchTransition(pending)
+            }
+            if let _ = try authorization("Foreground.json", pending: pending, command: "foreground") {
+                try require(request.action == "background" && pending.dispatched, "Unexpected foreground authorization")
+                if !pending.foregroundDispatched, UIApplication.shared.applicationState == .active {
+                    pending.foregroundDispatched = true
+                    try activateRequestedScene(pending)
+                }
+            }
+            let status = try transitionStatus(pending)
+            if let error = status.error { throw CheckFailure.observation(error) }
+            if let completion = try authorization("Complete.json", pending: pending, command: "complete") {
+                try require(pending.dispatched && status.phase == "ready" && completion.sceneID == status.sceneID,
+                            "External completion did not match current real scene readiness")
+                guard let owner = app.owners[status.sceneID] else { throw CheckFailure.observation("Current scene owner lost") }
+                _ = try transitionStatus(pending, completed: true)
+                completedTransitionIDs.append(request.id)
+                return owner
+            }
+            try await Task.sleep(for: .milliseconds(40))
         }
     }
     static func stage(_ name: String, app: NotesUIKitApp) {
         try? Data(name.utf8).write(to: app.root.appendingPathComponent("CheckStage.txt"), options: .atomic)
     }
     static func run(first: NotesSceneOwner, app: NotesUIKitApp) async throws {
+        _ = try await externalTransition("start", sceneID: first.id, app: app)
         var observations: [String] = []
         let images = (0..<_dyld_image_count()).compactMap { index -> String? in
             guard let name = _dyld_get_image_name(index) else { return nil }
@@ -172,15 +335,7 @@ import MachO
         try require(controller.scratch.text.isEmpty && beforeScratch == afterScratch, "Scratch affected document history")
         var peer: NotesSceneOwner?
         if UIApplication.shared.supportsMultipleScenes {
-            let oldIDs = Set(app.owners.keys); app.requestNewScene()
-            try await waitUntil("Independent scene missing") {
-                app.owners.values.contains { owner in
-                    !oldIDs.contains(owner.id) && owner.controller.map { presentationReady(owner, controller: $0) } == true
-                }
-            }
-            peer = app.owners.values.first { owner in
-                !oldIDs.contains(owner.id) && owner.controller.map { presentationReady(owner, controller: $0) } == true
-            }
+            peer = try await externalTransition("create", sceneID: "", app: app)
             guard peer?.controller?.binding != nil, let peerLease = peer?.lease else { throw CheckFailure.observation("Peer binding missing") }
             _ = await peerLease.edit(title: "Independent", body: "Peer scope", in: peer!.session!)
             peer?.controller?.bodyEditor.becomeFirstResponder()
@@ -190,7 +345,8 @@ import MachO
         try require(try await lease.read().note == Note(title: "Delayed", body: "Pending effect"), "Delayed group failed")
         if let peer {
             try require(peer.controller?.bodyEditor.isFirstResponder == true, "Completion stole peer focus")
-            try await activate(first)
+            _ = try await externalTransition("activate", sceneID: first.id, app: app)
+            (session, binding) = try readyPresentation(first, controller: controller, context: "Scene return attachment incomplete")
             observations.append("Actual independent UIWindowScenes preserve peer edits and focus during delayed first-scope acceptance.")
         }
         controller.bodyEditor.becomeFirstResponder()
@@ -253,14 +409,8 @@ import MachO
         try await restoredRejectionCheck(root: app.root)
         observations.append("Weak presenter/binding/control release while blocked lease and captured draft remain recoverable; repair retires the session.")
         observations.append("Unexpected facade registrations remain retained across disconnect and block admission/close until explicit certification; reopened rejected evidence requires a new explicit decision.")
-        let stage: [String: String] = ["phase": "background", "scene": first.id,
-            "priorBackgroundClosures": String(first.events.filter { $0 == "Outcome drained and store closed: background" }.count)]
-        let beforeBackground = first.events.filter { $0 == "UIKit scene entered background" }.count
-        try JSONEncoder().encode(stage).write(to: app.root.appendingPathComponent("Stage.json"), options: .atomic)
-        try await waitUntil("Real Settings transition missing") {
-            first.events.filter { $0 == "UIKit scene entered background" }.count > beforeBackground
-                && first.scene?.activationState == .foregroundActive && presentationReady(first, controller: controller)
-        }
+        _ = try await externalTransition("background", sceneID: first.id, app: app)
+        (session, binding) = try readyPresentation(first, controller: controller, context: "Settings return attachment incomplete")
         try require(matches(try await lease.read(), beforeClose), "Lifecycle replay changed host state")
         observations.append("Real Settings background/foreground closes and reopens the same scope without replay.")
         for owner in Array(app.owners.values) {
@@ -272,7 +422,8 @@ import MachO
             installedRuntime: images[0], installedResources: resources.path, sceneIDs: app.owners.keys.sorted(),
             fileProtectionObservation: protectionObservation, observations: observations,
             events: app.owners.mapValues(\.events), limitations: ["Public programmatic UIKit binding seam; software-keyboard assistant observation is separate.",
-                "No hardware shortcuts, physical IME/device, device-lock, or forced-termination qualification."])
+                "No hardware shortcuts, physical IME/device, device-lock, or forced-termination qualification."],
+            transitionIDs: completedTransitionIDs)
         try JSONEncoder().encode(report).write(to: app.root.appendingPathComponent("Report.json"), options: .atomic)
         exit(EXIT_SUCCESS)
     }

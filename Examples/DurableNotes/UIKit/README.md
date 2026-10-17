@@ -113,7 +113,31 @@ Each run uses a fresh fictional fixture and retains logs in `Evidence/UIKitNotes
 configuration, device identifier and signed binary hashes. `Fixture/Report.json`
 is written only after all owners close successfully. It records runtime,
 installed library path, scene identities, observations, lifecycle journals,
-protection attribute and limitations. Failed fixtures/logs remain failures.
+protection attribute, completed transition identities and limitations. Failed
+fixtures/logs remain failures.
+
+The runner supplies explicit check/fixture launch arguments and verifies the
+app's `Bootstrap.json` against the launched process and bundle before accepting
+check evidence. Environment variables remain available for interactive and
+physical sample use. Installed checks require the external runner: the app
+publishes correlated requests under `Transitions/REQUEST-ID`, and the runner
+owns dispatch, foreground recovery and completion approval. The app only makes
+a requested public UIKit scene call after dispatch authorization; an already
+active target needs no activation request. Two fresh observations of actual
+foreground activation and the current owner's ready session/binding precede
+runner approval, which the app revalidates before the next case. Returning
+checks reacquire the current presentation instead of retaining a closed binding.
+
+Each transition keeps its 30-second bound and the run keeps its 180-second
+bound. Settings closure retains its 45-second outer guard and requires both a
+new real background callback and a new successful drain/close journal before
+return. One bounded foreground recovery can resume an inactive/suspended check;
+it requires the original process to remain present and cannot restart a fixture.
+Requests, dispatches, actual-state observations and completion approvals remain
+with success or failure evidence. No process termination or data erasure is used
+to make a run pass. Controlled runner regressions are separate from UIKit runtime
+acceptance: `ruby scripts/test-uikit-runner.rb` uses fictional external tools and
+an app fixture actor.
 
 Checks run inside the installed UIKit app through the public binding with actual
 UIKit controls and an independent durable host. They observe coarse receipts,

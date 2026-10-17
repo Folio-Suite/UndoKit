@@ -39,7 +39,7 @@ begin
     raise 'Missing simulator fixture seed-11' unless File.directory?(File.join(options[:simulator], 'seed-11'))
     runner = JSON.parse(File.read(File.join(options[:simulator], 'RunnerReport.json')))
     raise 'Runner did not complete the full simulator fixture matrix' unless %w[validating simulator_full_completed].include?(runner.fetch('result')) && runner.fetch('profile') == 'simulator-full' && runner.fetch('groups') == 10_000 && runner.fetch('repetitions') == 3 && runner.fetch('reopens') == 10 && runner.fetch('runs').map { |run| run.fetch('seed') } == [11, 12, 13]
-    raise 'Runner build manifest or runtime identity is incomplete' unless runner.fetch('buildManifestSHA256') == Digest::SHA256.file(options[:build]).hexdigest && runner.fetch('runtime').fetch('runtime').fetch('version') && runner.fetch('runtime').fetch('runtime').fetch('buildVersion')
+    raise 'Runner build manifest or runtime identity is incomplete' unless runner.fetch('buildManifestSHA256') == Digest::SHA256.file(options[:build]).hexdigest && runner.fetch('runtime').fetch('runtime').fetch('version') && runner.fetch('runtime').fetch('runtime').fetch('buildversion')
     raise 'Runner exceeded actual app RSS budget or omitted fresh process evidence' unless runner.fetch('runs').all? { |run| run.fetch('pids').length == 11 && run.fetch('pids').uniq.length == 11 && run.fetch('samples').length == 10 && run.fetch('peakRSSBytes') <= 2 * 1024**3 }
     raise 'Simulator evidence requires clean committed source' unless build.fetch('sourceDirtyPaths').empty?
     (11..13).each do |seed|

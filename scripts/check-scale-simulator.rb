@@ -75,6 +75,7 @@ run = lambda do |*cmd, allow_failure: false|
 end
 bundle = 'org.foliosuite.undokit.scale'
 active_pid = nil
+booted_by_runner = false
 begin
   owned_cache = allocated.call(UndoKitBuild.directory('Scale'))
   owned_cache += allocated.call(evidence) unless evidence.start_with?(UndoKitBuild.directory('Scale') + File::SEPARATOR)
@@ -90,17 +91,18 @@ begin
   initially_booted = device['state'] == 'Booted'
   if !initially_booted
     run.call('xcrun', 'simctl', 'boot', options[:device])
+    booted_by_runner = true
     run.call('xcrun', 'simctl', 'bootstatus', options[:device], '-b')
   end
   runtime_key = JSON.parse(run.call('xcrun', 'simctl', 'list', 'devices', '-j')).fetch('devices').find { |_runtime, rows| rows.any? { |row| row['udid'] == options[:device] } }.first
   runtimes = JSON.parse(run.call('xcrun', 'simctl', 'list', 'runtimes', '-j')).fetch('runtimes')
   runtime = runtimes.find { |entry| entry.fetch('identifier') == runtime_key }
-  raise 'Exact simulator runtime version/build unavailable' unless runtime && runtime['version'] && runtime['buildVersion']
+  raise 'Exact simulator runtime version/build unavailable' unless runtime && runtime['version'] && runtime['buildversion']
   report[:runtime] = {runtime: runtime, device: device}
   toolchain = run.call('xcodebuild', '-version')
   raise 'Pinned Xcode 27.1 (27A9275) is required' unless toolchain.match?(/\AXcode 27\.1\nBuild version 27A9275\s*\z/)
   swift = run.call('swift', '--version')
-  raise 'Pinned Apple Swift 6.4 is required' unless swift.include?('Apple Swift version 6.4')
+  raise 'Pinned Apple Swift 6.4 is required' unless swift.include?('Apple Swift version 6.4 (swiftlang-6.4.0.34.1 clang-2100.3.34.1)')
   ENV['UNDOKIT_SCALE_DEVICE_BUILD_LOCK_HELD'] = '1'
   build_output = run.call('ruby', File.join(__dir__, 'build-scale-device.rb'), '--sdk', 'iphonesimulator', '--profile', full ? 'simulator-full' : 'smoke', '--configuration', options[:configuration])
   report[:buildOutput] = build_output
@@ -152,11 +154,14 @@ begin
         end
         failures = Dir.glob(File.join(fixture, 'Failure-*.json'))
         raise "App recorded failure: #{File.read(failures.first)}" unless failures.empty?
-        break if File.file?(expected)
-        raise 'Launched simulator process exited before writing its report' unless system('kill', '-0', pid.to_s, out: File::NULL, err: File::NULL)
         raise 'Simulator operation exceeded 900 seconds' if Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
         raise 'Host free space below 20 GiB guard' if free.call(evidence) < 20 * 1024**3
         raise 'Evidence + installed app exceeded 2 GiB guard' if (File.exist?(fixture_root) ? allocated.call(fixture_root) : 0) + allocated.call(installed_app) > 2 * 1024**3
+        owned_cache = allocated.call(scale)
+        owned_cache += allocated.call(evidence) unless evidence.start_with?(scale + File::SEPARATOR)
+        raise 'Xcode build/evidence cache exceeds 12 GiB guard' if owned_cache > 12 * 1024**3
+        break if File.file?(expected)
+        raise 'Launched simulator process exited before writing its report' unless system('kill', '-0', pid.to_s, out: File::NULL, err: File::NULL)
         sleep 1
       end
       sample_report = JSON.parse(File.read(expected))
@@ -189,7 +194,7 @@ ensure
   if active_pid
     Open3.capture2e('xcrun', 'simctl', 'terminate', options[:device], bundle) rescue nil
   end
-  if defined?(initially_booted) && !initially_booted
+  if booted_by_runner
     Open3.capture2e('xcrun', 'simctl', 'shutdown', options[:device]) rescue nil
   end
   build_lock.close if build_lock && !build_lock.closed?

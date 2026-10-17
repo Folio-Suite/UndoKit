@@ -24,7 +24,13 @@ class ScaleSimulatorCLITest < Minitest::Test
         File.write(path, "#!/bin/sh\n#{body}\n")
         File.chmod(0o755, path)
       end
-      write_tool.call('swift', 'echo Apple Swift version 6.4')
+      write_tool.call('swift', <<~SH)
+        if [ "$UNDOKIT_FIXTURE_WRONG_SWIFT" = 1 ]; then
+          echo 'Apple Swift version 6.4 (swiftlang-other clang-other)'
+        else
+          echo 'Apple Swift version 6.4 (swiftlang-6.4.0.34.1 clang-2100.3.34.1)'
+        fi
+      SH
       write_tool.call('git', 'if [ \"$1\" = \"rev-parse\" ]; then echo test-head; else exit 0; fi')
       write_tool.call('ruby', <<~SH)
         if [ \"$1\" = \"#{File.join(__dir__, 'check-scale-device-evidence.rb')}\" ]; then echo '{\"result\":\"simulator_evidence_complete_for_review\"}'; echo checker >> '#{dir}/calls'; exit 0; fi
@@ -37,13 +43,19 @@ class ScaleSimulatorCLITest < Minitest::Test
         done
         mkdir -p "$root/Build/Products/Release-iphonesimulator/ScaleDevice.app"
       SH
-      write_tool.call('du', 'echo "1 1 $2"')
+      write_tool.call('du', <<~SH)
+        if [ "$UNDOKIT_FIXTURE_FINAL_OVERSIZE" = 1 ] && [ "$2" = '#{data}/Library/Application Support/UndoKitScaleEvidence' ] && [ -f '#{data}/Library/Application Support/UndoKitScaleEvidence/seed-11/WorkloadReport.json' ]; then
+          echo '3000000 path'
+        else
+          echo "1 path"
+        fi
+      SH
       write_tool.call('kill', 'exit 0')
       write_tool.call('ps', 'echo 100')
       write_tool.call('df', 'echo "Filesystem 1K-blocks Used Available Capacity Mounted on"; echo "/dev/test 99999999 1 99999998 1% /"')
       write_tool.call('xcrun', <<~SH)
         if [ "$1" = "simctl" ] && [ "$2" = "list" ] && [ "$3" = "devices" ] && [ "$4" = "booted" ]; then echo '{"devices":{"iOS":{"udid":"SIM-1","state":"Booted"}}}'; exit 0; fi
-        if [ "$1" = "simctl" ] && [ "$2" = "list" ] && [ "$3" = "runtimes" ]; then echo '{"runtimes":[{"identifier":"iOS","version":"27.0","buildVersion":"24A1"}]}'; exit 0; fi
+        if [ "$1" = "simctl" ] && [ "$2" = "list" ] && [ "$3" = "runtimes" ]; then echo '{"runtimes":[{"identifier":"iOS","version":"27.0","buildversion":"24A1"}]}'; exit 0; fi
         if [ "$1" = "simctl" ] && [ "$2" = "list" ]; then echo '{"devices":{"iOS":[{"udid":"SIM-1","state":"Booted"}]}}'; exit 0; fi
         if [ "$1" = "simctl" ] && [ "$2" = "get_app_container" ]; then echo '#{data}'; exit 0; fi
         if [ "$1" = "simctl" ] && [ "$2" = "spawn" ]; then echo ''; exit 0; fi
@@ -75,6 +87,20 @@ class ScaleSimulatorCLITest < Minitest::Test
       assert_equal 3, calls.count { |line| line.start_with?('create:') }
       assert_equal 30, calls.count { |line| line.start_with?('reopen:') }
       assert_includes calls, 'checker'
+      compiler_dir = File.join(dir, 'wrong-compiler')
+      compiler_output, compiler_status = Open3.capture2e({'PATH' => "#{bin}:#{ENV.fetch('PATH')}",
+        'UNDOKIT_DERIVED_DATA' => File.join(dir, 'DerivedData'), 'UNDOKIT_FIXTURE_WRONG_SWIFT' => '1'},
+        'ruby', File.join(__dir__, 'check-scale-simulator.rb'), '--device', 'SIM-1', '--output', compiler_dir)
+      refute compiler_status.success?, compiler_output
+      assert_includes JSON.parse(File.read(File.join(compiler_dir, 'RunnerReport.json'))).fetch('failure'), 'Pinned Apple Swift'
+      FileUtils.rm_rf(File.join(data, 'Library', 'Application Support', 'UndoKitScaleEvidence'))
+      budget_dir = File.join(dir, 'final-budget')
+      budget_output, budget_status = Open3.capture2e({'PATH' => "#{bin}:#{ENV.fetch('PATH')}",
+        'UNDOKIT_DERIVED_DATA' => File.join(dir, 'DerivedData'), 'UNDOKIT_FIXTURE_FINAL_OVERSIZE' => '1'},
+        'ruby', File.join(__dir__, 'check-scale-simulator.rb'), '--device', 'SIM-1', '--groups', '100',
+        '--repetitions', '1', '--reopens', '1', '--output', budget_dir)
+      refute budget_status.success?, budget_output
+      assert_includes JSON.parse(File.read(File.join(budget_dir, 'RunnerReport.json'))).fetch('failure'), '2 GiB guard'
       FileUtils.rm_f(File.join(dir, 'installed'))
       FileUtils.mkdir_p(File.join(data, 'Library', 'Application Support', 'UndoKitScaleEvidence', 'seed-11'))
       refused_output, refused = Open3.capture2e({'PATH' => "#{bin}:#{ENV.fetch('PATH')}", 'UNDOKIT_DERIVED_DATA' => File.join(dir, 'DerivedData')},
@@ -82,6 +108,28 @@ class ScaleSimulatorCLITest < Minitest::Test
       refute refused.success?, refused_output
       assert_includes File.read(File.join(dir, 'refused', 'RunnerReport.json')), 'Refusing pre-existing simulator fixture evidence'
       refute File.exist?(File.join(dir, 'installed')), 'Existing simulator evidence must be checked before installation'
+    end
+  end
+
+  def test_refusing_other_booted_simulators_preserves_existing_boot_state
+    Dir.mktmpdir('scale-simulator-boot-') do |directory|
+      bin = File.join(directory, 'bin'); Dir.mkdir(bin)
+      calls = File.join(directory, 'calls')
+      tools = {
+        'du' => 'echo "1 path"',
+        'df' => 'echo "Filesystem 1K-blocks Used Available Capacity Mounted on"; echo "/dev/test 99999999 1 99999998 1% /"',
+        'xcrun' => "echo \"$*\" >> '#{calls}'\nif [ \"$2\" = list ]; then echo '{\"devices\":{\"iOS\":[{\"udid\":\"SIM-1\",\"state\":\"Booted\"},{\"udid\":\"SIM-2\",\"state\":\"Booted\"}]}}'; fi"
+      }
+      tools.each do |name, body|
+        path = File.join(bin, name)
+        File.write(path, "#!/bin/sh\n#{body}\n"); File.chmod(0o755, path)
+      end
+      output, status = Open3.capture2e({'PATH' => "#{bin}:#{ENV.fetch('PATH')}", 'UNDOKIT_DERIVED_DATA' => File.join(directory, 'build')},
+        'ruby', File.join(__dir__, 'check-scale-simulator.rb'), '--device', 'SIM-1', '--output', File.join(directory, 'evidence'))
+      refute status.success?, output
+      report = JSON.parse(File.read(File.join(directory, 'evidence', 'RunnerReport.json')))
+      assert_includes report.fetch('failure'), 'another simulator is booted'
+      refute_includes File.read(calls), 'shutdown'
     end
   end
 
@@ -139,7 +187,7 @@ class ScaleSimulatorCLITest < Minitest::Test
     runner_runs = (11..13).map { |seed| {seed: seed, pids: [100 + seed] + (1..10).map { |index| 1000 + seed * 20 + index }, samples: (1..10).map { |index| 1000 + seed * 20 + index }, peakRSSBytes: 100} }
     File.write(File.join(evidence_path, 'RunnerReport.json'), JSON.generate(result: 'validating', profile: 'simulator-full', groups: 10_000,
       repetitions: 3, reopens: 10, buildManifestSHA256: Digest::SHA256.file(build_path).hexdigest,
-      runtime: {runtime: {version: '27.0', buildVersion: '24A1'}}, runs: runner_runs))
+      runtime: {runtime: {version: '27.0', buildversion: '24A1'}}, runs: runner_runs))
     (11..13).each do |seed|
       path = File.join(evidence_path, "seed-#{seed}"); Dir.mkdir(path)
       embedded = identity.merge(profile: 'simulator-full')

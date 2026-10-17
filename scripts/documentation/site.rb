@@ -293,6 +293,16 @@ module UndoKitDocumentation
     fail!('could not capture selected Xcode/Swift/clang toolchain') unless xcode_status.success? && swift_status.success? && clang_status.success?
     command = ['xcodebuild', '-project', 'UndoKit.xcodeproj', '-scheme', 'UndoKit',
                '-destination', 'generic/platform=macOS', '-derivedDataPath', '<derived-data>', 'docbuild']
+    if ENV['GITHUB_ACTIONS'] == 'true'
+      revision = 'ef7d692fc6706e8f5628e26bcafaefa445c58a97'
+      resolved_path = File.join(source, 'UndoKit.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved')
+      resolved = JSON.parse(File.read(resolved_path))
+      pin = resolved.fetch('pins').find { |item| item.fetch('identity') == 'swiftlintplugins' }
+      fail!('Review SwiftLint plugin trust after changing its dependency pin') unless
+        pin && pin.fetch('state').fetch('revision') == revision &&
+        pin.fetch('location') == 'https://github.com/SimplyDanny/SwiftLintPlugins'
+      command << '-skipPackagePluginValidation'
+    end
     _stdout, stderr, result = Open3.capture3(*command.map { |part| part == '<derived-data>' ? derived : part }, chdir: source)
     fail!("docbuild failed: #{stderr.strip}") unless result.success?
     final_commit, final_commit_status = Open3.capture2('git', '-C', source, 'rev-parse', 'HEAD')

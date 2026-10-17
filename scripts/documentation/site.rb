@@ -205,10 +205,10 @@ module UndoKitDocumentation
     fail!('source commit must be a full 40-character SHA') unless source_commit.match?(/\A[0-9a-f]{40}\z/i)
     fail!('dirty source cannot produce release documentation') if options[:channel] == 'release' && producer.fetch('sourceDirty')
     if options[:channel] == 'release'
-      fail!('release documentation requires Xcode 27.0 build 27A266a') unless producer.dig('toolchain', 'xcode').match?(/\AXcode 27\.0\nBuild version 27A266a\z/)
+      fail!('release documentation requires Xcode 27.1 build 27A9275') unless producer.dig('toolchain', 'xcode').match?(/\AXcode 27\.1\nBuild version 27A9275\z/)
       swift = producer.dig('toolchain', 'swift')
-      fail!('release documentation requires Apple Swift 6.4 / swiftlang-6.4.0.34.1') unless swift.start_with?('Apple Swift version 6.4 ') && swift.include?('swiftlang-6.4.0.34.1')
-      fail!('release documentation must record the selected Xcode clang identity') unless producer.dig('toolchain', 'clang').start_with?('Apple clang version 21.0.0 ')
+      fail!('release documentation requires Apple Swift 6.4 / swiftlang-6.4.0.34.1') unless swift.start_with?('Apple Swift version 6.4 (swiftlang-6.4.0.34.1 clang-2100.3.34.1)')
+      fail!('release documentation must record the selected Xcode clang identity') unless producer.dig('toolchain', 'clang').start_with?('Apple clang version 21.0.0 (clang-2100.3.34.2)')
     end
     fail!('version must be a three-part numeric version') unless options[:version].match?(/\A\d+\.\d+\.\d+\z/)
     fail!('channel must be release or development') unless %w[release development].include?(options[:channel])
@@ -293,8 +293,31 @@ module UndoKitDocumentation
     fail!('could not capture selected Xcode/Swift/clang toolchain') unless xcode_status.success? && swift_status.success? && clang_status.success?
     command = ['xcodebuild', '-project', 'UndoKit.xcodeproj', '-scheme', 'UndoKit',
                '-destination', 'generic/platform=macOS', '-derivedDataPath', '<derived-data>', 'docbuild']
-    _stdout, stderr, result = Open3.capture3(*command.map { |part| part == '<derived-data>' ? derived : part }, chdir: source)
-    fail!("docbuild failed: #{stderr.strip}") unless result.success?
+    if ENV['GITHUB_ACTIONS'] == 'true'
+      revision = 'ef7d692fc6706e8f5628e26bcafaefa445c58a97'
+      resolved_path = File.join(source, 'UndoKit.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved')
+      resolved = JSON.parse(File.read(resolved_path))
+      pin = resolved.fetch('pins').find { |item| item.fetch('identity') == 'swiftlintplugins' }
+      fail!('Review SwiftLint plugin trust after changing its dependency pin') unless
+        pin && pin.fetch('state').fetch('revision') == revision &&
+        pin.fetch('location') == 'https://github.com/SimplyDanny/SwiftLintPlugins'
+      command << '-skipPackagePluginValidation'
+      command.concat(['CODE_SIGNING_ALLOWED=NO', 'CODE_SIGNING_REQUIRED=NO', 'CODE_SIGN_IDENTITY='])
+    end
+    actual_command = command.map { |part| part == '<derived-data>' ? derived : part }
+    stdout, stderr, result = Open3.capture3(*actual_command, chdir: source)
+    diagnostic_path = "#{output}.docbuild.log"
+    FileUtils.mkdir_p(File.dirname(diagnostic_path))
+    File.write(diagnostic_path, JSON.pretty_generate(
+      'command' => actual_command,
+      'exitStatus' => result.exitstatus,
+      'stdout' => stdout,
+      'stderr' => stderr
+    ) + "\n")
+    unless result.success?
+      output_text = [stdout, stderr].reject(&:empty?).join("\n")
+      fail!("docbuild failed (exit #{result.exitstatus}); full command output: #{diagnostic_path}\n#{output_text}")
+    end
     final_commit, final_commit_status = Open3.capture2('git', '-C', source, 'rev-parse', 'HEAD')
     final_dirty, final_dirty_status = Open3.capture2('git', '-C', source, 'status', '--porcelain')
     fail!('could not recheck source checkout after docbuild') unless final_commit_status.success? && final_dirty_status.success?
@@ -349,9 +372,9 @@ module UndoKitDocumentation
     fail!('candidate source commit is invalid') unless manifest.fetch('sourceCommit').match?(/\A[0-9a-f]{40}\z/)
     fail!('candidate base path is invalid') unless manifest.fetch('basePath') == "/UndoKit/versions/#{version}/"
     toolchain = manifest.fetch('toolchain')
-    fail!('release Xcode identity is not qualified') unless toolchain.fetch('xcode').match?(/\AXcode 27\.0\nBuild version 27A266a\z/)
-    fail!('release Swift identity is not qualified') unless toolchain.fetch('swift').start_with?('Apple Swift version 6.4 ') && toolchain.fetch('swift').include?('swiftlang-6.4.0.34.1')
-    fail!('release clang identity is missing') unless toolchain.fetch('clang').start_with?('Apple clang version 21.0.0 ')
+    fail!('release Xcode identity is not qualified') unless toolchain.fetch('xcode').match?(/\AXcode 27\.1\nBuild version 27A9275\z/)
+    fail!('release Swift identity is not qualified') unless toolchain.fetch('swift').start_with?('Apple Swift version 6.4 (swiftlang-6.4.0.34.1 clang-2100.3.34.1)')
+    fail!('release clang identity is missing') unless toolchain.fetch('clang').start_with?('Apple clang version 21.0.0 (clang-2100.3.34.2)')
     approved_documentation!(manifest, provenance_path, options)
     release_json, release_status = Open3.capture2('gh', 'release', 'view', version, '--repo', 'Folio-Suite/UndoKit', '--json', 'tagName,isDraft,isPrerelease')
     fail!("GitHub release #{version} is unavailable") unless release_status.success?

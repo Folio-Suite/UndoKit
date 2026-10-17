@@ -12,7 +12,7 @@ runtime identity. The independent consumers compare Swift type metadata across
 the app/domain-framework boundary and count loaded UndoKit images.
 
 The intended preview supports macOS 14 arm64/x86_64, iOS/iPadOS 17 device arm64,
-and separate Simulator arm64/x86_64. Use Xcode 27.0 (27A266a)/Apple Swift 6.4,
+and separate Simulator arm64/x86_64. Use Xcode 27.1 (27A9275)/Apple Swift 6.4,
 Swift 6 and complete concurrency checking. These declarations do not qualify an
 untested runtime or compiler combination. No qualified `0.2.0` artifact is
 published yet; examples below are development integration procedures.

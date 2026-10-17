@@ -206,9 +206,10 @@ failed artifacts, changed expected state and declared budget overruns. Its
 `physical_evidence_complete_for_review` result still requires maintainer review;
 observations are human evidence, not inferred from a nonempty file. This is the
 physical-evidence procedure, used when a specific physical question calls for it.
-#27 also tracks any runner work needed to execute the full portable iOS fixture
-in another accepted environment. Existing simulator smoke is not relabelled as
-completion, and resource budgets must suit the actual execution environment.
+The simulator-full runner supplies the full portable fixture in an accepted
+simulated environment; the physical checker above remains specifically physical.
+Historical simulator smoke is not relabelled as completion, and resource budgets
+must suit the actual execution environment.
 
 Inspect one actual runtime inventory, including simulator smoke, without claiming
 physical qualification:
@@ -220,3 +221,25 @@ ruby scripts/check-scale-device-evidence.rb --build-manifest EXACT_BUILD_MANIFES
 
 `artifact_identity_matched_for_inspection` explicitly reports physical qualification
 as false. A changed or missing executable/resource inventory fails this inspection.
+
+
+## iOS Simulator production fixture
+
+`scripts/check-scale-simulator.rb --device UDID` runs the full iOS Simulator
+fixture by default: seeds 11–13, 10,000 groups per fixture, and ten fresh app
+processes for reopen measurements. It refuses when another simulator is booted.
+It boots the selected simulator only when needed, then restores its original
+boot state. The runner never erases or uninstalls an app, refuses existing
+fixture evidence or an already running Scale app, and keeps a copy of the exact
+installed app and build manifest. Each operation has a 900-second limit. The embedded simulator-full
+profile declares a 2 GiB app RSS ceiling, 2 GiB fixture plus installed-app
+footprint, 4 GiB guest free-space floor, and a one-second ordinary heartbeat.
+The host runner also guards the shared build/evidence cache at 12 GiB and host
+free space at 20 GiB. Reports and logs remain in a fresh evidence directory,
+including after failure.
+
+Smaller `--groups`, `--repetitions`, or `--reopens` values produce simulator
+smoke evidence and cannot satisfy the full simulator evidence checker. Run
+`ruby scripts/check-scale-device-evidence.rb --simulator-evidence PATH
+--build-manifest PATH` to validate complete evidence. A simulator result does not
+qualify physical iOS behavior or physical-device performance.

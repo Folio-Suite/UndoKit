@@ -405,8 +405,8 @@ module UndoKit
     def pinned_toolchain!
       xcode = Assembly.capture!("xcodebuild", "-version")
       swift = Assembly.capture!("xcrun", "swift", "--version")
-      unless xcode.match?(/\AXcode 27\.0\nBuild version 27A266a\s*\z/)
-        raise Assembly::VerificationError, "binary consumer requires Xcode 27.0 (27A266a); found:\n#{xcode}"
+      unless xcode.match?(/\AXcode 27\.1\nBuild version 27A9275\s*\z/)
+        raise Assembly::VerificationError, "binary consumer requires Xcode 27.1 (27A9275); found:\n#{xcode}"
       end
       unless swift.match?(/Apple Swift version 6\.4 \(swiftlang-6\.4\.0\.34\.1 clang-2100\.3\.34\.1\)/)
         raise Assembly::VerificationError, "binary consumer requires Apple Swift 6.4; found:\n#{swift}"

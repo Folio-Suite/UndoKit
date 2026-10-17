@@ -79,7 +79,7 @@ content from opaque payloads without the host's codecs and resources.
 | iOS/iPadOS device | 17 | arm64 |
 | iOS/iPadOS Simulator | 17 | arm64, x86_64; separate device variant |
 
-Producer and initial consumer tooling: **Xcode 27.0 (27A266a), Apple Swift 6.4,
+Producer and initial consumer tooling: **Xcode 27.1 (27A9275), Apple Swift 6.4,
 Swift 6 mode and complete concurrency checking**. These are the intended preview
 requirements. Exact tested environments and unqualified cases belong to each
 candidate's evidence; the matrix alone is not runtime qualification. Direct

@@ -62,7 +62,7 @@ qualify a published binary's authentication.
 ## Current qualification boundary
 
 The intended preview matrix is macOS 14 and iOS/iPadOS 17, with producer and initial
-consumer Xcode 27.0 build 27A266a / Apple Swift 6.4, Swift 6 language mode and complete
+consumer Xcode 27.1 build 27A9275 / Apple Swift 6.4, Swift 6 language mode and complete
 concurrency checking. No direct Objective-C or other Apple-platform contract is
 added. Older/newer compilers require explicit qualification.
 

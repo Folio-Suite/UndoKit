@@ -70,10 +70,10 @@ physical-device performance. Numerical timing targets and larger workloads remai
 advisory; controlled resource refusal and ordinary responsiveness remain mandatory.
 
 The [scale protocol](production-scale.md) describes current runners. Its physical
-checker still requires physical evidence; simulator smoke is neither a full
-fixture pass nor a physical pass. Work needed to execute the complete iOS fixture
-in another accepted environment remains under #27. This policy changes no runner
-output and relabels no historical result.
+checker still requires physical evidence. Simulator smoke remains a smoke result;
+the simulator-full runner can qualify the complete portable fixture for review,
+without establishing physical behavior or performance. This policy changes no
+historical result.
 
 ## Evidence and candidate identity
 

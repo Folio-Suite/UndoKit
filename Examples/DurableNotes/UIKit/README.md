@@ -12,7 +12,7 @@ framework receives opaque commands; the host owns the domain and its storage.
 
 ## Build and run
 
-Open `DurableNotesUIKit.xcodeproj` in the selected Xcode 27.0 (27A266a), Swift 6.4
+Open `DurableNotesUIKit.xcodeproj` in the selected Xcode 27.1 (27A9275), Swift 6.4
 toolchain. The native target uses Swift 6 complete concurrency checking, declares
 iOS 17 and supports iPhone/iPad. Choose an available simulator or configure your
 own development team for a physical device. Physical qualification is separate.

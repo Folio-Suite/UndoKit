@@ -51,7 +51,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
+  DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
 
 defaults:
   run:
@@ -124,10 +124,14 @@ jobs:
             --previous-snapshot "$RUNNER_TEMP/undokit-docs-prior/versions/$VERSION" \
             --correction "$CORRECTION_NOTE"
           shasum -a 256 "$RUNNER_TEMP/undokit-docs-candidate/correction-provenance.json"
+      - name: Pack the unchanged documentation candidate for artifact transport
+        run: |
+          COPYFILE_DISABLE=1 tar -cf "$RUNNER_TEMP/undokit-docs-candidate.tar" \
+            -C "$RUNNER_TEMP/undokit-docs-candidate" .
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: undokit-docs-candidate
-          path: ${{ runner.temp }}/undokit-docs-candidate/
+          path: ${{ runner.temp }}/undokit-docs-candidate.tar
           if-no-files-found: error
           retention-days: 90
 
@@ -152,7 +156,11 @@ jobs:
           name: undokit-docs-candidate
           run-id: ${{ inputs.candidate_run_id }}
           github-token: ${{ github.token }}
-          path: candidate
+          path: candidate-transport
+      - name: Restore the unchanged documentation candidate
+        run: |
+          mkdir candidate
+          tar -xf candidate-transport/undokit-docs-candidate.tar -C candidate
       - name: Validate selected promotion and correction source identity
         id: identity
         env:

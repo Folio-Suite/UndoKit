@@ -38,7 +38,7 @@ Keep the attachment with the presentation. Each field supplies its own stable id
 
 ## Build and run
 
-Use the repository's selected Xcode 27.0 (27A266a), Swift 6.4 toolchain, Swift 6
+Use the repository's selected Xcode 27.1 (27A9275), Swift 6.4 toolchain, Swift 6
 language mode, and macOS 14 or later. The sample package also declares iOS 17 for
 its shared core. The separate UIKit project and simulator runner are documented
 in [UIKit/README.md](UIKit/README.md).

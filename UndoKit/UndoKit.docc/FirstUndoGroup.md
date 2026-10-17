@@ -9,7 +9,7 @@ Open a document, submit a typed edit, then Undo, Redo and reopen it.
 
 ## Run something first
 
-Clone the repository, select Xcode 27.0 (27A266a), and run an example from its root:
+Clone the repository, select Xcode 27.1 (27A9275), and run an example from its root:
 
 ```sh
 ruby scripts/run-durable-notes.rb --launch

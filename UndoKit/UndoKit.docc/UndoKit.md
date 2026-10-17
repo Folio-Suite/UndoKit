@@ -55,7 +55,7 @@ you need browsing, checkpoints or retention beyond ordinary Undo/Redo.
 
 ## Preview support
 
-The intended preview targets macOS 14 and iOS/iPadOS 17 with Xcode 27.0 / Swift 6.4.
+The intended preview targets macOS 14 and iOS/iPadOS 17 with Xcode 27.1 / Swift 6.4.
 The planned `0.2.0` preview is not yet a qualified release. Use the documentation
 and evidence matching your selected source or release; see
 <doc:PreviewCompatibilityAndSupport>.

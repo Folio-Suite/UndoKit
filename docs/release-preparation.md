@@ -72,10 +72,13 @@ rebuilding it:
 
 ```sh
 gh run download DOCS_STAGE_RUN_ID --repo Folio-Suite/UndoKit \
-  --name undokit-docs-candidate --dir /absolute/path/to/retained/documentation
+  --name undokit-docs-candidate --dir /absolute/path/to/retained/documentation-transport
+mkdir /absolute/path/to/retained/documentation
+tar -xf /absolute/path/to/retained/documentation-transport/undokit-docs-candidate.tar \
+  -C /absolute/path/to/retained/documentation
 ```
 
-The downloaded directory is the `--docs` input itself: `manifest.json`,
+The extracted directory is the `--docs` input: `manifest.json`,
 `producer.json`, `archive/`, and `site/` are at its root. Its manifest's
 `producerPath` and `producerSHA256` bind the original producer record;
 `sourceCommit`, `sourceDirty: false`, full toolchain and `producerCommand`

@@ -194,8 +194,9 @@ The repository workflow is `workflow_dispatch` only, using trusted workflow
 checkout tooling separately from the selected source checkout:
 
 - `stage` builds the selected full source SHA on the pinned Xcode runner,
-  validates the generated release/development site, and uploads
-  `undokit-docs-candidate` for inspection. Artifacts expire after 90 days.
+  validates the generated release/development site, and uploads the unchanged
+  candidate tree as a tar file in `undokit-docs-candidate`. Extract that file
+  before inspection or preparation. Artifacts expire after 90 days.
 - `stage-correction` additionally downloads the original release manifest,
   loads the retained predecessor from `documentation-snapshots`, enforces the
   restricted source diff, stages the complete correction, and prints its digest.

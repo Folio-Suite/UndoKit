@@ -205,7 +205,7 @@ module UndoKitDocumentation
     fail!('source commit must be a full 40-character SHA') unless source_commit.match?(/\A[0-9a-f]{40}\z/i)
     fail!('dirty source cannot produce release documentation') if options[:channel] == 'release' && producer.fetch('sourceDirty')
     if options[:channel] == 'release'
-      fail!('release documentation requires Xcode 27.0 build 27A266a') unless producer.dig('toolchain', 'xcode').match?(/\AXcode 27\.0\nBuild version 27A266a\z/)
+      fail!('release documentation requires Xcode 27.1 build 27A9275') unless producer.dig('toolchain', 'xcode').match?(/\AXcode 27\.1\nBuild version 27A9275\z/)
       swift = producer.dig('toolchain', 'swift')
       fail!('release documentation requires Apple Swift 6.4 / swiftlang-6.4.0.34.1') unless swift.start_with?('Apple Swift version 6.4 ') && swift.include?('swiftlang-6.4.0.34.1')
       fail!('release documentation must record the selected Xcode clang identity') unless producer.dig('toolchain', 'clang').start_with?('Apple clang version 21.0.0 ')
@@ -349,7 +349,7 @@ module UndoKitDocumentation
     fail!('candidate source commit is invalid') unless manifest.fetch('sourceCommit').match?(/\A[0-9a-f]{40}\z/)
     fail!('candidate base path is invalid') unless manifest.fetch('basePath') == "/UndoKit/versions/#{version}/"
     toolchain = manifest.fetch('toolchain')
-    fail!('release Xcode identity is not qualified') unless toolchain.fetch('xcode').match?(/\AXcode 27\.0\nBuild version 27A266a\z/)
+    fail!('release Xcode identity is not qualified') unless toolchain.fetch('xcode').match?(/\AXcode 27\.1\nBuild version 27A9275\z/)
     fail!('release Swift identity is not qualified') unless toolchain.fetch('swift').start_with?('Apple Swift version 6.4 ') && toolchain.fetch('swift').include?('swiftlang-6.4.0.34.1')
     fail!('release clang identity is missing') unless toolchain.fetch('clang').start_with?('Apple clang version 21.0.0 ')
     approved_documentation!(manifest, provenance_path, options)

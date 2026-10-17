@@ -21,6 +21,14 @@ The accepted contracts are [binary installation](https://github.com/Folio-Suite/
 [public onboarding](https://github.com/Folio-Suite/UndoKit/issues/10#issuecomment-6104631432).
 Qualification remains governed by [the acceptance gates](https://github.com/Folio-Suite/UndoKit/issues/8).
 
+On 2026-10-17, the maintainer moved the release producer from Xcode 27.0
+(27A266a) to Xcode 27.1 (27A9275). The installed Swift compiler remains Apple
+Swift 6.4 (`swiftlang-6.4.0.34.1`, embedded clang `2100.3.34.1`); standalone
+clang remains `2100.3.34.2`. This supersedes the producer pin in ADR 0005 for
+new candidates. Historical reports and the retained October 15 candidate keep
+their original identities. The subsequent framework refactor and revised
+documentation require a new candidate and applicable requalification.
+
 ## Inputs and authority
 
 The [qualification policy](release-qualification.md) accepts declared-architecture
@@ -30,7 +38,7 @@ does not establish those results. If revised release documentation affects
 qualification, prepare a new candidate rather than changing retained bytes.
 
 Select an exact clean source commit containing the intended release changes.
-Use the pinned Xcode 27.0 (27A266a), Apple Swift 6.4 producer. Marketing version
+Use the pinned Xcode 27.1 (27A9275), Apple Swift 6.4 producer. Marketing version
 is `0.2.0`; choose a positive integer framework build larger than every previously
 published framework build. Published source tag `0.1.0` records build `1`; build
 `2` is the initial `0.2.0` plan. Unpublished attempts may reuse this planned

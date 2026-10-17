@@ -40,7 +40,7 @@ when changing imported template material.
 
 ## Build and validation
 
-Use Xcode 27.0 (27A266a), Apple Swift 6.4 and Swift 6 language mode with complete
+Use Xcode 27.1 (27A9275), Apple Swift 6.4 and Swift 6 language mode with complete
 concurrency checking. Run `ruby scripts/check-toolchain.rb`, then
 `scripts/test-package.sh` and `scripts/test-package.sh -c release`.
 Source/project targets explicitly use macOS 14 and

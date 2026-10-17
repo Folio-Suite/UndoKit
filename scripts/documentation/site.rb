@@ -302,6 +302,7 @@ module UndoKitDocumentation
         pin && pin.fetch('state').fetch('revision') == revision &&
         pin.fetch('location') == 'https://github.com/SimplyDanny/SwiftLintPlugins'
       command << '-skipPackagePluginValidation'
+      command.concat(['CODE_SIGNING_ALLOWED=NO', 'CODE_SIGNING_REQUIRED=NO', 'CODE_SIGN_IDENTITY='])
     end
     actual_command = command.map { |part| part == '<derived-data>' ? derived : part }
     stdout, stderr, result = Open3.capture3(*actual_command, chdir: source)

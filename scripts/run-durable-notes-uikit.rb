@@ -24,7 +24,8 @@ abort 'Provide --device UDID from xcrun simctl list devices available' unless op
 repository = File.expand_path('..', __dir__)
 cache = UndoKitBuild.directory('UIKitNotes')
 evidence = UndoKitBuild.directory('Evidence', 'UIKitNotes', "#{Time.now.utc.strftime('%Y%m%dT%H%M%SZ')}-#{SecureRandom.hex(3)}")
-bundle_id = 'app.foliosuite.UndoKit.DurableNotesUIKit'
+base_bundle_id = 'app.foliosuite.UndoKit.DurableNotesUIKit'
+bundle_id = options[:check] ? "#{base_bundle_id}.check.#{SecureRandom.hex(8)}" : base_bundle_id
 fixture = options[:check] ? File.basename(evidence) : 'Interactive'
 
 def run!(arguments, log, environment = {}, timeout: nil)
@@ -202,9 +203,10 @@ end
 File.open(File.join(cache, '.runner.lock'), 'w') do |lock|
   abort 'Another UIKit Notes runner owns the shared cache' unless lock.flock(File::LOCK_EX | File::LOCK_NB)
   project = File.join(repository, 'Examples', 'DurableNotes', 'UIKit', 'DurableNotesUIKit.xcodeproj')
+  identity_settings = options[:check] ? ["PRODUCT_BUNDLE_IDENTIFIER=#{bundle_id}"] : []
   run!(['xcodebuild', '-project', project, '-scheme', 'DurableNotesUIKit', '-configuration', options[:configuration],
         '-sdk', 'iphonesimulator', '-destination', "id=#{options[:device]}", '-derivedDataPath', cache,
-        'CODE_SIGN_IDENTITY=-', 'ONLY_ACTIVE_ARCH=YES', 'ALWAYS_SEARCH_USER_PATHS=NO', 'build'], File.join(evidence, 'Build.log'))
+        'CODE_SIGN_IDENTITY=-', 'ONLY_ACTIVE_ARCH=YES', 'ALWAYS_SEARCH_USER_PATHS=NO', *identity_settings, 'build'], File.join(evidence, 'Build.log'))
   app = File.join(cache, 'Build', 'Products', "#{options[:configuration]}-iphonesimulator", 'DurableNotesUIKit.app')
   install_log = File.join(evidence, 'InstalledClosure.log')
   executable = File.join(app, 'DurableNotesUIKit')
@@ -229,7 +231,7 @@ File.open(File.join(cache, '.runner.lock'), 'w') do |lock|
   File.write(File.join(evidence, 'Setup.json'), JSON.pretty_generate(source: source.strip, dirty_paths: dirty.lines.map(&:chomp),
     changed_source_sha256: hashes, xcode: xcode.strip, swift: swift.strip, configuration: options[:configuration],
     simulator: options[:device], command: ['ruby', 'scripts/run-durable-notes-uikit.rb', *invocation],
-    app: app, executable_sha256: Digest::SHA256.file(executable).hexdigest,
+    base_bundle_id: base_bundle_id, bundle_id: bundle_id, app: app, executable_sha256: Digest::SHA256.file(executable).hexdigest,
     undokit_sha256: Digest::SHA256.file(File.join(embedded, 'UndoKit')).hexdigest))
   simulation_log = File.join(evidence, 'Simulator.log')
   devices = JSON.parse(run!(['xcrun', 'simctl', 'list', 'devices', '--json'], simulation_log))
@@ -238,7 +240,7 @@ File.open(File.join(cache, '.runner.lock'), 'w') do |lock|
   run!(['xcrun', 'simctl', 'boot', options[:device]], simulation_log) unless device['state'] == 'Booted'
   run!(['xcrun', 'simctl', 'bootstatus', options[:device], '-b'], simulation_log)
   jobs = run!(['xcrun', 'simctl', 'spawn', options[:device], 'launchctl', 'list'], simulation_log)
-  if options[:check] && jobs.lines.any? { |line| line.include?(bundle_id) && line.split.first.to_s.match?(/\A\d+\z/) }
+  if options[:check] && jobs.lines.any? { |line| line.include?(base_bundle_id) && line.split.first.to_s.match?(/\A\d+\z/) }
     raise 'The sample is already running; finish its graceful close before starting a fresh check fixture'
   end
   run!(['xcrun', 'simctl', 'install', options[:device], app], simulation_log)

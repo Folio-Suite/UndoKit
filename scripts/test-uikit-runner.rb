@@ -20,6 +20,8 @@ class UIKitRunnerCLITest < Minitest::Test
         case name
         when 'xcodebuild'
           if ARGV == ['-version']; puts 'Xcode 27.1'; exit; end
+          setting = ARGV.find { |argument| argument.start_with?('PRODUCT_BUNDLE_IDENTIFIER=') }
+          File.write(File.join(home, 'built-bundle-id'), setting ? setting.split('=', 2).last : 'app.foliosuite.UndoKit.DurableNotesUIKit')
           cache = ARGV[ARGV.index('-derivedDataPath') + 1]
           app = File.join(cache, 'Build/Products/Debug-iphonesimulator/DurableNotesUIKit.app')
           FileUtils.mkdir_p(File.join(app, 'Frameworks/UndoKit.framework'))
@@ -31,7 +33,7 @@ class UIKitRunnerCLITest < Minitest::Test
           case ARGV[1]
           when 'list'; puts JSON.generate(devices: { iOS: [{udid: 'SIM-1', isAvailable: true, state: 'Booted'}] })
           when 'spawn'
-            puts "1001 0 application.app.foliosuite.UndoKit.DurableNotesUIKit" if File.exist?(File.join(home, 'actor-started'))
+            puts "1001 0 application.#{File.read(File.join(home, 'built-bundle-id'))}" if File.exist?(File.join(home, 'actor-started'))
           when 'bootstatus', 'install'; exit
           when 'get_app_container'; puts File.join(home, 'data')
           when 'launch'
@@ -43,14 +45,14 @@ class UIKitRunnerCLITest < Minitest::Test
               fixture_index = ARGV.index('--undokit-uikit-fixture')
               fixture = fixture_index ? ARGV[fixture_index + 1] : ENV.fetch('SIMCTL_CHILD_UNDOKIT_UIKIT_FIXTURE')
               File.write(File.join(home, 'launch-arguments.json'), JSON.generate(ARGV))
-              pid = Process.spawn(RbConfig.ruby, File.join(home, 'actor.rb'), fixture, out: File::NULL, err: File::NULL)
+              pid = Process.spawn(RbConfig.ruby, File.join(home, 'actor.rb'), fixture, ARGV.fetch(3), out: File::NULL, err: File::NULL)
               Process.detach(pid)
             else
               count_path = File.join(home, 'foreground-count')
               count = File.exist?(count_path) ? Integer(File.read(count_path)) : 0
               File.write(count_path, (count + 1).to_s)
             end
-            puts 'app.foliosuite.UndoKit.DurableNotesUIKit: 1001'
+            puts "#{ARGV.fetch(3)}: 1001"
           else; abort "Unexpected simctl command #{ARGV}"
           end
         else; abort name
@@ -68,7 +70,7 @@ class UIKitRunnerCLITest < Minitest::Test
         root = File.join(home, 'data/Library/Application Support/DurableNotesUIKit', fixture)
         FileUtils.mkdir_p(root)
         write = lambda { |path, value| File.write(path + '.tmp', JSON.generate(value)); File.rename(path + '.tmp', path) }
-        write.call(File.join(root, 'Bootstrap.json'), {version: 1, fixture: fixture, check: true, bundleIdentifier: 'app.foliosuite.UndoKit.DurableNotesUIKit', processID: 1001})
+        write.call(File.join(root, 'Bootstrap.json'), {version: 1, fixture: fixture, check: true, bundleIdentifier: ARGV.fetch(1), processID: 1001})
         id = '00000000-0000-4000-8000-000000000001'; path = File.join(root, 'Transitions', id); FileUtils.mkdir_p(path)
         if ENV['UIKIT_ACTOR_MODE'] == 'orphan'
           write.call(File.join(path, 'Complete.json'), {request: {fixture: fixture, id: id}, command: 'complete'})
@@ -153,6 +155,14 @@ class UIKitRunnerCLITest < Minitest::Test
       arguments = JSON.parse(File.read(File.join(directory, 'launch-arguments.json')))
       assert_includes arguments, '--undokit-uikit-check'
       assert_includes arguments, '--undokit-uikit-fixture'
+      bundle_id = arguments.fetch(3)
+      assert_match(/\Aapp\.foliosuite\.UndoKit\.DurableNotesUIKit\.check\.[0-9a-f]{16}\z/, bundle_id)
+      assert_equal bundle_id, File.read(File.join(directory, 'built-bundle-id'))
+      setup = JSON.parse(File.read(Dir.glob(File.join(directory, 'build/Evidence/UIKitNotes/*/Setup.json')).fetch(0)))
+      assert_equal bundle_id, setup.fetch('bundle_id')
+      assert_equal 'app.foliosuite.UndoKit.DurableNotesUIKit', setup.fetch('base_bundle_id')
+      bootstrap = JSON.parse(File.read(Dir.glob(File.join(directory, 'build/Evidence/UIKitNotes/*/Fixture/Bootstrap.json')).fetch(0)))
+      assert_equal bundle_id, bootstrap.fetch('bundleIdentifier')
       report = Dir.glob(File.join(directory, 'build/Evidence/UIKitNotes/*/Fixture/Report.json')).first
       refute_nil report, output
       assert_equal ['FFFFFFFF-FFFF-4FFF-8FFF-FFFFFFFFFFFF', '00000000-0000-4000-8000-000000000002',

@@ -116,9 +116,16 @@ installed library path, scene identities, observations, lifecycle journals,
 protection attribute, completed transition identities and limitations. Failed
 fixtures/logs remain failures.
 
+Each check builds and installs a fresh bundle identity under
+`app.foliosuite.UndoKit.DurableNotesUIKit.check.HEX`, avoiding restored or
+automatically launched scenes from previous installations. Interactive runs keep
+`app.foliosuite.UndoKit.DurableNotesUIKit`. `Setup.json` records both the base and
+installed identities; the preinstall running-sample guard covers the base prefix,
+including earlier check variants. Existing apps and data are retained.
+
 The runner supplies explicit check/fixture launch arguments and verifies the
-app's `Bootstrap.json` against the launched process and bundle before accepting
-check evidence. Environment variables remain available for interactive and
+app's `Bootstrap.json` against the launched process and exact installed bundle
+before accepting check evidence. Environment variables remain available for interactive and
 physical sample use. Installed checks require the external runner: the app
 publishes correlated requests under `Transitions/REQUEST-ID`, and the runner
 owns dispatch, foreground recovery and completion approval. The app only makes

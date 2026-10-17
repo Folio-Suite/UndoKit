@@ -53,12 +53,12 @@ existing history is preserved and refused. See <doc:RecoveryAndStorage> for
 recovery, draft decisions and closure, and <doc:RetainedHistoryAndResources> when
 you need browsing, checkpoints or retention beyond ordinary Undo/Redo.
 
-## Preview support
+## Beta support
 
-The intended preview targets macOS 14 and iOS/iPadOS 17 with Xcode 27.1 / Swift 6.4.
-Qualification of the `0.2.0` preview is established by its matching release and
-retained readiness evidence. Use the documentation and evidence matching your
-selected source or release; see
+The intended beta targets macOS 14 and iOS/iPadOS 17 with Xcode 27.1 / Swift 6.4.
+The designated first beta is `0.2.0`; its qualification depends on the matching
+release and retained readiness evidence. Use the documentation and evidence
+matching your selected source or release; see
 <doc:PreviewCompatibilityAndSupport>.
 
 ## Topics

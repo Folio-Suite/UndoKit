@@ -1,4 +1,4 @@
-# Preview compatibility and support
+# Beta compatibility and support
 
 <!--
 SPDX-FileCopyrightText: 2026 the Folio Project
@@ -7,15 +7,15 @@ SPDX-License-Identifier: MIT
 
 Distinguish intended support, actual qualification and published identity.
 
-## Preview promises
+## Beta promises
 
-The first qualified preview baseline is version 0.2.0. Its compatibility promises
+The first qualified beta baseline is version 0.2.0. Its compatibility promises
 begin with actual qualification, not a planned version label or development build.
 Before that baseline, public APIs are under frost, with qualification-driven
 changes documented. No migration from tagged 0.1.0 or experimental stores is
 promised. Unsupported history is preserved and refused.
 
-After the qualified preview, patches preserve public source compatibility and
+After the qualified beta, patches preserve public source compatibility and
 documented behavior; minor 0.x releases may change APIs with migration guidance.
 Supported retained histories remain usable directly or through supported
 structural migration, subject to the host's retained codecs/resources. From 1.0,
@@ -63,7 +63,8 @@ versions and language mode, configuration, expected/actual behavior and sanitize
 diagnostics. Do not upload real host databases, user content or raw payloads.
 
 Suspected vulnerabilities use the verified private route in SECURITY.md rather
-than public issues, discussions or PRs. Latest-preview support is best effort,
-without a response-time guarantee or routine backports; older versions receive
-upgrade guidance. That support policy does not weaken the forward persisted-history
-continuity contract. Reports outside the qualified matrix do not extend support.
+than public issues, discussions or PRs. Support for the latest published beta is
+best effort, without a response-time guarantee or routine backports; older versions
+receive upgrade guidance. That support policy does not weaken the forward
+persisted-history continuity contract. Reports outside the qualified matrix do not
+extend support.

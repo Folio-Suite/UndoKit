@@ -12,7 +12,7 @@ Select one dynamic runtime and resource owner per process.
 For a first app, choose **File > Add Package Dependencies…**, enter
 `https://github.com/Folio-Suite/UndoKit`, and add the dynamic **UndoKit** product to
 your app target. Select the source revision you intend to use and commit the
-resolved package record. For a published preview, select its immutable release
+resolved package record. For a published beta, select its immutable release
 tag; for an unqualified candidate, select its exact source commit.
 
 Add `import UndoKit` to your Swift sources. Xcode builds the package and its
@@ -62,7 +62,7 @@ qualify a published binary's authentication.
 
 ## Current qualification boundary
 
-The intended preview matrix is macOS 14 and iOS/iPadOS 17, with producer and initial
+The intended beta matrix is macOS 14 and iOS/iPadOS 17, with producer and initial
 consumer Xcode 27.1 build 27A9275 / Apple Swift 6.4, Swift 6 language mode and complete
 concurrency checking. No direct Objective-C or other Apple-platform contract is
 added. Older/newer compilers require explicit qualification.
@@ -70,9 +70,10 @@ added. Older/newer compilers require explicit qualification.
 Build and simulator evidence is source/artifact-bound and does not imply
 floor-OS behavior, physical hardware, binary-distribution or release acceptance.
 Clean builds covering declared architectures satisfy CPU coverage without
-dedicated Intel execution; actual OS behavior remains a separate requirement. A development version label is not qualification. Use retained
-evidence for the exact selected candidate or published release. Preview updates require rebuild/relink of all
-clients in a process; no drop-in ABI replacement is promised.
+dedicated Intel execution; actual OS behavior remains a separate requirement. A
+development version label is not qualification. Use retained evidence for the exact
+selected candidate or published release. Beta updates require rebuilding/relinking
+all clients in a process; no drop-in ABI replacement is promised.
 
 ## Topics
 

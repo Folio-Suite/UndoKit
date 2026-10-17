@@ -3,13 +3,15 @@ SPDX-FileCopyrightText: 2026 the Folio Project
 SPDX-License-Identifier: MIT
 -->
 
-# Preparing an UndoKit preview candidate
+# Preparing the UndoKit 0.2.0 beta candidate
 
-`0.2.0` is the planned next preview. Preparation retains a candidate for
-qualification; it does not qualify it, create a tag, publish a GitHub release,
-deploy Pages, or approve promotion. Actual signed preparation
-requires approved Apple Distribution publisher and certificate details and
-secure access to its private key (#24). The maintainer-approved publisher is
+On 2026-10-17, the maintainer designated `0.2.0` as UndoKit's first beta version
+and tag, replacing the planned preview. The planned tag is the plain three-part
+annotated tag `0.2.0`; the planned GitHub release will be marked as a prerelease
+(beta). Preparation retains a candidate for qualification; it does not qualify it, create a tag, publish a
+GitHub release, deploy Pages, or approve promotion. Actual signed preparation
+requires approved Apple Distribution publisher and certificate details and secure
+access to its private key (#24). The maintainer-approved publisher is
 Justin Croonenberghs under team `FT9KDL728H`; the
 [signing verification record](signing-identity.md) records the checked certificate
 and actual secure-timestamp probe. Recheck availability, validity and approval

@@ -44,6 +44,20 @@ class ScaleSimulatorCLITest < Minitest::Test
         mkdir -p "$root/Build/Products/Release-iphonesimulator/ScaleDevice.app"
       SH
       write_tool.call('du', <<~SH)
+        if [ "$UNDOKIT_FIXTURE_DU_ENOENT_ONCE" = 1 ] || [ "$UNDOKIT_FIXTURE_DU_ENOENT_ALWAYS" = 1 ] || [ "$UNDOKIT_FIXTURE_DU_MIXED_ERRORS" = 1 ] || [ "$UNDOKIT_FIXTURE_DU_PATH_PERMISSION" = 1 ]; then
+          calls='#{dir}/du-calls'
+          count=$(cat "$calls" 2>/dev/null || echo 0); count=$((count + 1)); echo $count > "$calls"
+          if [ "$UNDOKIT_FIXTURE_DU_PATH_PERMISSION" = 1 ]; then
+            echo 'du: /tmp/No such file or directory/item: Permission denied' >&2
+            exit 1
+          fi
+          if [ "$UNDOKIT_FIXTURE_DU_ENOENT_ALWAYS" = 1 ] || [ "$UNDOKIT_FIXTURE_DU_MIXED_ERRORS" = 1 ] || [ "$count" = 1 ]; then
+            echo '1 partial-path'
+            echo "du: #{data}/Xcodetmpfile.tmp: No such file or directory" >&2
+            if [ "$UNDOKIT_FIXTURE_DU_MIXED_ERRORS" = 1 ]; then echo 'du: denied-path: Permission denied' >&2; fi
+            exit 1
+          fi
+        fi
         if [ "$UNDOKIT_FIXTURE_FINAL_OVERSIZE" = 1 ] && [ "$2" = '#{data}/Library/Application Support/UndoKitScaleEvidence' ] && [ -f '#{data}/Library/Application Support/UndoKitScaleEvidence/seed-11/WorkloadReport.json' ]; then
           echo '3000000 path'
         else
@@ -75,6 +89,24 @@ class ScaleSimulatorCLITest < Minitest::Test
         exit 2
       SH
       output_dir = File.join(dir, 'evidence')
+      transient_dir = File.join(dir, 'transient')
+      transient_output, transient_status = Open3.capture2e({'PATH' => "#{bin}:#{ENV.fetch('PATH')}",
+        'UNDOKIT_DERIVED_DATA' => File.join(dir, 'DerivedData'), 'UNDOKIT_FIXTURE_DU_ENOENT_ONCE' => '1'},
+        'ruby', File.join(__dir__, 'check-scale-simulator.rb'), '--device', 'SIM-1', '--output', transient_dir)
+      assert transient_status.success?, transient_output + File.read(File.join(transient_dir, 'RunnerReport.json'))
+      assert_operator Integer(File.read(File.join(dir, 'du-calls'))), :>, 1
+      FileUtils.rm_rf(File.join(data, 'Library', 'Application Support', 'UndoKitScaleEvidence'))
+      FileUtils.rm_f(File.join(dir, 'installed'))
+      FileUtils.rm_f(File.join(dir, 'calls'))
+      FileUtils.rm_f(File.join(dir, 'du-calls'))
+      malformed_path_dir = File.join(dir, 'path-with-permission-error')
+      malformed_output, malformed_status = Open3.capture2e({'PATH' => "#{bin}:#{ENV.fetch('PATH')}",
+        'UNDOKIT_DERIVED_DATA' => File.join(dir, 'DerivedData'), 'UNDOKIT_FIXTURE_DU_PATH_PERMISSION' => '1'},
+        'ruby', File.join(__dir__, 'check-scale-simulator.rb'), '--device', 'SIM-1', '--output', malformed_path_dir)
+      refute malformed_status.success?, malformed_output
+      malformed_failure = JSON.parse(File.read(File.join(malformed_path_dir, 'RunnerReport.json'))).fetch('failure')
+      assert_includes malformed_failure, 'Permission denied'
+      assert_equal 1, Integer(File.read(File.join(dir, 'du-calls'))), "A permission error must fail without retry, even when its path contains ENOENT text: #{malformed_failure}"
       output, status = Open3.capture2e({'PATH' => "#{bin}:#{ENV.fetch('PATH')}", 'UNDOKIT_DERIVED_DATA' => File.join(dir, 'DerivedData')},
         'ruby', File.join(__dir__, 'check-scale-simulator.rb'), '--device', 'SIM-1', '--output', output_dir)
       assert status.success?, output + File.read(File.join(output_dir, 'RunnerReport.json'))
@@ -87,6 +119,20 @@ class ScaleSimulatorCLITest < Minitest::Test
       assert_equal 3, calls.count { |line| line.start_with?('create:') }
       assert_equal 30, calls.count { |line| line.start_with?('reopen:') }
       assert_includes calls, 'checker'
+      [['UNDOKIT_FIXTURE_DU_ENOENT_ALWAYS', 'No such file or directory'],
+       ['UNDOKIT_FIXTURE_DU_MIXED_ERRORS', 'Permission denied']].each do |guard, expected_error|
+        FileUtils.rm_f(File.join(dir, 'du-calls'))
+        fail_dir = File.join(dir, guard)
+        failed_output, failed_status = Open3.capture2e({'PATH' => "#{bin}:#{ENV.fetch('PATH')}",
+          'UNDOKIT_DERIVED_DATA' => File.join(dir, 'DerivedData'), guard => '1'},
+          'ruby', File.join(__dir__, 'check-scale-simulator.rb'), '--device', 'SIM-1', '--output', fail_dir)
+        refute failed_status.success?, failed_output
+        failure = JSON.parse(File.read(File.join(fail_dir, 'RunnerReport.json'))).fetch('failure')
+        assert_includes failure, 'Cannot inventory'
+        assert_includes failure, expected_error
+        assert_equal(guard == 'UNDOKIT_FIXTURE_DU_ENOENT_ALWAYS' ? 3 : 1,
+          Integer(File.read(File.join(dir, 'du-calls'))), 'Retry counts must remain bounded and mixed errors must fail immediately')
+      end
       compiler_dir = File.join(dir, 'wrong-compiler')
       compiler_output, compiler_status = Open3.capture2e({'PATH' => "#{bin}:#{ENV.fetch('PATH')}",
         'UNDOKIT_DERIVED_DATA' => File.join(dir, 'DerivedData'), 'UNDOKIT_FIXTURE_WRONG_SWIFT' => '1'},
@@ -94,9 +140,11 @@ class ScaleSimulatorCLITest < Minitest::Test
       refute compiler_status.success?, compiler_output
       assert_includes JSON.parse(File.read(File.join(compiler_dir, 'RunnerReport.json'))).fetch('failure'), 'Pinned Apple Swift'
       FileUtils.rm_rf(File.join(data, 'Library', 'Application Support', 'UndoKitScaleEvidence'))
+      FileUtils.rm_f(File.join(dir, 'du-calls'))
       budget_dir = File.join(dir, 'final-budget')
       budget_output, budget_status = Open3.capture2e({'PATH' => "#{bin}:#{ENV.fetch('PATH')}",
-        'UNDOKIT_DERIVED_DATA' => File.join(dir, 'DerivedData'), 'UNDOKIT_FIXTURE_FINAL_OVERSIZE' => '1'},
+        'UNDOKIT_DERIVED_DATA' => File.join(dir, 'DerivedData'), 'UNDOKIT_FIXTURE_FINAL_OVERSIZE' => '1',
+        'UNDOKIT_FIXTURE_DU_ENOENT_ONCE' => '1'},
         'ruby', File.join(__dir__, 'check-scale-simulator.rb'), '--device', 'SIM-1', '--groups', '100',
         '--repetitions', '1', '--reopens', '1', '--output', budget_dir)
       refute budget_status.success?, budget_output

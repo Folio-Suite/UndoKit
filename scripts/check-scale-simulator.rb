@@ -8,7 +8,6 @@ require 'open3'
 require 'time'
 require 'digest'
 require 'timeout'
-require 'timeout'
 require_relative 'build-support'
 
 options = {configuration: 'Release', groups: 10_000, repetitions: 3, reopens: 10}
@@ -38,7 +37,23 @@ report = {result: 'incomplete', capturedAtUTC: Time.now.utc.iso8601, device: opt
           repetitions: options[:repetitions], reopens: options[:reopens], profile: full ? 'simulator-full' : 'simulator-smoke', runs: []}
 write = -> { File.write(File.join(evidence, 'RunnerReport.json'), JSON.pretty_generate(report) + "\n") }
 write.call
-allocated = ->(path) { out, status = Open3.capture2e('du', '-sk', path); raise "Cannot inventory #{path}: #{out}" unless status.success?; Integer(out.split.first) * 1024 }
+allocated = lambda do |path|
+  attempts = 0
+  loop do
+    out, errors, status = Open3.capture3({'LC_ALL' => 'C'}, 'du', '-sk', path)
+    if status.success? && errors.empty?
+      size_kib = Integer(out.split.first)
+      break size_kib * 1024
+    end
+    transient_disappearance = !errors.empty? && errors.lines.all? do |line|
+      line.chomp.end_with?(': No such file or directory')
+    end
+    raise "Cannot inventory #{path}: #{errors.empty? ? out : errors}" unless transient_disappearance
+    attempts += 1
+    raise "Cannot inventory #{path} after #{attempts} attempts: #{errors}" if attempts >= 3
+    sleep 0.05
+  end
+end
 free = ->(path) { out, status = Open3.capture2e('df', '-k', path); raise "Cannot inspect free space: #{out}" unless status.success?; Integer(out.lines.last.split[3]) * 1024 }
 run = lambda do |*cmd, allow_failure: false|
   output = +' '

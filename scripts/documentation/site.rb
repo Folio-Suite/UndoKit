@@ -53,9 +53,8 @@ module UndoKitDocumentation
   def normalize_root_entrypoint(site, base_path)
     index = File.join(site, 'index.html')
     fail!('static output has no root index.html') unless File.file?(index)
-    content = File.read(index)
-    content = content.gsub('var baseUrl = "/"', "var baseUrl = \"#{base_path}\"")
-    content = content.gsub(/(href|src)=["']\/(?!UndoKit\/)/, "\\1=\"#{base_path}")
+    target = "#{base_path}documentation/undokit/"
+    content = "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta http-equiv=\"refresh\" content=\"0; url=#{target}\"><title>UndoKit documentation</title></head><body><p><a href=\"#{target}\">Browse UndoKit documentation</a></p></body></html>\n"
     File.write(index, content)
   end
 

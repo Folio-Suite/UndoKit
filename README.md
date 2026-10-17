@@ -10,8 +10,9 @@ native live typing Undo/Redo while explicit editing transactions become persiste
 Undo Groups. History survives reopening; the app owns domain meaning and its
 primary data.
 
-**Development preview:** `0.2.0` is planned, not released or qualified. The current
-source is under API frost, with changes needed for qualification still possible.
+**Development preview:** Qualification and publication of `0.2.0` are established
+by its matching release and retained readiness evidence. Before that qualified
+baseline, the source remains under API frost, with qualification changes possible.
 Do not treat `main`, a successful build, or a simulator run as a qualified release.
 
 ## Try it in a small app

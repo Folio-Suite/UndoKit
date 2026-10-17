@@ -12,7 +12,8 @@ Select one dynamic runtime and resource owner per process.
 For a first app, choose **File > Add Package Dependencies…**, enter
 `https://github.com/Folio-Suite/UndoKit`, and add the dynamic **UndoKit** product to
 your app target. Select the source revision you intend to use and commit the
-resolved package record. The planned preview has no qualified `0.2.0` tag yet.
+resolved package record. For a published preview, select its immutable release
+tag; for an unqualified candidate, select its exact source commit.
 
 Add `import UndoKit` to your Swift sources. Xcode builds the package and its
 resource bundle; keep the matching compiled model and privacy resources when

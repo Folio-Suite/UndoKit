@@ -14,7 +14,7 @@ defaults:
     shell: bash
 
 env:
-  DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
+  DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -34,6 +34,8 @@ jobs:
         run: ruby scripts/maintenance/check.rb
       - name: Verify maintenance gate diagnostics with controlled fixtures
         run: ruby scripts/maintenance/check-fixtures.rb
+      - name: Verify simulator scale runner with controlled tools
+        run: ruby scripts/test-scale-simulator.rb
 
   swift-package:
     runs-on: xcode-27

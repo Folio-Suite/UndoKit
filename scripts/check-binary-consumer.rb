@@ -329,7 +329,8 @@ module UndoKit
       run_command!(["xcodebuild", "-project", project, "-scheme", "Consumer", "-configuration", "Release",
         "-destination", "generic/platform=macOS", "-derivedDataPath", build_root, "-archivePath", archive,
         "ARCHS=#{architecture}", "ONLY_ACTIVE_ARCH=YES", "CODE_SIGNING_ALLOWED=YES", "CODE_SIGN_STYLE=Manual",
-        "CODE_SIGN_IDENTITY=#{options.fetch(:identity)}", "DEVELOPMENT_TEAM=#{options.fetch(:team)}", "archive"], archive_log)
+        "CODE_SIGN_IDENTITY=#{options.fetch(:identity)}", "DEVELOPMENT_TEAM=#{options.fetch(:team)}",
+        "DEBUG_INFORMATION_FORMAT=dwarf-with-dsym", "GCC_GENERATE_DEBUGGING_SYMBOLS=YES", "archive"], archive_log)
       export_log = File.join(directory, "export.log")
       run_command!(["xcodebuild", "-exportArchive", "-archivePath", archive,
         "-exportOptionsPlist", plist, "-exportPath", export_root], export_log)

@@ -303,8 +303,20 @@ module UndoKitDocumentation
         pin.fetch('location') == 'https://github.com/SimplyDanny/SwiftLintPlugins'
       command << '-skipPackagePluginValidation'
     end
-    _stdout, stderr, result = Open3.capture3(*command.map { |part| part == '<derived-data>' ? derived : part }, chdir: source)
-    fail!("docbuild failed: #{stderr.strip}") unless result.success?
+    actual_command = command.map { |part| part == '<derived-data>' ? derived : part }
+    stdout, stderr, result = Open3.capture3(*actual_command, chdir: source)
+    diagnostic_path = "#{output}.docbuild.log"
+    FileUtils.mkdir_p(File.dirname(diagnostic_path))
+    File.write(diagnostic_path, JSON.pretty_generate(
+      'command' => actual_command,
+      'exitStatus' => result.exitstatus,
+      'stdout' => stdout,
+      'stderr' => stderr
+    ) + "\n")
+    unless result.success?
+      output_text = [stdout, stderr].reject(&:empty?).join("\n")
+      fail!("docbuild failed (exit #{result.exitstatus}); full command output: #{diagnostic_path}\n#{output_text}")
+    end
     final_commit, final_commit_status = Open3.capture2('git', '-C', source, 'rev-parse', 'HEAD')
     final_dirty, final_dirty_status = Open3.capture2('git', '-C', source, 'status', '--porcelain')
     fail!('could not recheck source checkout after docbuild') unless final_commit_status.success? && final_dirty_status.success?

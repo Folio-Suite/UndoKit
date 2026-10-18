@@ -35,6 +35,9 @@ that execution; record exact OS/build and toolchain versions and cover iPhone/iP
 native differences where relevant. Missing OS execution remains open. The
 environment inventory still tracks OS access and specific physical questions.
 
+For the `0.2.0` first beta only, the [iPad 26.x substitution record](diagnostics/2026-10-17-first-beta-ipad-qualification.md)
+documents the maintainer's 17 October 2026 direction and the unresolved 27 gap.
+
 Keep the existing public seams: production APIs with durable host state and
 authoritative receipts, installed independent consumers, and source-bound
 artifact/documentation checks. Retain Debug/Release coverage where applicable;

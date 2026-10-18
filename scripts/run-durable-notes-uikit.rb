@@ -203,7 +203,7 @@ end
 File.open(File.join(cache, '.runner.lock'), 'w') do |lock|
   abort 'Another UIKit Notes runner owns the shared cache' unless lock.flock(File::LOCK_EX | File::LOCK_NB)
   project = File.join(repository, 'Examples', 'DurableNotes', 'UIKit', 'DurableNotesUIKit.xcodeproj')
-  identity_settings = options[:check] ? ["PRODUCT_BUNDLE_IDENTIFIER=#{bundle_id}"] : []
+  identity_settings = options[:check] ? ["UNDOKIT_UIKIT_BUNDLE_IDENTIFIER=#{bundle_id}"] : []
   run!(['xcodebuild', '-project', project, '-scheme', 'DurableNotesUIKit', '-configuration', options[:configuration],
         '-sdk', 'iphonesimulator', '-destination', "id=#{options[:device]}", '-derivedDataPath', cache,
         'CODE_SIGN_IDENTITY=-', 'ONLY_ACTIVE_ARCH=YES', 'ALWAYS_SEARCH_USER_PATHS=NO', *identity_settings, 'build'], File.join(evidence, 'Build.log'))

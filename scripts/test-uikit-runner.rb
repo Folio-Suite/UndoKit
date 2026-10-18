@@ -20,7 +20,8 @@ class UIKitRunnerCLITest < Minitest::Test
         case name
         when 'xcodebuild'
           if ARGV == ['-version']; puts 'Xcode 27.1'; exit; end
-          setting = ARGV.find { |argument| argument.start_with?('PRODUCT_BUNDLE_IDENTIFIER=') }
+          abort 'Global bundle identity override would affect embedded frameworks' if ARGV.any? { |argument| argument.start_with?('PRODUCT_BUNDLE_IDENTIFIER=') }
+          setting = ARGV.find { |argument| argument.start_with?('UNDOKIT_UIKIT_BUNDLE_IDENTIFIER=') }
           File.write(File.join(home, 'built-bundle-id'), setting ? setting.split('=', 2).last : 'app.foliosuite.UndoKit.DurableNotesUIKit')
           cache = ARGV[ARGV.index('-derivedDataPath') + 1]
           app = File.join(cache, 'Build/Products/Debug-iphonesimulator/DurableNotesUIKit.app')

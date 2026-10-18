@@ -118,7 +118,9 @@ fixtures/logs remain failures.
 
 Each check builds and installs a fresh bundle identity under
 `app.foliosuite.UndoKit.DurableNotesUIKit.check.HEX`, avoiding restored or
-automatically launched scenes from previous installations. Interactive runs keep
+automatically launched scenes from previous installations. The runner passes
+`UNDOKIT_UIKIT_BUNDLE_IDENTIFIER`, consumed only by the sample target; embedded
+framework bundle identities are not overridden. Interactive runs keep
 `app.foliosuite.UndoKit.DurableNotesUIKit`. `Setup.json` records both the base and
 installed identities; the preinstall running-sample guard covers the base prefix,
 including earlier check variants. Existing apps and data are retained.

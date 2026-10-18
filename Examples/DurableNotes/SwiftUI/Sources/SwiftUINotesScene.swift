@@ -52,6 +52,11 @@ import UndoKit
     @Published var showEditor = true
     @Published var editorGeneration = 0
     @Published var navigationPath = NavigationPath()
+    // Check-only UIKit appearance observations do not invalidate the SwiftUI tree.
+    var checkDetailVisible = false
+    var checkDetailAppearances = 0
+    var checkDetailDisappearances = 0
+    weak var checkDetailController: UIViewController?
     private(set) var documentURL: URL
     @Published private(set) var protectedDataAvailable = UIApplication.shared.isProtectedDataAvailable
     private var lifecycleTail: Task<Void, Never>?
@@ -367,5 +372,40 @@ import UndoKit
         }
         .padding()
         .navigationTitle("History detail")
+        .background {
+            if ProcessInfo.processInfo.environment["UNDOKIT_SWIFTUI_CHECK"] == "1" {
+                SwiftUICheckDetailAppearance(owner: owner).frame(width: 0, height: 0)
+            }
+        }
+    }
+}
+
+/// Observe completed native navigation appearances only in installed checks.
+@MainActor private struct SwiftUICheckDetailAppearance: UIViewControllerRepresentable {
+    let owner: SwiftUINotesOwner
+    func makeUIViewController(context: Context) -> SwiftUICheckDetailController {
+        SwiftUICheckDetailController(owner: owner)
+    }
+    func updateUIViewController(_ controller: SwiftUICheckDetailController, context: Context) {}
+}
+
+@MainActor private final class SwiftUICheckDetailController: UIViewController {
+    private weak var owner: SwiftUINotesOwner?
+    init(owner: SwiftUINotesOwner) {
+        self.owner = owner
+        super.init(nibName: nil, bundle: nil)
+    }
+    required init?(coder: NSCoder) { fatalError("Use init(owner:)") }
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        owner?.checkDetailController = self
+        owner?.checkDetailVisible = true
+        owner?.checkDetailAppearances += 1
+    }
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        guard owner?.checkDetailController === self else { return }
+        owner?.checkDetailVisible = false
+        owner?.checkDetailDisappearances += 1
     }
 }

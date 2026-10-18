@@ -342,13 +342,16 @@ import MachO
             try require(try await peerLease.read().applicationCount == 1, "Peer blocked with first scope")
         }
         await lease.resumeDelivery(); _ = await delayed.value
-        try require(try await lease.read().note == Note(title: "Delayed", body: "Pending effect"), "Delayed group failed")
         if let peer {
             try require(peer.controller?.bodyEditor.isFirstResponder == true, "Completion stole peer focus")
             _ = try await externalTransition("activate", sceneID: first.id, app: app)
             (session, binding) = try readyPresentation(first, controller: controller, context: "Scene return attachment incomplete")
             observations.append("Actual independent UIWindowScenes preserve peer edits and focus during delayed first-scope acceptance.")
         }
+        // Activating a peer may background the first scene. Its admitted delivery
+        // drains before background closure releases the host lease; read only
+        // after the external runner has reactivated and reopened that owner.
+        try require(try await lease.read().note == Note(title: "Delayed", body: "Pending effect"), "Delayed group failed")
         controller.bodyEditor.becomeFirstResponder()
         observations.append("Pending admission refuses the public native delegate and inverse routes, preserving focus; scratch remains independent.")
 

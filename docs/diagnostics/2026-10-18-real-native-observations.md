@@ -55,7 +55,7 @@ text was used. The baseline English values used ordinary paste.
 7. Arm Delay next edit, select body and type
    `o o s a k a Space Return Return`, then Commit typing. The view shows `大阪`
    while editing is blocked; authoritative state remains `東京` at 6/7.
-8. Switch to A with Command-`. Paste and commit `Independent peer`, Undo and
+8. Switch to A with Command + grave accent. Paste and commit `Independent peer`, Undo and
    Redo there. A reaches 3/3 independently. Returning to B still shows its
    original pending edit. Peer Undo does not touch B.
 9. Release delayed outcome in B: `大阪` is accepted once (7 applications,

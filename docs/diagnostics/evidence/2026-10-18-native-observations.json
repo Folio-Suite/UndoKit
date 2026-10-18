@@ -804,11 +804,170 @@
         "Closure requested: explicit finish",
         "Outcome drained and store closed: explicit finish"
       ]
+    },
+    "IME-12-Human-Final-Note.json": {
+      "sha256": "f9772250796bae288ffcebb22331b28de0071ae7ce22dee117b707171c86c631",
+      "content": {
+        "workingIdentity": "67F34C7C-AF8F-4796-A6B4-5D9329FAB79E",
+        "scope": "27CB8292-353A-446A-9A87-83517CFCF96C",
+        "receipts": {
+          "27CB8292-353A-446A-9A87-83517CFCF96C:BEEF295A-A0E7-42C3-9863-6DFDD6BC0B54:1:EED13741-D6E1-4A7A-9E38-6B423A1EF658": {
+            "accepted": true,
+            "effects": [
+              {
+                "redo": {
+                  "replacement": "IME baseline",
+                  "field": "title",
+                  "expected": ""
+                },
+                "member": "747D0935-4347-4F3A-A1D9-1B23789B5B36",
+                "undo": {
+                  "replacement": "",
+                  "expected": "IME baseline",
+                  "field": "title"
+                }
+              }
+            ]
+          },
+          "27CB8292-353A-446A-9A87-83517CFCF96C:BEEF295A-A0E7-42C3-9863-6DFDD6BC0B54:3:14CBFC9F-721A-4E8F-AF86-10E7CBE88CB8": {
+            "accepted": true,
+            "effects": [
+              {
+                "member": "DE5E0FCC-22AF-40C6-91B3-059A8A071295",
+                "redo": {
+                  "expected": "Before composition",
+                  "replacement": "日本",
+                  "field": "body"
+                },
+                "undo": {
+                  "expected": "日本",
+                  "replacement": "Before composition",
+                  "field": "body"
+                }
+              }
+            ]
+          },
+          "27CB8292-353A-446A-9A87-83517CFCF96C:BEEF295A-A0E7-42C3-9863-6DFDD6BC0B54:7:078C67F0-663D-402D-970C-202768F7A2CA": {
+            "effects": [
+              {
+                "redo": {
+                  "replacement": "東京",
+                  "field": "body",
+                  "expected": "日本"
+                },
+                "member": "FC819442-1A17-4C4D-A691-D4870604DBF2",
+                "undo": {
+                  "replacement": "日本",
+                  "field": "body",
+                  "expected": "東京"
+                }
+              }
+            ],
+            "accepted": true
+          },
+          "27CB8292-353A-446A-9A87-83517CFCF96C:BEEF295A-A0E7-42C3-9863-6DFDD6BC0B54:2:09B9A82D-32EA-413B-A9FC-387AF6FD2D06": {
+            "effects": [
+              {
+                "redo": {
+                  "expected": "",
+                  "replacement": "Before composition",
+                  "field": "body"
+                },
+                "member": "50EFE20E-1E20-44FA-978F-0437EAE75B97",
+                "undo": {
+                  "expected": "Before composition",
+                  "replacement": "",
+                  "field": "body"
+                }
+              }
+            ],
+            "accepted": true
+          },
+          "27CB8292-353A-446A-9A87-83517CFCF96C:BEEF295A-A0E7-42C3-9863-6DFDD6BC0B54:4:D1895615-A35B-490C-BD1E-A7A0C23BBB1F": {
+            "accepted": true,
+            "effects": [
+              {
+                "member": "DE5E0FCC-22AF-40C6-91B3-059A8A071295",
+                "redo": {
+                  "replacement": "Before composition",
+                  "expected": "日本",
+                  "field": "body"
+                },
+                "undo": {
+                  "replacement": "日本",
+                  "expected": "Before composition",
+                  "field": "body"
+                }
+              }
+            ]
+          },
+          "27CB8292-353A-446A-9A87-83517CFCF96C:BEEF295A-A0E7-42C3-9863-6DFDD6BC0B54:5:E093400F-55CB-42C0-B0F8-CB89F3D7324C": {
+            "accepted": true,
+            "effects": [
+              {
+                "undo": {
+                  "field": "body",
+                  "expected": "日本",
+                  "replacement": "Before composition"
+                },
+                "member": "DE5E0FCC-22AF-40C6-91B3-059A8A071295",
+                "redo": {
+                  "field": "body",
+                  "expected": "Before composition",
+                  "replacement": "日本"
+                }
+              }
+            ]
+          },
+          "27CB8292-353A-446A-9A87-83517CFCF96C:BEEF295A-A0E7-42C3-9863-6DFDD6BC0B54:6:FC3CF5CB-8979-4014-99CB-FF2109F158A1": {
+            "accepted": false,
+            "effects": []
+          },
+          "27CB8292-353A-446A-9A87-83517CFCF96C:BEEF295A-A0E7-42C3-9863-6DFDD6BC0B54:8:6293136D-BBAE-43B6-89A5-0ED5A7FF1C21": {
+            "accepted": true,
+            "effects": [
+              {
+                "undo": {
+                  "replacement": "東京",
+                  "field": "body",
+                  "expected": "大阪"
+                },
+                "redo": {
+                  "replacement": "大阪",
+                  "field": "body",
+                  "expected": "東京"
+                },
+                "member": "5DB2BA5F-F4A2-4243-A0D9-3F4DCF79945A"
+              }
+            ]
+          }
+        },
+        "applicationCount": 7,
+        "note": {
+          "body": "大阪",
+          "title": "IME baseline"
+        }
+      }
     }
   },
   "limitations": [
     "Source-built Debug samples only; immutable beta assets and published qualification are unchanged.",
     "AppKit Japanese Romaji with Live Conversion; no UIKit IME, other languages, or hardware keyboard matrix.",
     "Actual iOS 17.5 simulator expiry; no physical-device expiry, crash, abrupt-termination, or timing-budget certification."
-  ]
+  ],
+  "human_observation": {
+    "kind": "maintainer-observation",
+    "behavior": "Actual Japanese IME Undo to live baseline and local Redo",
+    "result": "Witnessed working after input retries",
+    "statement": "It worked, but I messed up several times on input, so I will attest I witnessed it work correctly.",
+    "observer_followup_ui": "きょうt (intermediate input left after retries, not an independently captured final 京都)",
+    "authoritative_note": {
+      "body": "大阪",
+      "title": "IME baseline"
+    },
+    "applicationCount": 7,
+    "receiptCount": 8,
+    "limitations": "Human observation, not an exact one-shot automated key trace; the final UI capture does not independently reproduce the witnessed Undo/Redo sequence.",
+    "cleanup": "Remaining uncommitted input discarded through the sample UI; original 大阪 baseline restored and normal application quit completed."
+  }
 }

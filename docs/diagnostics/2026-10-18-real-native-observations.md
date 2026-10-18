@@ -62,6 +62,17 @@ text was used. The baseline English values used ordinary paste.
    8 receipts). Close / reopen preserves `大阪` with the same scope, working
    identity and counters. Quit the fixture through its normal graceful close.
 
+A second, directly operated session checked the remaining **live baseline /
+local Redo** behavior. The maintainer attests that Undo back to `大阪` and Redo
+to `京都` worked with the real Japanese input method, noting several input
+retries. This is a human observation, not a clean automated key trace. The
+observer's later screenshot captures an intermediate `きょうt` left after the
+retries, so it does not independently prove a final `京都` view. Authoritative
+readback remains `大阪`, 7 applications and 8 receipts: the live attempts created
+no durable effect or receipt. The remaining draft was explicitly discarded,
+restoring `大阪`, and the app quit normally. The machine-readable record retains
+the attestation separately from directly observed UI and durable state.
+
 The OS input-source list, U.S. selection, input-menu visibility, globe-key
 behavior and automatically added dictation language were restored afterward.
 
@@ -70,8 +81,9 @@ sample status text says “Pending authoritative outcome”; the rejection is
 established by the authoritative rejected receipt and successful retry, rather
 than that presentation label. This session does not qualify UIKit IMEs, other
 languages, physical hardware keyboards, every native coalescing pattern, or
-all selection ranges. Programmatic baseline-local-Redo checks remain separate
-from the actual durable Undo/Redo observation above.
+all selection ranges. The directly witnessed baseline-local-Redo observation
+remains distinguished from the captured durable Undo/Redo sequence and from
+programmatic checks.
 
 ## Actual OS background-task expiry on iOS 17.5
 

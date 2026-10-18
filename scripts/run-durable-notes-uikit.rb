@@ -250,7 +250,7 @@ File.open(File.join(cache, '.runner.lock'), 'w') do |lock|
   arguments = ['xcrun', 'simctl', 'launch', options[:device], bundle_id]
   arguments += ['--undokit-uikit-check', '--undokit-uikit-fixture', fixture] if options[:check]
   launch = run!(arguments, simulation_log,
-    'SIMCTL_CHILD_UNDOKIT_UIKIT_FIXTURE' => fixture, 'SIMCTL_CHILD_UNDOKIT_UIKIT_CHECK' => options[:check] ? '1' : '0')
+    {'SIMCTL_CHILD_UNDOKIT_UIKIT_FIXTURE' => fixture, 'SIMCTL_CHILD_UNDOKIT_UIKIT_CHECK' => options[:check] ? '1' : '0'})
   if options[:check]
     begin
       process_id = Integer(launch.match(/#{Regexp.escape(bundle_id)}: (\d+)/)&.captures&.first || raise('Missing launched app PID'))

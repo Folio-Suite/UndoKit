@@ -42,7 +42,7 @@ module UndoKitCandidate
   end
 
   def inventory!(options)
-    fail!('this preview plans version 0.2.0') unless options[:version] == '0.2.0'
+    fail!('version must use major.minor.patch form') unless options[:version].match?(/\A[0-9]+\.[0-9]+\.[0-9]+\z/)
     fail!('build number must be a positive integer') unless options[:build_number].match?(/\A[1-9][0-9]*\z/)
     inventory = json(options.fetch(:published_inventory))
     fail!('published inventory must use schema 1 and Folio-Suite/UndoKit') unless inventory['schemaVersion'] == 1 && inventory['repository'] == 'Folio-Suite/UndoKit'

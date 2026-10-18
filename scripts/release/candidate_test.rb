@@ -26,7 +26,7 @@ class ReleaseCandidateCommandTest < Minitest::Test
         published: [{version: '0.1.0', frameworkBuildNumber: '8', sourceCommit: 'a' * 40, archiveSHA256: 'b' * 64}]))
       output = File.join(directory, 'attempt')
       text, result = Open3.capture2e(RbConfig.ruby, '--disable-gems', COMMAND, 'prepare', '--output', output,
-        '--source', source, '--commit', commit.strip, '--version', '0.2.0', '--build-number', '8',
+        '--source', source, '--commit', commit.strip, '--version', '0.2.1', '--build-number', '8',
         '--assembly', File.join(directory, 'assembly'), '--docs', File.join(directory, 'docs'), '--publisher-approval', 'missing.json',
         '--published-inventory', inventory)
       refute result.success?

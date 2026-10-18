@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "version": "0.2.0",
+  "channel": "release",
+  "sourceCommit": "8d3ab774379413e9f330ce198aa27cb91eb4b74b",
+  "sourceDirty": false,
+  "basePath": "/UndoKit/versions/0.2.0/",
+  "toolchain": {
+    "xcode": "Xcode 27.1\nBuild version 27A9275",
+    "swift": "Apple Swift version 6.4 (swiftlang-6.4.0.34.1 clang-2100.3.34.1)\nTarget: arm64-apple-macosx27.0.0",
+    "clang": "Apple clang version 21.0.0 (clang-2100.3.34.2)\nTarget: arm64-apple-darwin27.0.0\nThread model: posix\nInstalledDir: /Applications/Xcode_27.1_Release_Candidate.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin"
+  },
+  "archivePath": "archive",
+  "archiveTreeSHA256": "8d752e98faf8ad576454da9ea66de6ec7dac0bbfda1aeaee2458f167bce7d067",
+  "sitePath": "site",
+  "producerPath": "producer.json",
+  "producerCommand": [
+    "xcodebuild",
+    "-project",
+    "UndoKit.xcodeproj",
+    "-scheme",
+    "UndoKit",
+    "-destination",
+    "generic/platform=macOS",
+    "-derivedDataPath",
+    "<derived-data>",
+    "docbuild",
+    "-skipPackagePluginValidation",
+    "CODE_SIGNING_ALLOWED=NO",
+    "CODE_SIGNING_REQUIRED=NO",
+    "CODE_SIGN_IDENTITY="
+  ],
+  "producerSHA256": "0c0c4e7c7205b298834fcd11abf39dd24a2797754c41be916249f413e63439c6",
+  "siteTreeSHA256": "70ffcafe8ae4b4dd8c77461b169a2fb7d0db423a2cbec74e5fd93fc108af4458"
+}

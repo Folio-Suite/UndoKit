@@ -10,9 +10,11 @@ native live typing Undo/Redo while explicit editing transactions become persiste
 Undo Groups. History survives reopening; the app owns domain meaning and its
 primary data.
 
-**Development preview:** `0.2.0` is planned, not released or qualified. The current
-source is under API frost, with changes needed for qualification still possible.
-Do not treat `main`, a successful build, or a simulator run as a qualified release.
+**First beta:** `0.2.0` is the designated first beta version and tag. Qualification
+and publication are established by its matching release and retained readiness
+evidence. Before that qualified baseline, the source remains under API frost,
+with qualification changes possible. Do not treat `main`, a successful build, or
+a simulator run as a qualified release.
 
 ## Try it in a small app
 
@@ -79,13 +81,13 @@ content from opaque payloads without the host's codecs and resources.
 | iOS/iPadOS device | 17 | arm64 |
 | iOS/iPadOS Simulator | 17 | arm64, x86_64; separate device variant |
 
-Producer and initial consumer tooling: **Xcode 27.0 (27A266a), Apple Swift 6.4,
-Swift 6 mode and complete concurrency checking**. These are the intended preview
+Producer and initial consumer tooling: **Xcode 27.1 (27A9275), Apple Swift 6.4,
+Swift 6 mode and complete concurrency checking**. These are the intended beta
 requirements. Exact tested environments and unqualified cases belong to each
 candidate's evidence; the matrix alone is not runtime qualification. Direct
 Objective-C and other Apple platforms are outside this contract.
 
-Preview updates require rebuilding/relinking every client in a process against
+Beta updates require rebuilding/relinking every client in a process against
 one selected UndoKit version and supply route. No drop-in ABI replacement or
 blanket compiler compatibility is promised. See [binary integration](docs/binary-distribution.md)
 for resources, signing and bundled exact-build dSYMs.
@@ -112,9 +114,9 @@ reports distinguish full workloads, simulator smoke and physical measurements.
 
 ## Compatibility, support and provenance
 
-Before the first qualified preview there is no promised migration from `0.1.0`
+Before the first qualified beta there is no promised migration from `0.1.0`
 or experimental stores. Unsupported stores are preserved and refused. The first
-qualified preview will establish the supported persisted-history baseline;
+qualified beta will establish the supported persisted-history baseline;
 subsequent continuity promises and explicit migration requirements are defined
 in the [compatibility policy](docs/history-compatibility.md).
 
@@ -122,8 +124,8 @@ Use [GitHub Issues](https://github.com/Folio-Suite/UndoKit/issues) with a small
 sanitized reproduction and version/source, route, architecture, OS and tooling.
 Never post real host databases, user content or raw payloads. Follow
 [SECURITY.md](SECURITY.md) for private vulnerability reporting. Support for the
-latest published preview is best effort, with no response-time guarantee or
-routine backports; older previews receive upgrade guidance.
+latest published beta is best effort, with no response-time guarantee or
+routine backports; older betas receive upgrade guidance.
 
 UndoKit originated in Folio and is maintained independently. See
 [provenance](UPSTREAM.md), the [domain glossary](CONTEXT.md),

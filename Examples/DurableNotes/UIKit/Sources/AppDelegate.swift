@@ -15,12 +15,26 @@ import UndoKit
         leaseReferences[directory] = WeakNotesLease(lease)
         return lease
     }
+    // Explicit CLI arguments survive a simulator launch independently of environment transport.
+    let isCheckMode = ProcessInfo.processInfo.arguments.contains("--undokit-uikit-check")
+        || ProcessInfo.processInfo.environment["UNDOKIT_UIKIT_CHECK"] == "1"
+    let fixtureName: String = {
+        let arguments = ProcessInfo.processInfo.arguments
+        if let index = arguments.firstIndex(of: "--undokit-uikit-fixture") {
+            guard arguments.indices.contains(index + 1) else { fatalError("Missing UIKit check fixture") }
+            let value = arguments[index + 1]
+            guard !value.isEmpty, value.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-") }) else {
+                fatalError("Invalid UIKit check fixture")
+            }
+            return value
+        }
+        return ProcessInfo.processInfo.environment["UNDOKIT_UIKIT_FIXTURE"] ?? "Interactive"
+    }()
     var checksStarted = false
     var events: [String] = []
     var root: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        let fixture = ProcessInfo.processInfo.environment["UNDOKIT_UIKIT_FIXTURE"] ?? "Interactive"
-        return base.appendingPathComponent("DurableNotesUIKit").appendingPathComponent(fixture)
+        return base.appendingPathComponent("DurableNotesUIKit").appendingPathComponent(fixtureName)
     }
     func application(_ application: UIApplication, configurationForConnecting connectingSceneSession: UISceneSession,
                      options: UIScene.ConnectionOptions) -> UISceneConfiguration {
@@ -60,10 +74,17 @@ import UndoKit
         }
     }
     func sceneReady(_ owner: NotesSceneOwner) {
-        guard ProcessInfo.processInfo.environment["UNDOKIT_UIKIT_CHECK"] == "1", !checksStarted else { return }
+        guard isCheckMode, !checksStarted else { return }
+        guard fixtureName != "Interactive" else { fatalError("Checks require an explicit fresh fixture") }
         checksStarted = true
         Task { @MainActor in
-            do { try await UIKitChecks.run(first: owner, app: self) }
+            do {
+                let bootstrap: [String: Any] = ["version": 1, "fixture": fixtureName, "check": true,
+                    "bundleIdentifier": Bundle.main.bundleIdentifier ?? "", "processID": ProcessInfo.processInfo.processIdentifier]
+                try JSONSerialization.data(withJSONObject: bootstrap, options: .sortedKeys)
+                    .write(to: root.appendingPathComponent("Bootstrap.json"), options: .atomic)
+                try await UIKitChecks.run(first: owner, app: self)
+            }
             catch {
                 var closed = true
                 for owner in self.owners.values {
@@ -98,8 +119,13 @@ import UndoKit
         self.window = window; window.makeKeyAndVisible()
         Task { await owner.openIfAvailable() }
     }
-    func sceneDidEnterBackground(_ scene: UIScene) { owner?.enteredBackground() }
-    func sceneWillEnterForeground(_ scene: UIScene) { owner?.enteredForeground() }
+    private func publishCheckState() {
+        if let app = UIApplication.shared.delegate as? NotesUIKitApp, app.isCheckMode { UIKitChecks.publishTransitionStatus(app: app) }
+    }
+    func sceneDidBecomeActive(_ scene: UIScene) { publishCheckState() }
+    func sceneWillResignActive(_ scene: UIScene) { publishCheckState() }
+    func sceneDidEnterBackground(_ scene: UIScene) { owner?.enteredBackground(); publishCheckState() }
+    func sceneWillEnterForeground(_ scene: UIScene) { owner?.enteredForeground(); publishCheckState() }
     func sceneDidDisconnect(_ scene: UIScene) { owner?.disconnected(); window?.isHidden = true; window = nil; owner = nil }
     func stateRestorationActivity(for scene: UIScene) -> NSUserActivity? {
         let activity = NSUserActivity(activityType: "app.foliosuite.UndoKit.DurableNotes.restore")

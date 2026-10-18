@@ -22,6 +22,7 @@ import UndoKit
         case .create: creating = true
         case .existing: creating = false
         case .independentCopy: throw HistoryFailure(.invalidInput, stage: .admission, disposition: .usable)
+        @unknown default: throw HistoryFailure(.invalidInput, stage: .admission, disposition: .usable)
         }
         let historyExists = FileManager.default.fileExists(atPath: directory.appendingPathComponent("History.sqlite").path)
         let hostURL = directory.appendingPathComponent("Note.json")

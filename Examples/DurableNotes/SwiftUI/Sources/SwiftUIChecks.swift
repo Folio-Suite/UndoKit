@@ -85,11 +85,35 @@ import UndoKit
             owner.showEditor = true
             try await pause()
             let afterConditionalRemount = reconstructionSnapshot(owner: owner, session: session, binding: binding)
+            guard let navigationWindow = owner.bodyEditor.window else {
+                throw Failure.check("Original editor window missing before navigation")
+            }
+            let priorAppearances = owner.checkDetailAppearances
+            let priorDisappearances = owner.checkDetailDisappearances
             owner.navigationPath.append("history-detail")
-            try await pause()
+            do {
+                try await waitUntil("Detail navigation did not finish appearing") {
+                    guard let detail = owner.checkDetailController else { return false }
+                    return owner.checkDetailAppearances > priorAppearances && owner.checkDetailVisible
+                        && detail.viewIfLoaded?.window?.windowScene?.activationState == .foregroundActive
+                        && detail.transitionCoordinator == nil
+                }
+            } catch {
+                throw Failure.check("Detail navigation did not finish appearing: \(navigationSnapshot(owner))")
+            }
             let afterNavigationPush = reconstructionSnapshot(owner: owner, session: session, binding: binding)
-            if !owner.navigationPath.isEmpty { owner.navigationPath.removeLast() }
-            try await pause()
+            try require(!owner.navigationPath.isEmpty, "Detail appeared without its navigation path")
+            owner.navigationPath.removeLast()
+            do {
+                try await waitUntil("Detail navigation did not return the original presentation") {
+                    owner.checkDetailDisappearances > priorDisappearances && !owner.checkDetailVisible
+                        && owner.bodyEditor.window === navigationWindow && owner.titleEditor.window === navigationWindow
+                        && owner.session === originalSession && owner.binding === originalBinding
+                        && owner.bodyEditor === originalEditor && owner.titleEditor === originalTitleEditor
+                }
+            } catch {
+                throw Failure.check("Detail navigation did not return the original presentation: \(navigationSnapshot(owner))")
+            }
             try require(owner.session === originalSession && owner.binding === originalBinding
                 && owner.bodyEditor === originalEditor && owner.titleEditor === originalTitleEditor
                 && owner.bodyEditor.window != nil && owner.titleEditor.window != nil
@@ -566,6 +590,10 @@ import UndoKit
         let remounted = window()
         defer { remounted.rootViewController = nil; remounted.isHidden = true }
         try await waitUntil("Editor did not remount after its unrelated parent released it") { editor.window === remounted }
+    }
+
+    private static func navigationSnapshot(_ owner: SwiftUINotesOwner) -> String {
+        "appeared=\(owner.checkDetailAppearances), disappeared=\(owner.checkDetailDisappearances), visible=\(owner.checkDetailVisible), detailWindow=\(owner.checkDetailController?.viewIfLoaded?.window != nil), transitioning=\(owner.checkDetailController?.transitionCoordinator != nil), bodyAttached=\(owner.bodyEditor.window != nil), titleAttached=\(owner.titleEditor.window != nil), pathEmpty=\(owner.navigationPath.isEmpty), phase=\(String(describing: owner.session?.status.phase)), binding=\(String(describing: owner.binding?.status.phase))"
     }
 
     private static func reconstructionSnapshot(owner: SwiftUINotesOwner, session: HistorySession,

@@ -5,7 +5,7 @@ SPDX-License-Identifier: MIT
 
 # Binary framework assembly
 
-The release producer uses Xcode 27.0 (27A266a) and Apple Swift 6.4. The
+The release producer uses Xcode 27.1 (27A9275) and Apple Swift 6.4. The
 assembly command archives the dynamic framework in Release configuration for
 macOS 14 (arm64 and x86_64), iOS/iPadOS 17 device (arm64), and iOS/iPadOS 17
 simulator (arm64 and x86_64). Device and simulator archives remain separate.

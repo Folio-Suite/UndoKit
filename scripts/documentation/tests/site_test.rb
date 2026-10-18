@@ -51,7 +51,7 @@ class DocumentationSiteTest < Minitest::Test
 
   def create_producer
     File.write(@producer, JSON.generate({ schemaVersion: 1, sourceCommit: SHA, sourceDirty: false,
-      toolchain: { xcode: "Xcode 27.0\nBuild version 27A266a", swift: 'Apple Swift version 6.4 (swiftlang-6.4.0.34.1, clang-2100.3.34.1)', clang: 'Apple clang version 21.0.0 (clang-2100.3.34.1)' }, command: ['xcodebuild', 'docbuild'],
+      toolchain: { xcode: "Xcode 27.1\nBuild version 27A9275", swift: 'Apple Swift version 6.4 (swiftlang-6.4.0.34.1 clang-2100.3.34.1)', clang: 'Apple clang version 21.0.0 (clang-2100.3.34.2)' }, command: ['xcodebuild', 'docbuild'],
       archiveTreeSHA256: tree_hash(@archive) }))
   end
 
@@ -72,8 +72,11 @@ class DocumentationSiteTest < Minitest::Test
     FileUtils.mkdir_p(File.join(site, 'documentation', 'undokit'))
     FileUtils.mkdir_p(File.join(site, 'js'))
     FileUtils.mkdir_p(File.join(site, 'index'))
-    File.write(File.join(site, 'index.html'), '<body><a href="/UndoKit/versions/0.2.0/documentation/undokit">UndoKit</a><script src="/UndoKit/versions/0.2.0/js/search.js"></script>')
-    File.write(File.join(site, 'documentation', 'undokit', 'index.html'), '<body><a href="/UndoKit/versions/0.2.0/documentation/undokit/example">Example</a>')
+    root_shell = '<!doctype html><html><head><script>var baseUrl = "/"</script><script defer src="/js/search.js"></script></head><body data-color-scheme="auto"><div id="app"></div></body></html>'
+    landing_shell = root_shell.gsub('var baseUrl = "/"', 'var baseUrl = "/UndoKit/versions/0.2.0/"')
+                              .gsub('src="/js/', 'src="/UndoKit/versions/0.2.0/js/')
+    File.write(File.join(site, 'index.html'), root_shell)
+    File.write(File.join(site, 'documentation', 'undokit', 'index.html'), landing_shell)
     FileUtils.mkdir_p(File.join(site, 'documentation', 'undokit', 'example'))
     File.write(File.join(site, 'documentation', 'undokit', 'example', 'index.html'), '<body>symbol</body>')
     File.write(File.join(site, 'js', 'search.js'), 'search index')
@@ -91,15 +94,24 @@ class DocumentationSiteTest < Minitest::Test
     assert_equal SHA, manifest.fetch('sourceCommit')
     assert_equal false, manifest.fetch('sourceDirty')
     assert_equal '/UndoKit/versions/0.2.0/', manifest.fetch('basePath')
-    assert_equal "Xcode 27.0\nBuild version 27A266a", manifest.dig('toolchain', 'xcode')
+    assert_equal "Xcode 27.1\nBuild version 27A9275", manifest.dig('toolchain', 'xcode')
     assert_includes manifest.dig('toolchain', 'swift'), 'swiftlang-6.4.0.34.1'
-    assert_includes manifest.dig('toolchain', 'clang'), 'clang-2100.3.34.1'
+    assert_includes manifest.dig('toolchain', 'clang'), 'clang-2100.3.34.2'
     assert_equal 64, manifest.fetch('archiveTreeSHA256').length
     assert_equal 64, manifest.fetch('siteTreeSHA256').length
+    staged_site = File.join(@artifact, 'site')
+    root = File.read(File.join(staged_site, 'index.html'))
+    assert_match(/http-equiv="refresh" content="0; url=\/UndoKit\/versions\/0\.2\.0\/documentation\/undokit\/"/, root)
+    assert_match(/href="\/UndoKit\/versions\/0\.2\.0\/documentation\/undokit\/"/, root)
+    assert_match(/UndoKit 0\.2\.0.*source #{SHA}/, root)
     assert_equal 'archive', manifest.fetch('archivePath')
     assert_equal 'site', manifest.fetch('sitePath')
     assert File.file?(File.join(@artifact, manifest.fetch('producerPath')))
-    assert_match(/UndoKit 0.2.0.*source #{SHA}/, File.read(File.join(@artifact, 'site', 'index.html')))
+    landing = File.read(File.join(staged_site, 'documentation', 'undokit', 'index.html'))
+    assert_includes landing, '<div id="app"></div>'
+    assert_includes landing, 'var baseUrl = "/UndoKit/versions/0.2.0/"'
+    assert File.file?(File.join(staged_site, 'js', 'search.js'))
+    assert_equal manifest.fetch('siteTreeSHA256'), tree_hash(staged_site)
     assert File.file?(File.join(@artifact, 'archive', 'data', 'documentation.json'))
     topic = File.read(File.join(@artifact, 'site', 'documentation', 'undokit', 'example', 'index.html'))
     assert_match(/UndoKit 0.2.0.*source #{SHA}/, topic)

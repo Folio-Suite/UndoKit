@@ -5,7 +5,7 @@ SPDX-License-Identifier: MIT
 
 # Durable Notes in SwiftUI on iPhone and iPad
 
-Open `DurableNotesSwiftUI.xcodeproj` in Xcode 27.0 and run the
+Open `DurableNotesSwiftUI.xcodeproj` in Xcode 27.1 (27A9275) and run the
 `DurableNotesSwiftUI` scheme. It links the UndoKit source package and the shared
 `DurableNotesCore` domain package. Deployment starts at iOS/iPadOS 17. Leave
 Xcode's Derived Data setting at its system default.

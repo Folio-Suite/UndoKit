@@ -14,6 +14,26 @@ struct ScaleDeviceView: View {
     @State private var active: Task<Void, Never>?
     @State private var started = false
     @State private var count = 10_000
+    private var fullProfile: Bool {
+        #if targetEnvironment(simulator)
+        guard argument("--scale-profile") == "simulator-full",
+              let manifestURL = Bundle.main.url(forResource: "BuildManifest", withExtension: "json"),
+              let data = try? Data(contentsOf: manifestURL),
+              let manifest = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              manifest["sdk"] as? String == "iphonesimulator",
+              manifest["profile"] as? String == "simulator-full",
+              let budgets = manifest["budgets"] as? [String: Any],
+              (budgets["seconds"] as? NSNumber)?.doubleValue == 900,
+              (budgets["residentBytes"] as? NSNumber)?.uint64Value == 2 * 1024 * 1024 * 1024,
+              (budgets["evidenceAllocatedBytes"] as? NSNumber)?.uint64Value == 2 * 1024 * 1024 * 1024,
+              (budgets["minimumFreeBytes"] as? NSNumber)?.uint64Value == 4 * 1024 * 1024 * 1024,
+              (budgets["ordinaryHeartbeatSeconds"] as? NSNumber)?.doubleValue == 1 else { return false }
+        return true
+        #else
+        return false
+        #endif
+    }
+    private var budgets: ScaleBudgets { fullProfile ? ScaleBudgets(seconds: 900, residentBytes: 2 * 1024 * 1024 * 1024, ownedBytes: 2 * 1024 * 1024 * 1024, minimumFreeBytes: 4 * 1024 * 1024 * 1024, ordinaryHeartbeatSeconds: 1) : .device }
     private var arguments: [String] { CommandLine.arguments }
     private func argument(_ flag: String) -> String? {
         guard let index = arguments.firstIndex(of: flag), index + 1 < arguments.count else { return nil }
@@ -27,7 +47,7 @@ struct ScaleDeviceView: View {
                         ForEach(11...13, id: \.self) { Text("\($0)").tag($0) }
                     }.disabled(active != nil)
                     Text("\(count) groups; 1% trunk, two distant continuations; multi-Action groups and shared resource.")
-                    Text("Budgets: 15 minutes, 512 MiB process RSS, 2 GiB evidence, 4 GiB remaining free space. Ordinary heartbeat: 1 second.")
+                    Text(fullProfile ? "Full simulator profile: 15 minutes, 2 GiB app RSS, 2 GiB fixture and installed app, 4 GiB remaining free space. Ordinary heartbeat: 1 second." : "Smoke profile: 15 minutes, 512 MiB process RSS, 2 GiB evidence, 4 GiB remaining free space.")
                     Button("Create fixture") { run(operation: "create", sample: 0) }.disabled(active != nil)
                     Button("Read back in this process") { run(operation: "reopen", sample: 0) }.disabled(active != nil)
                     if active != nil { Button("Cancel preparation", role: .cancel) { active?.cancel() } }
@@ -62,11 +82,12 @@ struct ScaleDeviceView: View {
                     guard !FileManager.default.fileExists(atPath: fixture.appendingPathComponent("History.sqlite").path) else {
                         throw ScaleFailure.assertion("Fixture exists. Export its evidence, then delete app data before recreating this seed.")
                     }
-                    var report = try await ScaleWorkload.create(directory: fixture, groups: count, seed: seed, budgets: .device) { phase in
+                    var report = try await ScaleWorkload.create(directory: fixture, groups: count, seed: seed, budgets: budgets) { phase in
                         status = phase
                         try? Data(phase.utf8).write(to: fixture.appendingPathComponent("Phase.txt"), options: .atomic)
                     }
                     report.installedArtifactSHA256 = installedArtifact
+                    if fullProfile { report.platform = "iOS Simulator" }
                     report.artifactInventorySeconds = inventorySeconds
                     if let manifest = Bundle.main.url(forResource: "BuildManifest", withExtension: "json") {
                         try Data(contentsOf: manifest).write(to: fixture.appendingPathComponent("BuildManifest.json"), options: .atomic)
@@ -82,7 +103,7 @@ struct ScaleDeviceView: View {
                     guard creation.installedArtifactSHA256 == installedArtifact else {
                         throw ScaleFailure.assertion("Installed artifact differs from the fixture's creation process")
                     }
-                    var report = try await ScaleWorkload.reopen(directory: fixture, budgets: .device)
+                    var report = try await ScaleWorkload.reopen(directory: fixture, budgets: budgets)
                     report.installedArtifactSHA256 = installedArtifact
                     report.artifactInventorySeconds = inventorySeconds
                     try encoder.encode(report).write(to: path, options: .atomic)

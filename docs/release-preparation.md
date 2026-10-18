@@ -3,13 +3,15 @@ SPDX-FileCopyrightText: 2026 the Folio Project
 SPDX-License-Identifier: MIT
 -->
 
-# Preparing an UndoKit preview candidate
+# Preparing the UndoKit 0.2.0 beta candidate
 
-`0.2.0` is the planned next preview. Preparation retains a candidate for
-qualification; it does not qualify it, create a tag, publish a GitHub release,
-deploy Pages, or approve promotion. Actual signed preparation
-requires approved Apple Distribution publisher and certificate details and
-secure access to its private key (#24). The maintainer-approved publisher is
+On 2026-10-17, the maintainer designated `0.2.0` as UndoKit's first beta version
+and tag, replacing the planned preview. The planned tag is the plain three-part
+annotated tag `0.2.0`; the planned GitHub release will be marked as a prerelease
+(beta). Preparation retains a candidate for qualification; it does not qualify it, create a tag, publish a
+GitHub release, deploy Pages, or approve promotion. Actual signed preparation
+requires approved Apple Distribution publisher and certificate details and secure
+access to its private key (#24). The maintainer-approved publisher is
 Justin Croonenberghs under team `FT9KDL728H`; the
 [signing verification record](signing-identity.md) records the checked certificate
 and actual secure-timestamp probe. Recheck availability, validity and approval
@@ -21,6 +23,14 @@ The accepted contracts are [binary installation](https://github.com/Folio-Suite/
 [public onboarding](https://github.com/Folio-Suite/UndoKit/issues/10#issuecomment-6104631432).
 Qualification remains governed by [the acceptance gates](https://github.com/Folio-Suite/UndoKit/issues/8).
 
+On 2026-10-17, the maintainer moved the release producer from Xcode 27.0
+(27A266a) to Xcode 27.1 (27A9275). The installed Swift compiler remains Apple
+Swift 6.4 (`swiftlang-6.4.0.34.1`, embedded clang `2100.3.34.1`); standalone
+clang remains `2100.3.34.2`. This supersedes the producer pin in ADR 0005 for
+new candidates. Historical reports and the retained October 15 candidate keep
+their original identities. The subsequent framework refactor and revised
+documentation require a new candidate and applicable requalification.
+
 ## Inputs and authority
 
 The [qualification policy](release-qualification.md) accepts declared-architecture
@@ -30,7 +40,7 @@ does not establish those results. If revised release documentation affects
 qualification, prepare a new candidate rather than changing retained bytes.
 
 Select an exact clean source commit containing the intended release changes.
-Use the pinned Xcode 27.0 (27A266a), Apple Swift 6.4 producer. Marketing version
+Use the pinned Xcode 27.1 (27A9275), Apple Swift 6.4 producer. Marketing version
 is `0.2.0`; choose a positive integer framework build larger than every previously
 published framework build. Published source tag `0.1.0` records build `1`; build
 `2` is the initial `0.2.0` plan. Unpublished attempts may reuse this planned
@@ -64,10 +74,13 @@ rebuilding it:
 
 ```sh
 gh run download DOCS_STAGE_RUN_ID --repo Folio-Suite/UndoKit \
-  --name undokit-docs-candidate --dir /absolute/path/to/retained/documentation
+  --name undokit-docs-candidate --dir /absolute/path/to/retained/documentation-transport
+mkdir /absolute/path/to/retained/documentation
+tar -xf /absolute/path/to/retained/documentation-transport/undokit-docs-candidate.tar \
+  -C /absolute/path/to/retained/documentation
 ```
 
-The downloaded directory is the `--docs` input itself: `manifest.json`,
+The extracted directory is the `--docs` input: `manifest.json`,
 `producer.json`, `archive/`, and `site/` are at its root. Its manifest's
 `producerPath` and `producerSHA256` bind the original producer record;
 `sourceCommit`, `sourceDirty: false`, full toolchain and `producerCommand`

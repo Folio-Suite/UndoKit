@@ -122,7 +122,7 @@ module UndoKitCandidate
   end
 
   def toolchain!(xcode, swift)
-    fail!('producer must use Xcode 27.0 (27A266a)') unless xcode.strip == "Xcode 27.0\nBuild version 27A266a"
+    fail!('producer must use Xcode 27.1 (27A9275)') unless xcode.strip == "Xcode 27.1\nBuild version 27A9275"
     fail!('producer must use pinned Apple Swift 6.4') unless swift.include?('Apple Swift version 6.4 (swiftlang-6.4.0.34.1 clang-2100.3.34.1)')
   end
 

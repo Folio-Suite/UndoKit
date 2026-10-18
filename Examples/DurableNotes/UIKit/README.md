@@ -12,7 +12,7 @@ framework receives opaque commands; the host owns the domain and its storage.
 
 ## Build and run
 
-Open `DurableNotesUIKit.xcodeproj` in the selected Xcode 27.0 (27A266a), Swift 6.4
+Open `DurableNotesUIKit.xcodeproj` in the selected Xcode 27.1 (27A9275), Swift 6.4
 toolchain. The native target uses Swift 6 complete concurrency checking, declares
 iOS 17 and supports iPhone/iPad. Choose an available simulator or configure your
 own development team for a physical device. Physical qualification is separate.
@@ -113,7 +113,40 @@ Each run uses a fresh fictional fixture and retains logs in `Evidence/UIKitNotes
 configuration, device identifier and signed binary hashes. `Fixture/Report.json`
 is written only after all owners close successfully. It records runtime,
 installed library path, scene identities, observations, lifecycle journals,
-protection attribute and limitations. Failed fixtures/logs remain failures.
+protection attribute, completed transition identities and limitations. Failed
+fixtures/logs remain failures.
+
+Each check builds and installs a fresh bundle identity under
+`app.foliosuite.UndoKit.DurableNotesUIKit.check.HEX`, avoiding restored or
+automatically launched scenes from previous installations. The runner passes
+`UNDOKIT_UIKIT_BUNDLE_IDENTIFIER`, consumed only by the sample target; embedded
+framework bundle identities are not overridden. Interactive runs keep
+`app.foliosuite.UndoKit.DurableNotesUIKit`. `Setup.json` records both the base and
+installed identities; the preinstall running-sample guard covers the base prefix,
+including earlier check variants. Existing apps and data are retained.
+
+The runner supplies explicit check/fixture launch arguments and verifies the
+app's `Bootstrap.json` against the launched process and exact installed bundle
+before accepting check evidence. Environment variables remain available for interactive and
+physical sample use. Installed checks require the external runner: the app
+publishes correlated requests under `Transitions/REQUEST-ID`, and the runner
+owns dispatch, foreground recovery and completion approval. The app only makes
+a requested public UIKit scene call after dispatch authorization; an already
+active target needs no activation request. Two fresh observations of actual
+foreground activation and the current owner's ready session/binding precede
+runner approval, which the app revalidates before the next case. Returning
+checks reacquire the current presentation instead of retaining a closed binding.
+
+Each transition keeps its 30-second bound and the run keeps its 180-second
+bound. Settings closure retains its 45-second outer guard and requires both a
+new real background callback and a new successful drain/close journal before
+return. One bounded foreground recovery can resume an inactive/suspended check;
+it requires the original process to remain present and cannot restart a fixture.
+Requests, dispatches, actual-state observations and completion approvals remain
+with success or failure evidence. No process termination or data erasure is used
+to make a run pass. Controlled runner regressions are separate from UIKit runtime
+acceptance: `ruby scripts/test-uikit-runner.rb` uses fictional external tools and
+an app fixture actor.
 
 Checks run inside the installed UIKit app through the public binding with actual
 UIKit controls and an independent durable host. They observe coarse receipts,

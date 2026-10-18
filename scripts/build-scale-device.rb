@@ -9,20 +9,22 @@ require 'digest'
 require 'time'
 require_relative 'build-support'
 
-options = {sdk: 'iphonesimulator', configuration: 'Release', team: nil}
+options = {sdk: 'iphonesimulator', configuration: 'Release', team: nil, profile: 'smoke'}
 OptionParser.new do |parser|
   parser.banner = 'Usage: scripts/build-scale-device.rb --sdk iphonesimulator|iphoneos [--team ID] [--configuration Debug|Release]'
   parser.on('--sdk SDK', %w[iphonesimulator iphoneos]) { |v| options[:sdk] = v }
   parser.on('--team ID') { |v| options[:team] = v }
+  parser.on('--profile NAME', %w[smoke simulator-full]) { |v| options[:profile] = v }
   parser.on('--configuration NAME', %w[Debug Release]) { |v| options[:configuration] = v }
   parser.on('-h', '--help') { puts parser; exit 0 }
 end.parse!
 abort '--team is required for an installable physical-device build' if options[:sdk] == 'iphoneos' && !options[:team]
+abort 'simulator-full requires --sdk iphonesimulator' if options[:profile] == 'simulator-full' && options[:sdk] != 'iphonesimulator'
 root = File.expand_path('..', __dir__)
 project_root = UndoKitBuild.directory('Scale', 'DeviceProject')
 build_root = UndoKitBuild.directory('Scale', 'DeviceBuild')
 lock = File.open(File.join(UndoKitBuild.directory('Scale'), 'device-build.lock'), File::RDWR | File::CREAT, 0o600)
-lock.flock(File::LOCK_EX)
+lock.flock(File::LOCK_EX) unless ENV['UNDOKIT_SCALE_DEVICE_BUILD_LOCK_HELD'] == '1'
 source_root = File.join(project_root, 'Sources')
 FileUtils.mkdir_p(source_root)
 Dir.glob(File.join(source_root, '*.swift')).each { |path| File.delete(path) }
@@ -38,9 +40,10 @@ manifest = {'capturedAtUTC' => Time.now.utc.iso8601, 'sourceHead' => capture('gi
             'sourceSHA256' => (sources + Dir.glob(File.join(root, 'UndoKit', '**/*')).select { |p| File.file?(p) } + [File.join(root, 'Package.swift')]).to_h { |p| [p.delete_prefix(root + '/'), Digest::SHA256.file(p).hexdigest] },
             'toolchain' => capture('xcodebuild', '-version'), 'swift' => capture('swift', '--version'),
             'configuration' => options[:configuration], 'sdk' => options[:sdk],
-            'budgets' => {seconds: 900, residentBytes: 512 * 1024**2, evidenceAllocatedBytes: 2 * 1024**3,
-                          minimumFreeBytes: 4 * 1024**3, ordinaryHeartbeatSeconds: 1},
-            'qualification' => options[:sdk] == 'iphoneos' ? 'physical runtime pending; build is not acceptance' : 'simulator smoke only; not physical qualification'}
+            'profile' => options[:profile],
+            'budgets' => {seconds: 900, residentBytes: (options[:profile] == 'simulator-full' ? 2 * 1024**3 : 512 * 1024**2), evidenceAllocatedBytes: 2 * 1024**3,
+                          minimumFreeBytes: 4 * 1024**3, ordinaryHeartbeatSeconds: 1, externalBuildCacheBytes: 12 * 1024**3, externalMinimumFreeBytes: 20 * 1024**3},
+            'qualification' => options[:sdk] == 'iphoneos' ? 'physical runtime pending; build is not acceptance' : (options[:profile] == 'simulator-full' ? 'full simulator fixture; not physical qualification' : 'simulator smoke only; not physical qualification')}
 File.write(File.join(source_root, 'BuildManifest.json'), JSON.pretty_generate(manifest) + "\n")
 sign = options[:sdk] == 'iphoneos' ? "CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = #{options[:team]};" : 'CODE_SIGN_IDENTITY = "-";'
 project = <<~PBX

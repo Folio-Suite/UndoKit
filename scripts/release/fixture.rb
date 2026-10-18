@@ -78,7 +78,7 @@ module CandidateFixture
     provenance = {schemaVersion: 1, releaseVersion: '0.2.0', frameworkBuildNumber: '9',
       sourceCommit: options[:commit], sourceTree: Open3.capture2('git', '-C', options[:source], 'rev-parse', 'HEAD^{tree}').first.strip,
       workingTreeDirtyPaths: [], configuration: 'Release', toolchain: {
-        xcodebuildVersion: ['Xcode 27.0', 'Build version 27A266a'],
+        xcodebuildVersion: ['Xcode 27.1', 'Build version 27A9275'],
         swiftVersion: ['Apple Swift version 6.4 (swiftlang-6.4.0.34.1 clang-2100.3.34.1)']},
       procedure: {codeSigning: 'disabled', script: 'scripts/assemble-xcframework.rb'},
       archives: archives, xcframeworkPath: bundle, xcframeworkTreeSHA256: UndoKit::XCFrameworkAssembly.tree_sha256(bundle)}
@@ -101,7 +101,7 @@ module CandidateFixture
       digest.hexdigest
     end
     producer = {schemaVersion: 1, sourceCommit: options[:commit], sourceDirty: false,
-      toolchain: {xcode: "Xcode 27.0\nBuild version 27A266a", swift: provenance[:toolchain][:swiftVersion].first, clang: 'Apple clang version 21.0.0 (clang-2100.3.34.2)'},
+      toolchain: {xcode: "Xcode 27.1\nBuild version 27A9275", swift: provenance[:toolchain][:swiftVersion].first, clang: 'Apple clang version 21.0.0 (clang-2100.3.34.2)'},
       command: ['xcodebuild', 'docbuild'], archiveTreeSHA256: tree_hash.call(File.join(docs, 'archive'))}
     File.write(File.join(docs, 'producer.json'), JSON.generate(producer))
     manifest = {schemaVersion: 1, version: '0.2.0', channel: 'release', sourceCommit: options[:commit], sourceDirty: false,

@@ -329,7 +329,8 @@ module UndoKit
       run_command!(["xcodebuild", "-project", project, "-scheme", "Consumer", "-configuration", "Release",
         "-destination", "generic/platform=macOS", "-derivedDataPath", build_root, "-archivePath", archive,
         "ARCHS=#{architecture}", "ONLY_ACTIVE_ARCH=YES", "CODE_SIGNING_ALLOWED=YES", "CODE_SIGN_STYLE=Manual",
-        "CODE_SIGN_IDENTITY=#{options.fetch(:identity)}", "DEVELOPMENT_TEAM=#{options.fetch(:team)}", "archive"], archive_log)
+        "CODE_SIGN_IDENTITY=#{options.fetch(:identity)}", "DEVELOPMENT_TEAM=#{options.fetch(:team)}",
+        "DEBUG_INFORMATION_FORMAT=dwarf-with-dsym", "GCC_GENERATE_DEBUGGING_SYMBOLS=YES", "archive"], archive_log)
       export_log = File.join(directory, "export.log")
       run_command!(["xcodebuild", "-exportArchive", "-archivePath", archive,
         "-exportOptionsPlist", plist, "-exportPath", export_root], export_log)
@@ -405,8 +406,8 @@ module UndoKit
     def pinned_toolchain!
       xcode = Assembly.capture!("xcodebuild", "-version")
       swift = Assembly.capture!("xcrun", "swift", "--version")
-      unless xcode.match?(/\AXcode 27\.0\nBuild version 27A266a\s*\z/)
-        raise Assembly::VerificationError, "binary consumer requires Xcode 27.0 (27A266a); found:\n#{xcode}"
+      unless xcode.match?(/\AXcode 27\.1\nBuild version 27A9275\s*\z/)
+        raise Assembly::VerificationError, "binary consumer requires Xcode 27.1 (27A9275); found:\n#{xcode}"
       end
       unless swift.match?(/Apple Swift version 6\.4 \(swiftlang-6\.4\.0\.34\.1 clang-2100\.3\.34\.1\)/)
         raise Assembly::VerificationError, "binary consumer requires Apple Swift 6.4; found:\n#{swift}"

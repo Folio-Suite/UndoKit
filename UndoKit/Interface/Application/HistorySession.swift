@@ -55,6 +55,8 @@ enum HistoryNativeOperation { case settle, undo, redo }
     var requiresDraftDecision = false
     var liveUndo = false
     var liveRedo = false
+    var nativeActionNameResolver: (@MainActor (HistoryPayload) throws -> String?)?
+    var nativeActionNames = HistoryNativeActionNames(undo: "", redo: "")
     var openingWaiters: [CheckedContinuation<Void, Never>] = []
     var closingWaiters: [CheckedContinuation<Void, Never>] = []
     private var nativeOperations: [UUID: Task<Void, Never>] = [:]
@@ -66,6 +68,18 @@ enum HistoryNativeOperation { case settle, undo, redo }
     }
 
     // MARK: - Typed edits and presentation attachment
+
+    /// Resolves retained group metadata into localized native Undo/Redo action names.
+    /// Install again after reopening, or to refresh names after a language change.
+    /// Nil, missing metadata, and resolver errors use the native generic label.
+    /// The synchronous main-actor resolver must not mutate the session. Capture host owners weakly.
+    /// Names and availability refresh together; native Undo/Redo still complete asynchronously.
+    public func setNativeActionNameResolver(
+        _ resolve: (@MainActor (HistoryPayload) throws -> String?)?
+    ) {
+        nativeActionNameResolver = resolve
+        refreshStatus()
+    }
 
     /// Creates a handle for this exact registered operation, session epoch and generation.
     /// Reacquire handles after closing/reopening or retiring a generation.

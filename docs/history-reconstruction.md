@@ -54,6 +54,18 @@ UndoKit does not interpret labels, thumbnails or domain identifiers.
 availability snapshot in one actor turn. `readIdentity()` identifies a committed
 scope view independently of the native availability version.
 
+For the ordinary session/attachment route, install
+`session.setNativeActionNameResolver { payload in ... }`. Decode the host-owned
+payload and return a localized action name. The supplied native UndoManager and
+the AppKit/UIKit bindings publish names with matching availability, including
+name-only changes. Missing metadata, nil results and resolver errors use the
+native generic label. Passing nil removes the resolver. Install it again after
+reopening or when the host's language changes. The resolver runs synchronously on
+the main actor: keep it short, do not mutate the session, and capture owners weakly.
+Focused local/live text retains its own native names and empty-stack isolation.
+Native callbacks initiate asynchronous semantic work; await
+`session.waitForNativeOperations()` when completion must be observed.
+
 ## Verification and scale
 
 The ordinary tests cover divergent reconstruction, restoration followed by Undo,

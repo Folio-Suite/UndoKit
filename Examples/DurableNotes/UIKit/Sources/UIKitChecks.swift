@@ -241,6 +241,8 @@ import MachO
         try require(try await lease.read().note == Note(), "Checks require a fresh independent host")
         stage("first grouped action", app: app)
         _ = await lease.edit(title: "Shopping", body: "Tea and bread", in: session)
+        session.setNativeActionNameResolver { _ in "Localized note change" }
+        try require(binding.undoManager.undoActionName == "Localized note change", "Durable native name missing")
         try require(try await lease.read().applicationCount == 1, "Grouped edit did not apply once")
         _ = await binding.undoDocument()
         try require(try await lease.read().note == Note(), "Durable Undo did not reverse both fields")
@@ -254,6 +256,7 @@ import MachO
         let beforeTyping = try await lease.read()
         controller.bodyEditor.insertText(" live"); try await pause()
         try require(binding.hasLiveTransaction && controller.bodyEditor.undoManager?.canUndo == true, "Native typing did not offer local Undo")
+        try require(controller.bodyEditor.undoManager?.undoActionName != "Localized note change", "Durable label replaced live text name")
         controller.bodyEditor.undoManager?.undo(); try await pause()
         try require(controller.bodyEditor.text == "Tea and bread", "Live Undo did not restore baseline")
         try require(try await lease.read().applicationCount == beforeTyping.applicationCount,
@@ -328,7 +331,10 @@ import MachO
         try require(!binding.textView(controller.bodyEditor, shouldChangeTextIn: NSRange(location: 0, length: 0), replacementText: "blocked"), "Delegate barrier permitted native user editing")
         controller.bodyEditor.undoManager?.undo()
         try require(controller.bodyEditor.text == pendingText && controller.bodyEditor.isFirstResponder, "Pending inverse changed text or focus")
-        controller.scratch.becomeFirstResponder(); controller.scratch.insertText("local"); try await pause()
+        controller.scratch.becomeFirstResponder()
+        try require(!binding.undoManager.canUndo && binding.undoManager.undoActionName.isEmpty,
+            "Empty local stack leaked durable name or availability")
+        controller.scratch.insertText("local"); try await pause()
         let beforeScratch = try await lease.read().applicationCount
         binding.undoManager.undo(); try await pause()
         let afterScratch = try await lease.read().applicationCount

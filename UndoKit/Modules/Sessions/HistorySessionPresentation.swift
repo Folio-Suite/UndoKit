@@ -37,8 +37,15 @@ extension HistorySession {
             phase: phase,
             canUndo: ready && (snapshot.canUndo || liveUndo), canRedo: ready && (snapshot.canRedo || liveRedo),
             issue: nativeIssue ?? issue, requiresDraftDecision: requiresDraftDecision)
-        guard next != status else { return }
+        let resolved = ready && nativeActionNameResolver != nil ? try? engine?.nativeActionNames { [self] payload in
+            try nativeActionNameResolver?(payload)
+        } : nil
+        let names = HistoryNativeActionNames(
+            undo: next.canUndo ? resolved?.names.undo ?? "" : "",
+            redo: next.canRedo ? resolved?.names.redo ?? "" : "")
+        guard next != status || names != nativeActionNames else { return }
         status = next
+        nativeActionNames = names
         nativeCoordinator.publish(status: next)
         for observer in Array(observers.values) { observer(next) }
         collection?.changed()

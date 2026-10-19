@@ -54,10 +54,8 @@ in this implementation, so no speculative migration option is exposed.
 An incompatible model is safely refused. This does not promise an upgrade from
 tagged `0.1.0`, experimental stores, or unpublished schemas.
 
-Before the qualified preview, APIs are under frost: keep them steady where
-practical, document changes needed for qualification, and preserve/refuse
-unsupported history. The first qualified preview establishes the promised
-persisted-history baseline. Thereafter, patches preserve public source
+The published `0.2.0` beta establishes the supported persisted-history baseline.
+Patches preserve public source
 compatibility and documented behavior; minor `0.x` releases may break source APIs
 with explicit migration notes. Supported histories remain usable directly or
 through supported structural migration, subject to host codecs and resources.
@@ -108,14 +106,14 @@ not byte-identical generated SQLite databases.
 Run the focused evidence:
 
 ```sh
-swift test --scratch-path DerivedData/OpeningTests --filter HistoryOpeningCompatibilityTests
+scripts/test-package.sh --filter HistoryOpeningCompatibilityTests
 ```
 
 Export a concrete matched pair to an **absent** destination:
 
 ```sh
 UNDOKIT_BASELINE_OUTPUT=/tmp/undokit-preview-baseline \
-  swift test --scratch-path DerivedData/OpeningTests \
+  scripts/test-package.sh \
   --filter testPreviewBaselineRecipeRetainsPairedHistoryStateCodecsAndResources
 ```
 

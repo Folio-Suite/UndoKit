@@ -184,6 +184,7 @@ import Foundation
             issue: unknown ? failure(.hostProtocol, suspended: true) : issue,
             requiresDraftDecision: !unboundJournals.isEmpty || fields.values.contains { $0.requiresDecision },
             hasLiveUndo: live?.canUndo ?? false, hasLiveRedo: live?.canRedo ?? false)
+        NotificationCenter.default.post(name: .NSUndoManagerCheckpoint, object: facade)
         adapters.values.compactMap(\.value).forEach { $0.publishAvailability() }
     }
     func detach(attachment: UUID) {
@@ -273,6 +274,8 @@ import Foundation
     }
     override var canUndo: Bool { owner?.nativeCanUndo ?? false }
     override var canRedo: Bool { owner?.nativeCanRedo ?? false }
+    override var undoActionName: String { canUndo ? owner?.session.nativeActionNames.undo ?? "" : "" }
+    override var redoActionName: String { canRedo ? owner?.session.nativeActionNames.redo ?? "" : "" }
     override func undo() { owner?.requestNativeUndo(true) }
     override func redo() { owner?.requestNativeUndo(false) }
     override func __registerUndoWithTarget(_ target: Any, handler: @escaping @MainActor @Sendable (Any) -> Void) {

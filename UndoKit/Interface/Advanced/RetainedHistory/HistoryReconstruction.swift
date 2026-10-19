@@ -107,7 +107,8 @@ public struct HistoryReadIdentity: Equatable, Sendable {
     public let latestGroupID: UUID?
 }
 
-/// Host-resolved names to pass to the native router with the matching snapshot.
+/// Host-resolved names read with the matching snapshot.
+/// Ordinary native attachments use ``HistorySession/setNativeActionNameResolver(_:)``.
 public struct HistoryNativeActionNames: Equatable, Sendable {
     /// Host-resolved Undo label; empty requests the native generic label.
     public let undo: String

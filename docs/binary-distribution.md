@@ -14,7 +14,7 @@ Run from a clean checkout and pass the planned framework version and build
 number:
 
 ```sh
-ruby scripts/assemble-xcframework.rb --version 0.2.0 --build-number 2
+ruby scripts/assemble-xcframework.rb --version 0.2.2 --build-number 4
 ```
 
 The command pins those toolchain versions, disables code signing, emits the

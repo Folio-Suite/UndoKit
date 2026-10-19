@@ -10,11 +10,12 @@ native live typing Undo/Redo while explicit editing transactions become persiste
 Undo Groups. History survives reopening; the app owns domain meaning and its
 primary data.
 
-**First beta:** `0.2.0` is the designated first beta version and tag. Qualification
-and publication are established by its matching release and retained readiness
-evidence. Before that qualified baseline, the source remains under API frost,
-with qualification changes possible. Do not treat `main`, a successful build, or
-a simulator run as a qualified release.
+**Published beta:** `0.2.0` and `0.2.1` are published releases. The
+[0.2.2 candidate](docs/releases/0.2.2.md) is under preparation;
+its source and documentation may still change
+before publication. Use the matching release and retained readiness evidence
+when assessing a published version. Do not treat a candidate, successful build,
+or simulator run as a qualified release.
 
 ## Try it in a small app
 
@@ -58,8 +59,10 @@ releases its attachment; closing the document explicitly closes its shared sessi
 
 Continue with the [DocC catalog](UndoKit/UndoKit.docc/UndoKit.md),
 [recovery guide](UndoKit/UndoKit.docc/RecoveryAndStorage.md) and
-[history compatibility policy](docs/history-compatibility.md). The source guides
-are available now; the versioned hosted documentation site is being prepared.
+[history compatibility policy](docs/history-compatibility.md). The
+[versioned hosted documentation site](https://foliosuite.dev/UndoKit/versions/0.2.0/)
+contains the published `0.2.0` snapshot; candidate documentation stays with its
+source until a matching version is published.
 
 ## Ownership
 
@@ -114,11 +117,10 @@ reports distinguish full workloads, simulator smoke and physical measurements.
 
 ## Compatibility, support and provenance
 
-Before the first qualified beta there is no promised migration from `0.1.0`
-or experimental stores. Unsupported stores are preserved and refused. The first
-qualified beta will establish the supported persisted-history baseline;
-subsequent continuity promises and explicit migration requirements are defined
-in the [compatibility policy](docs/history-compatibility.md).
+There is no promised migration from `0.1.0` or experimental stores. Unsupported
+stores are preserved and refused. The published `0.2.0` baseline establishes the
+supported persisted-history contract; subsequent continuity promises and explicit
+migration requirements are defined in the [compatibility policy](docs/history-compatibility.md).
 
 Use [GitHub Issues](https://github.com/Folio-Suite/UndoKit/issues) with a small
 sanitized reproduction and version/source, route, architecture, OS and tooling.

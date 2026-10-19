@@ -3,15 +3,19 @@ SPDX-FileCopyrightText: 2026 the Folio Project
 SPDX-License-Identifier: MIT
 -->
 
-# Preparing the UndoKit 0.2.0 beta candidate
+# Preparing an UndoKit beta maintenance candidate
 
-On 2026-10-17, the maintainer designated `0.2.0` as UndoKit's first beta version
-and tag, replacing the planned preview. The planned tag is the plain three-part
-annotated tag `0.2.0`; the planned GitHub release will be marked as a prerelease
-(beta). Preparation retains a candidate for qualification; it does not qualify it, create a tag, publish a
-GitHub release, deploy Pages, or approve promotion. Actual signed preparation
-requires approved Apple Distribution publisher and certificate details and secure
-access to its private key (#24). The maintainer-approved publisher is
+The current planned maintenance release is `0.2.2`, framework build `4`, correcting
+native action-name presentation through the ordinary History Session route (#73).
+`0.2.0` was the first beta; `0.2.1` is the preceding published maintenance release.
+Use a plain three-part annotated tag and mark the GitHub release as a prerelease
+(beta). The [0.2.2 release notes and preparation checklist](releases/0.2.2.md)
+distinguish completed source checks from remaining artifact and promotion gates.
+
+Preparation retains a candidate for qualification; it does not qualify it, create
+a tag, publish a GitHub release, deploy Pages, or approve promotion. Actual signed
+preparation requires approved Apple Distribution publisher and certificate details
+and secure access to its private key. The maintainer-approved publisher is
 Justin Croonenberghs under team `FT9KDL728H`; the
 [signing verification record](signing-identity.md) records the checked certificate
 and actual secure-timestamp probe. Recheck availability, validity and approval
@@ -41,10 +45,11 @@ qualification, prepare a new candidate rather than changing retained bytes.
 
 Select an exact clean source commit containing the intended release changes.
 Use the pinned Xcode 27.1 (27A9275), Apple Swift 6.4 producer. Marketing version
-is `0.2.0`; choose a positive integer framework build larger than every previously
-published framework build. Published source tag `0.1.0` records build `1`; build
-`2` is the initial `0.2.0` plan. Unpublished attempts may reuse this planned
-version/build; their signed ZIP hashes and candidate identities remain distinct.
+is `0.2.2`; planned framework build is `4`. Refresh the published identity inventory
+before preparation and require a build larger than every published framework build.
+Published releases `0.1.0`, `0.2.0` and `0.2.1` reserve builds `1`, `2` and `3`,
+respectively. Unpublished attempts may reuse the planned version/build; their signed
+ZIP hashes and candidate identities remain distinct.
 
 Prepare these inputs outside the source checkout:
 
@@ -53,8 +58,8 @@ Prepare these inputs outside the source checkout:
   and the unsigned `UndoKit.xcframework`. Keep that entire directory unchanged.
 - A release documentation artifact from `scripts/documentation/site.rb` (#22):
   `manifest.json`, `producer.json`, `archive/` and `site/`. It must describe
-  `0.2.0`, the same clean source commit and pinned Xcode/Swift producer, channel `release`,
-  and base path `/UndoKit/versions/0.2.0/`. Both original DocC archive and staged
+  `0.2.2`, the same clean source commit and pinned Xcode/Swift producer, channel `release`,
+  and base path `/UndoKit/versions/0.2.2/`. Both original DocC archive and staged
   output are retained exactly; preparation performs no documentation build.
   Retain full standalone clang output independently: this Xcode reports
   `Apple clang version 21.0.0 (clang-2100.3.34.2)`, while the pinned Swift compiler
@@ -69,7 +74,7 @@ Prepare these inputs outside the source checkout:
 
 Stage documentation with the `Versioned documentation` Actions workflow
 (`documentation.yml`), operation `stage`, the selected full `source_commit`,
-version `0.2.0` and channel `release`. Download its retained output without
+version `0.2.2` and channel `release`. Download its retained output without
 rebuilding it:
 
 ```sh
@@ -133,7 +138,7 @@ identities and from local tags. Preparation never fetches, edits, or deletes tag
 Run the assembly command from the selected clean checkout first:
 
 ```sh
-scripts/assemble-xcframework.rb --version 0.2.0 --build-number BUILD --run-id UNIQUE
+scripts/assemble-xcframework.rb --version 0.2.2 --build-number BUILD --run-id UNIQUE
 ```
 
 After producing and staging the matching documentation artifact, prepare from
@@ -143,7 +148,7 @@ those fixed inputs. Use a fresh output path outside the checkout and inputs:
 scripts/release/candidate.rb prepare \
   --source /absolute/path/to/clean/UndoKit \
   --commit FULL_40_CHARACTER_COMMIT \
-  --version 0.2.0 --build-number BUILD \
+  --version 0.2.2 --build-number BUILD \
   --assembly /absolute/path/to/retained/assembly \
   --docs /absolute/path/to/retained/documentation \
   --publisher-approval /absolute/path/to/approved-publisher.json \
@@ -168,7 +173,7 @@ The build/archive inputs are never signed in place or removed on failure.
 A successful directory includes:
 
 - `UndoKit.xcframework`, the finalized signed bundle;
-- `UndoKit-0.2.0-buildBUILD.xcframework.zip` and `SHA256SUMS`;
+- `UndoKit-0.2.2-buildBUILD.xcframework.zip` and `SHA256SUMS`;
 - `manifest.json` and `manifest.sha256`;
 - `inputs/assembly/` with unchanged producer evidence, original archives and dSYMs;
 - `inputs/documentation/` with unchanged documentation archive, site and provenance;
@@ -224,7 +229,7 @@ Promotion must use the exact approved ZIP, documentation output and source
 commit without rebuilding, re-signing or recompressing. Publication and live
 verification remain separate maintainer-controlled work (#28/#29). Publish the
 unchanged candidate `manifest.json` bytes as the GitHub release asset
-`UndoKit-0.2.0-manifest.json` (general form `UndoKit-<version>-manifest.json`).
+`UndoKit-0.2.2-manifest.json` (general form `UndoKit-<version>-manifest.json`).
 That exact asset name is the versioned documentation promotion workflow's
 release-provenance input. Changing an upload filename does not change the
 approved manifest bytes or its SHA-256; preserve both.

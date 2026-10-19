@@ -39,9 +39,19 @@ where Handler.Command == NoteChange, Handler.Effect == NoteChange {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.sortedKeys]
             return try encoder.encode(changes)
+        },
+        metadata: { changes in
+            let name = changes.count == 1 ? changes[0].field.rawValue : "note"
+            return HistoryOperationMetadata(presentation: HistoryPayload(
+                family: "durable-notes.action", data: Data(name.utf8)))
         })
 }
 ```
+
+This sample metadata uses `durable-notes.action` with `title`, `body` or `note`
+as its data. A host can decode it to localized menu names through the session's
+optional native action-name resolver; UndoKit stores and returns the payload
+without interpreting it.
 
 Keep this declaration and its handler for the session lifetime. Recreating a
 lookalike operation for each button press does not preserve registration identity.

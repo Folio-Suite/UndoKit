@@ -66,6 +66,8 @@ import UndoKit
         observations.append("Focused standard NSTextView insert/live Undo/baseline Redo produced zero host applications/receipts; explicit commit produced exactly one; responder Undo/Redo then used durable history.")
 
         a.apply(title: "Shopping", body: "Tea and bread"); await a.waitForOperations()
+        a.session.setNativeActionNameResolver { _ in "Localized note change" }
+        try require(a.binding.undoManager.undoActionName == "Localized note change", "Durable native name missing")
         let grouped = try a.session.advanced.historyPage(limit: 20).last
         try require(grouped?.memberCount == 2, "Host grouped fields did not persist as one two-member group")
         focus(a, editor: a.titleEditor); await pump(); _ = command("undo:"); await a.waitForOperations()
@@ -75,6 +77,7 @@ import UndoKit
 
         focus(a, editor: a.bodyEditor); await pump()
         insert(" live", in: a.bodyEditor)
+        try require(a.bodyEditor.undoManager!.undoActionName != "Localized note change", "Durable label replaced live text name")
         await a.lease.rejectNextDelivery()
         let beforeRejection = try await a.read()
         let rejected = await a.binding.undoDocument()
@@ -107,6 +110,8 @@ import UndoKit
 
         focus(a, editor: a.scratch); await pump()
         let beforeLocal = try await a.read()
+        try require(!a.scratch.undoManager!.canUndo && a.scratch.undoManager!.undoActionName.isEmpty,
+            "Empty local stack leaked durable name or availability")
         _ = command("undo:")
         insert("scratch", in: a.scratch); _ = command("undo:")
         try require(a.scratch.string.isEmpty, "Scratch native Undo failed")

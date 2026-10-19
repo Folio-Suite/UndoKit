@@ -56,8 +56,9 @@ you need browsing, checkpoints or retention beyond ordinary Undo/Redo.
 ## Beta support
 
 The intended beta targets macOS 14 and iOS/iPadOS 17 with Xcode 27.1 / Swift 6.4.
-The designated first beta is `0.2.0`; its qualification depends on the matching
-release and retained readiness evidence. Use the documentation and evidence
+Versions `0.2.0` and `0.2.1` are published beta releases. Version `0.2.2` is
+being prepared as a candidate and remains subject to change until published with
+its matching qualification evidence. Use the documentation and evidence
 matching your selected source or release; see
 <doc:PreviewCompatibilityAndSupport>.
 

@@ -43,6 +43,9 @@ import UndoKit
             effectCodec: .json(), handler: host, fingerprint: { changes in
                 let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
                 return try encoder.encode(changes)
+            }, metadata: { changes in
+                HistoryOperationMetadata(presentation: HistoryPayload(
+                    family: "durable-notes.action", data: Data((changes.count == 1 ? changes[0].field.rawValue : "note").utf8)))
             })
     }
     public func openSession(in owners: HistorySessions, mode: HistoryOpenMode) async -> HistorySession {

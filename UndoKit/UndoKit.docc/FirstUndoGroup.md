@@ -82,6 +82,48 @@ sample registry also deduplicates requests for the same document and handles
 blocked acquisition; use that pattern for a multiwindow app. A blocked session
 remains retained by the application collection so recovery can finish.
 
+## Localize durable native action names
+
+Operation metadata is opaque to UndoKit. The Durable Notes operation records the
+`durable-notes.action` family and one of `title`, `body` or `note`. The host can
+decode that payload and install a resolver on the main actor:
+
+```swift
+@MainActor
+func installActionNames(on document: NoteDocument) {
+    document.history.setNativeActionNameResolver { payload in
+        guard payload.family == "durable-notes.action",
+              let name = String(data: payload.data, encoding: .utf8)
+        else { return nil }
+        switch name {
+        case "title":
+            return NSLocalizedString(
+                "Change Title",
+                comment: "Native action name, without Undo/Redo prefix")
+        case "body":
+            return NSLocalizedString(
+                "Edit Note Body",
+                comment: "Native action name, without Undo/Redo prefix")
+        case "note":
+            return NSLocalizedString(
+                "Change Note",
+                comment: "Native action name, without Undo/Redo prefix")
+        default: return nil
+        }
+    }
+}
+```
+
+Missing metadata, an unknown key, a nil result or a thrown resolver error leaves
+the native generic label in place. Install the resolver again after reopening and
+after a language change so names reflect the current localization. Keep the
+synchronous resolver short, avoid session mutation, and capture host owners weakly.
+Add translations for these source strings in your app's own localization bundle;
+without translations, the example still displays readable action names.
+Focused live/local typing keeps its own native names. Native Undo/Redo starts
+asynchronous semantic work; use `waitForNativeOperations()` when the caller must
+observe its completion.
+
 ## Submit application intent
 
 Here is a rename button's action. Read the current title, filter a known no-op,

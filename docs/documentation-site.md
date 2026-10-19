@@ -37,6 +37,10 @@ installed Xcode templates merely to silence their diagnostics.
 
 ## Prepare a candidate
 
+The current maintenance preparation targets 0.2.2. The published 0.2.0 snapshot
+remains available at [the hosted site](https://foliosuite.dev/UndoKit/versions/0.2.0/);
+staging a candidate does not publish a new snapshot.
+
 Run the producer build from the selected checkout. It records the checkout's
 full commit, whether the worktree was dirty, the exact Xcode/Swift toolchain, the
 `xcodebuild docbuild` command, and a SHA-256 tree identity for the produced
@@ -58,9 +62,9 @@ ruby scripts/documentation/site.rb stage \
   --archive "$HOME/Library/Developer/Xcode/DerivedData/UndoKit/Documentation/Build/Products/Debug/UndoKit.doccarchive" \
   --producer /tmp/UndoKit-docs-producer.json \
   --output /tmp/undokit-docs-candidate \
-  --version 0.2.0 \
+  --version 0.2.2 \
   --channel release \
-  --base-path /UndoKit/versions/0.2.0/
+  --base-path /UndoKit/versions/0.2.2/
 ```
 
 The candidate contains `manifest.json`, `producer.json`, the exact input
@@ -100,14 +104,14 @@ manifest is not release approval.
 ```sh
 ruby scripts/documentation/site.rb verify-release \
   --artifact /tmp/undokit-docs-candidate \
-  --release-provenance /tmp/UndoKit-0.2.0-manifest.json
+  --release-provenance /tmp/UndoKit-0.2.2-manifest.json
 ruby scripts/documentation/site.rb promote \
   --artifact /tmp/undokit-docs-candidate \
-  --release-provenance /tmp/UndoKit-0.2.0-manifest.json \
+  --release-provenance /tmp/UndoKit-0.2.2-manifest.json \
   --destination /tmp/undokit-pages
 ruby scripts/documentation/site.rb update-latest \
   --artifact /tmp/undokit-docs-candidate \
-  --release-provenance /tmp/UndoKit-0.2.0-manifest.json \
+  --release-provenance /tmp/UndoKit-0.2.2-manifest.json \
   --destination /tmp/undokit-pages
 ```
 
@@ -121,6 +125,9 @@ GitHub lookups explicitly target `Folio-Suite/UndoKit`, including when invoked
 outside a checkout.
 
 ## Correct released guidance
+
+The examples in this section correct the published 0.2.0 guidance snapshot.
+The new 0.2.2 resolver documentation uses the candidate staging route above.
 
 A guidance correction has its own reviewed candidate. It preserves the original
 release tag, API source commit, original release manifest, and binary assets.

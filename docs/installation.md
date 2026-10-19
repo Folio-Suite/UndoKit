@@ -11,11 +11,13 @@ use different distribution routes. Equal version strings alone do not establish
 runtime identity. The independent consumers compare Swift type metadata across
 the app/domain-framework boundary and count loaded UndoKit images.
 
-The intended preview supports macOS 14 arm64/x86_64, iOS/iPadOS 17 device arm64,
+The beta platform contract declares macOS 14 arm64/x86_64, iOS/iPadOS 17 device arm64,
 and separate Simulator arm64/x86_64. Use Xcode 27.1 (27A9275)/Apple Swift 6.4,
 Swift 6 and complete concurrency checking. These declarations do not qualify an
-untested runtime or compiler combination. No qualified `0.2.0` artifact is
-published yet; examples below are development integration procedures.
+untested runtime or compiler combination. Published `0.2.0` and `0.2.1`
+artifacts are available; `0.2.2` is a candidate and is not yet a published
+artifact. The procedures below apply to development integrations and selected
+published versions.
 
 ## Source Swift Package
 
@@ -97,7 +99,7 @@ as proof of a different artifact.
 
 ## Updating or recovering
 
-Rebuild/relink every client in a process against one selected preview version.
+Rebuild/relink every client in a process against one selected beta version.
 Do not replace a loaded dynamic framework as an unqualified ABI-compatible update.
 Retain a coherent host-state/history/resource copy before a supported upgrade.
 There is no downgrade guarantee or automatic experimental-store migration. A

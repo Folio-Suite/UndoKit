@@ -9,11 +9,12 @@ Distinguish intended support, actual qualification and published identity.
 
 ## Beta promises
 
-The first qualified beta baseline is version 0.2.0. Its compatibility promises
-begin with actual qualification, not a planned version label or development build.
-Before that baseline, public APIs are under frost, with qualification-driven
-changes documented. No migration from tagged 0.1.0 or experimental stores is
-promised. Unsupported history is preserved and refused.
+The published beta baseline is version 0.2.0, followed by published 0.2.1.
+Their compatibility promises begin with their actual qualification, not a planned
+version label or development build. Version 0.2.2 is a maintenance candidate
+adding the native-name resolver while preserving existing source compatibility.
+Its release qualification remains pending. No migration from tagged 0.1.0 or experimental stores
+is promised. Unsupported history is preserved and refused.
 
 After the qualified beta, patches preserve public source compatibility and
 documented behavior; minor 0.x releases may change APIs with migration guidance.

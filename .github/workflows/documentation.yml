@@ -6,10 +6,10 @@ on:
   workflow_dispatch:
     inputs:
       operation:
-        description: Stage a DocC candidate or promote an approved release candidate
+        description: Stage a DocC candidate, publish an approved release asset, or run the legacy Pages operation
         required: true
         type: choice
-        options: [stage, stage-correction, promote, promote-correction]
+        options: [stage, stage-correction, promote, promote-correction, publish-asset]
       source_commit:
         description: Full source commit SHA to build for stage or stage-correction
         required: false
@@ -25,7 +25,7 @@ on:
         type: choice
         options: [release, development]
       candidate_run_id:
-        description: Actions run ID containing undokit-docs-candidate when operation is promote
+        description: Actions run ID containing undokit-docs-candidate when operation is promote or publish-asset
         required: false
         type: string
       correction_note:
@@ -270,3 +270,65 @@ jobs:
         if: ${{ failure() && inputs.operation == 'promote-correction' }}
         run: |
           echo "Correction publication is incomplete. An additive provenance asset or snapshot commit may already exist; the prior hosted site remains authoritative until Pages succeeds. Retry the same approved identity after inspecting the failed step." >&2
+
+  publish-asset:
+    if: ${{ inputs.operation == 'publish-asset' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: tooling
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: undokit-docs-candidate
+          run-id: ${{ inputs.candidate_run_id }}
+          github-token: ${{ github.token }}
+          path: candidate-transport
+      - name: Restore the unchanged documentation candidate
+        run: |
+          mkdir candidate
+          python3 - <<'PY'
+          import pathlib
+          import tarfile
+
+          archive = "candidate-transport/undokit-docs-candidate.tar"
+          destination = pathlib.Path("candidate")
+          with tarfile.open(archive, "r:") as bundle:
+              members = bundle.getmembers()
+              for member in members:
+                  name = pathlib.PurePosixPath(member.name)
+                  if name.is_absolute() or ".." in name.parts:
+                      raise SystemExit(f"unsafe candidate path: {member.name}")
+                  parts = tuple(part for part in name.parts if part not in ("", "."))
+                  if parts and parts[0] not in {"archive", "site", "producer.json", "manifest.json"}:
+                      raise SystemExit(f"unexpected candidate path: {member.name}")
+                  if member.issym() or member.islnk() or not (member.isdir() or member.isfile()):
+                      raise SystemExit(f"unsupported candidate entry: {member.name}")
+              bundle.extractall(destination, members=members, filter="data")
+          PY
+      - name: Download the published release manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "version must have three numeric components" >&2; exit 1; }
+          mkdir release-provenance
+          gh release download "$VERSION" --repo Folio-Suite/UndoKit --pattern "UndoKit-$VERSION-manifest.json" --dir release-provenance
+      - name: Validate and package the candidate
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          ruby tooling/scripts/documentation/release-asset.rb --artifact candidate \
+            --release-provenance "release-provenance/UndoKit-$VERSION-manifest.json" \
+            --output "$RUNNER_TEMP/UndoKit-$VERSION-documentation.tar.gz"
+      - name: Upload the immutable documentation asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          gh release upload "$VERSION" "$RUNNER_TEMP/UndoKit-$VERSION-documentation.tar.gz" --repo Folio-Suite/UndoKit

@@ -8,7 +8,9 @@ SPDX-License-Identifier: MIT
 UndoKit's DocC catalog, guides, and examples live in `UndoKit/UndoKit.docc`.
 Generated output is staged from a fixed source checkout and promoted through a
 manual GitHub Pages workflow. A successful DocC build or local stage is not proof
-that the Pages site is live.
+that the Pages site is live. After the website cutover, the GitHub Pages promotion
+path below is retired; hosted documentation assets are published from the original
+release candidate as described in “Publish a permanent release asset.”
 
 ## Check the authored guides
 
@@ -124,6 +126,23 @@ entry points. An exact installed artifact is an idempotent promotion retry.
 GitHub lookups explicitly target `Folio-Suite/UndoKit`, including when invoked
 outside a checkout.
 
+## Publish a permanent release asset
+
+The staged candidate remains the original, reviewed DocC output. After the matching
+release and its `UndoKit-<version>-manifest.json` asset are published, manually run
+the `publish-asset` operation with the successful staging run ID and version. The
+workflow downloads that candidate and the retained release manifest, validates the
+full manifest binding and recomputes archive, site, and producer hashes, then uploads
+`UndoKit-<version>-documentation.tar.gz` to the same release. The tar root contains
+only `archive/`, `site/`, `producer.json`, and `manifest.json`; empty directories are
+preserved. Existing release assets are never replaced. A duplicate upload fails and
+requires investigation rather than clobbering a retained asset.
+
+The operation is manual and does not run on ordinary releases. It requires the
+candidate staging run to finish first. The GitHub Pages `promote` operations above
+are retained only for the pre-cutover workflow and are retired after the website
+cutover; they do not define the permanent release-asset contract.
+
 ## Correct released guidance
 
 The examples in this section correct the published 0.2.0 guidance snapshot.
@@ -207,6 +226,9 @@ checkout tooling separately from the selected source checkout:
 - `stage-correction` additionally downloads the original release manifest,
   loads the retained predecessor from `documentation-snapshots`, enforces the
   restricted source diff, stages the complete correction, and prints its digest.
+- `publish-asset` downloads the fixed candidate by Actions run ID and the matching
+  published release manifest, verifies and packages the unchanged candidate, then
+  uploads the named permanent release asset without replacement.
 - `promote` downloads the fixed candidate by Actions run ID, verifies the
   published matching release/tag and original release asset, combines it with
   prior snapshots, updates latest, and deploys Pages.
